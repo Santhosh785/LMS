@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "description": "Growth Scholar — MERN port of the static marketing/LMS/creator platform",
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "install:all": "npm install",
     "dev": "concurrently -n server,client -c green,cyan \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
