@@ -170,7 +170,8 @@ export default function Home() {
               Start, switch, or advance your marketing career
             </h1>
             <p className="mb-[1.35rem] max-w-[32ch] text-base leading-[1.55] text-white/80">
-              Grow with native-language courses in SEO, ads, copy, funnels, and affiliate marketing.
+              Learn SEO, ads, copy, funnels, and affiliate marketing — taught in your native
+              language.
             </p>
             <Button href="#popular" variant="light" className="self-start shadow-none">
               Join for Free →
