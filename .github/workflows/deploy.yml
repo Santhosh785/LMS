@@ -17,9 +17,9 @@ jobs:
     name: Build check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
@@ -39,11 +39,13 @@ jobs:
         env:
           COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          # Optional. Left unset, the app is resolved by matching this
+          # repository against each Coolify application's git_repository.
           COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
         run: |
           set -euo pipefail
 
-          for v in COOLIFY_URL COOLIFY_TOKEN COOLIFY_APP_UUID; do
+          for v in COOLIFY_URL COOLIFY_TOKEN; do
             if [ -z "${!v}" ]; then
               echo "::error::Missing repository secret $v"
               exit 1
@@ -53,15 +55,53 @@ jobs:
           # Strip any trailing slash so the URL joins cleanly.
           base="${COOLIFY_URL%/}"
 
+          api() {
+            curl -sS --max-time 60 \
+              -o "$2" -w '%{http_code}' \
+              -H "Authorization: Bearer $COOLIFY_TOKEN" \
+              -H 'Accept: application/json' \
+              "$base$1"
+          }
+
+          uuid="$COOLIFY_APP_UUID"
+
+          if [ -z "$uuid" ]; then
+            echo "Resolving the Coolify application for $GITHUB_REPOSITORY"
+
+            code=$(api /api/v1/applications apps.json)
+            if [ "$code" != "200" ]; then
+              echo "::error::Could not list Coolify applications (HTTP $code)."
+              echo "::error::Check that COOLIFY_URL is reachable from GitHub and COOLIFY_TOKEN is valid."
+              exit 1
+            fi
+
+            # Match on the repo slug so either an https or ssh remote resolves.
+            uuid=$(jq -r --arg slug "$GITHUB_REPOSITORY" '
+              [ .[]
+                | select((.git_repository // "") | ascii_downcase | contains($slug | ascii_downcase))
+              ] | first | .uuid // empty
+            ' apps.json)
+
+            if [ -z "$uuid" ]; then
+              echo "::error::No Coolify application is wired to $GITHUB_REPOSITORY."
+              echo "::error::Point the app's source at this repo, or set the COOLIFY_APP_UUID secret."
+              echo "Applications visible to this token:"
+              jq -r '.[] | "  - \(.name)  <- \(.git_repository // "no repo"):\(.git_branch // "?")"' apps.json
+              exit 1
+            fi
+
+            name=$(jq -r --arg u "$uuid" '.[] | select(.uuid == $u) | .name' apps.json)
+            echo "Matched application: $name"
+          fi
+
+          # The UUID is a deploy handle: keep it out of this public repo's logs.
+          echo "::add-mask::$uuid"
+
           echo "Deploying $GITHUB_SHA"
-          code=$(curl -sS -X GET \
-            --max-time 60 \
-            -o response.json -w '%{http_code}' \
-            -H "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$base/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false")
+          code=$(api "/api/v1/deploy?uuid=$uuid&force=false" deploy.json)
 
           echo "HTTP $code"
-          cat response.json
+          jq . deploy.json 2>/dev/null || cat deploy.json
           echo
 
           if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
