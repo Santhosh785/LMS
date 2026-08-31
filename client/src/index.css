@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Base — mirrors the original css/base.css body/heading defaults so typography
+   lands identically without repeating the same utilities on every element.
+   --------------------------------------------------------------------------- */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface font-sans text-ink antialiased;
+    line-height: 1.55;
+    letter-spacing: -0.01em;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-bold text-brand-deep;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  img {
+    @apply block max-w-full;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Keeps the browser default arrow off <details> summaries, as the original did */
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Decorative gradients — copied verbatim from the original stylesheets.
+   These are pure art (course thumbnails, banner washes) and are far more
+   legible as named classes than as arbitrary-value utilities.
+
+   NOT inside @layer components on purpose: the class name for a course
+   thumbnail comes from the database at runtime, so Tailwind's content scanner
+   never sees it and would tree-shake the rule away.
+   --------------------------------------------------------------------------- */
+
+  /* Homepage mini-course thumbnails (css/styles.css) */
+  .art-seo      { background: linear-gradient(145deg, #135855, #2a9b78); }
+  .art-meta     { background: linear-gradient(145deg, #0f6b66, #3ecf8e); }
+  .art-copy     { background: linear-gradient(145deg, #16706c, #68c088); }
+  .art-funnel   { background: linear-gradient(145deg, #0d4f4c, #51bf96); }
+  .art-ppc      { background: linear-gradient(145deg, #1a6e5f, #7ad4a4); }
+  .art-aff      { background: linear-gradient(145deg, #145c58, #3ecf8e); }
+  .art-flag     { background: linear-gradient(145deg, #0d3f3d, #135855 40%, #3ecf8e); }
+  .art-social   { background: linear-gradient(145deg, #1b7a6e, #68c088); }
+  .art-free     { background: linear-gradient(145deg, #2a6f8f, #7ec8e3); }
+
+  /* Homepage career cards */
+  .career-art-seo    { background: linear-gradient(145deg, #135855, #3ecf8e); }
+  .career-art-ads    { background: linear-gradient(145deg, #0d4f4c, #68c088); }
+  .career-art-prog   { background: linear-gradient(145deg, #0d3f3d, #51bf96); }
+  .career-art-funnel { background: linear-gradient(145deg, #1a6e5f, #b8f0d2); }
+
+  .hero-media-wash { background: linear-gradient(145deg, #1a6e5f, #3ecf8e 70%, #b8f0d2); }
+  .career-banner-wash { background: linear-gradient(100deg, #0f3f3d 0%, #135855 45%, #2a9b78 100%); }
+
+  /* Catalog + category card media (css/explore.css, css/category.css) */
+  .media-seo       { background: linear-gradient(145deg, #0d3f3d, #2a9b78); }
+  .media-meta      { background: linear-gradient(145deg, #0f6b66, #3ecf8e); }
+  .media-google    { background: linear-gradient(145deg, #0d4f4c, #51bf96); }
+  .media-copy      { background: linear-gradient(145deg, #16706c, #68c088); }
+  .media-social    { background: linear-gradient(145deg, #1b7a6e, #7ad4a4); }
+  .media-funnel    { background: linear-gradient(145deg, #145c58, #8fd9b4); }
+  .media-aff       { background: linear-gradient(145deg, #1a6e5f, #3ecf8e); }
+  .media-ppc       { background: linear-gradient(145deg, #0d3f3d, #68c088); }
+  .media-brand     { background: linear-gradient(145deg, #135855 20%, #3ecf8e); }
+  .media-starter   { background: linear-gradient(145deg, #1f7a68, #b8f0d2); }
+  .media-email     { background: linear-gradient(145deg, #135855, #68c088); }
+  .media-analytics { background: linear-gradient(145deg, #0a3331, #3ecf8e); }
+
+  /* Blog featured + related thumbnails (css/blog.css) */
+  .feat-career { background: linear-gradient(145deg, #0d3f3d, #3ecf8e); }
+  .feat-seo    { background: linear-gradient(145deg, #0a3331, #2a9b78); }
+  .feat-ads    { background: linear-gradient(145deg, #135855, #68c088); }
+  .feat-copy   { background: linear-gradient(145deg, #16706c, #8fd9b4); }
+  .feat-funnel { background: linear-gradient(145deg, #0d4f4c, #3ecf8e); }
+  .feat-cta    { background: linear-gradient(165deg, #0d3f3d, #135855 60%, #1a6e5f); }
+
+  /* Workshop banners (css/workshops.css) */
+  .ws-seo     { background: linear-gradient(145deg, #0d3f3d 0%, #2a9b78 55%, #3ecf8e 100%); }
+  .ws-meta    { background: linear-gradient(145deg, #135855 0%, #1a7a6a 50%, #68c088 100%); }
+  .ws-google  { background: linear-gradient(145deg, #0a3331 0%, #16706c 60%, #51bf96 100%); }
+  .ws-copy    { background: linear-gradient(145deg, #145c58 0%, #3ecf8e 100%); }
+  .ws-funnel  { background: linear-gradient(145deg, #0d4f4c 0%, #8fd9b4 100%); }
+  .ws-huddle  { background: linear-gradient(145deg, #0d3f3d 20%, #135855 70%, #68c088 100%); }
+  .ws-offline { background: linear-gradient(145deg, #1a3d3a 0%, #3ecf8e 90%); }
+
+  /* Shared sheen overlay used on banners and hero media */
+  .art-sheen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 80% 15%, rgba(255, 255, 255, 0.22), transparent 45%),
+      radial-gradient(circle at 10% 90%, rgba(0, 0, 0, 0.15), transparent 45%);
+    pointer-events: none;
+  }
+
+  /* Course hero / avatar chip wash */
+  .brand-wash { background: linear-gradient(145deg, #135855, #3ecf8e); }
+  .brand-wash-deep { background: linear-gradient(145deg, #0d3f3d, #3ecf8e); }
+
+/* ---------------------------------------------------------------------------
+   Utilities the original CSS expressed as bespoke rules
+   --------------------------------------------------------------------------- */
+@layer utilities {
+  .shell {
+    @apply mx-auto w-full max-w-shell px-5;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

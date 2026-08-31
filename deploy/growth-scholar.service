@@ -1,0 +1,52 @@
+# systemd alternative to PM2. Use one or the other, never both — two supervisors
+# racing to own port 5000 produces a restart loop that reads like a crash.
+#
+#   sudo cp deploy/growth-scholar.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now growth-scholar
+#   journalctl -u growth-scholar -f
+#
+# Choose this over PM2 if you would rather not have a second process manager to
+# keep alive; choose PM2 for `pm2 logs` and zero-downtime reload.
+
+[Unit]
+Description=Growth Scholar API and SPA
+Documentation=file:///opt/growth-scholar/docs/deploy.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=growthscholar
+Group=growthscholar
+WorkingDirectory=/opt/growth-scholar
+ExecStart=/usr/bin/node server/src/index.js
+
+Environment=NODE_ENV=production
+Environment=PORT=5000
+# nginx is the single hop in front; see env.trustProxy.
+Environment=TRUST_PROXY=1
+# Secrets live in the gitignored env file, not in this unit — a systemd unit is
+# world-readable by default and ends up quoted in support threads.
+EnvironmentFile=/opt/growth-scholar/server/.env
+
+Restart=always
+RestartSec=2
+# Give up if it fails five times in a minute: a process dying on a bad
+# MONGO_URI should stay down and visible, not spin forever.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=growth-scholar
+
+# Least privilege — the app writes only to its own logs directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/growth-scholar/logs
+
+[Install]
+WantedBy=multi-user.target

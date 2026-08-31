@@ -1,0 +1,15 @@
+# Optional: run MongoDB in Docker instead of installing it locally.
+#   docker compose up -d
+# Then leave MONGO_URI at its default (mongodb://127.0.0.1:27017/growth-scholar).
+services:
+  mongo:
+    image: mongo:7
+    container_name: growth-scholar-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
