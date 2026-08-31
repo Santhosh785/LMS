@@ -1,0 +1,72 @@
+name: Deploy to Coolify
+
+# Any push to main — from you or a collaborator — redeploys the app.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time. A newer push supersedes an in-flight run rather than
+# racing it, so the server always ends on the newest commit.
+concurrency:
+  group: coolify-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-check:
+    name: Build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # Workspace install: the root lockfile covers client and server.
+      - run: npm ci
+
+      - name: Build client
+        run: npm run build
+
+  deploy:
+    name: Trigger Coolify deploy
+    needs: build-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Coolify deploy API
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+        run: |
+          set -euo pipefail
+
+          for v in COOLIFY_URL COOLIFY_TOKEN COOLIFY_APP_UUID; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Missing repository secret $v"
+              exit 1
+            fi
+          done
+
+          # Strip any trailing slash so the URL joins cleanly.
+          base="${COOLIFY_URL%/}"
+
+          echo "Deploying $GITHUB_SHA"
+          code=$(curl -sS -X GET \
+            --max-time 60 \
+            -o response.json -w '%{http_code}' \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$base/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false")
+
+          echo "HTTP $code"
+          cat response.json
+          echo
+
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Coolify rejected the deploy (HTTP $code)"
+            exit 1
+          fi
+
+          echo "Deploy queued in Coolify."
