@@ -85,6 +85,9 @@ describe('workshop and blog cover images', () => {
       slug: 'a-post',
       category: 'SEO',
       image: 'https://cdn.example.com/post.jpg',
+      // The public endpoint only serves published posts; this test is about the
+      // cover image, so the fixture has to be one.
+      status: 'Published',
     })
 
     const res = await agent().get('/api/blog/a-post').expect(200)

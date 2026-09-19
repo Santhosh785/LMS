@@ -77,6 +77,18 @@ const settingSchema = new mongoose.Schema(
     },
 
     /**
+     * Bunny Storage, where the Media Library keeps its images. Separate from
+     * `video` above because it is a separate Bunny product with its own zone
+     * and its own credential — an operator can run one without the other.
+     */
+    media: {
+      bunnyStorageZone: String,
+      bunnyStorageRegion: String,
+      bunnyStorageHost: String,
+      bunnyStoragePasswordEnc: { type: String, select: false },
+    },
+
+    /**
      * The business identity that goes on invoices, policy pages and the footer
      * of every transactional email. Also CFG-3: these are the fields Razorpay's
      * KYC review rejects when they read as placeholders.

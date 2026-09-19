@@ -67,6 +67,20 @@ export const env = {
    */
   bunnyWebhookToken: process.env.BUNNY_WEBHOOK_TOKEN || '',
 
+  /**
+   * Bunny Storage — the object store behind the Media Library's images.
+   *
+   * A different product from the Stream settings above: `zone` is the storage
+   * zone name, `password` its access key, `region` the storage endpoint prefix
+   * ('' for the default German zone) and `host` the Pull Zone hostname images
+   * are actually served from. All four blank means image uploads stay on the
+   * server's own disk, which is the previous behaviour.
+   */
+  bunnyStorageZone: process.env.BUNNY_STORAGE_ZONE || '',
+  bunnyStoragePassword: process.env.BUNNY_STORAGE_PASSWORD || '',
+  bunnyStorageRegion: process.env.BUNNY_STORAGE_REGION || '',
+  bunnyStorageHost: process.env.BUNNY_STORAGE_HOST || '',
+
   // Resend transactional email (task 7)
   resendApiKey: process.env.RESEND_API_KEY || '',
   mailFrom: process.env.MAIL_FROM || '',

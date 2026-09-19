@@ -39,9 +39,20 @@ export default function CoverArt({
   imageClass,
   labelClass = 'text-[1.15rem]',
   sizes,
+  /** Candidate widths from the Media Library, when the image came from it. */
+  srcSet,
+  /**
+   * The source's real pixel width, when known. An image narrower than the slot
+   * it fills is shown at its true size over the gradient rather than stretched
+   * to fit: `object-cover` would upscale it, and a 200px image blown up to
+   * 1400px does not look like a cover, it looks broken.
+   */
+  naturalWidth,
+  naturalHeight,
 }) {
   const [failed, setFailed] = useState(false)
   const showImage = Boolean(image) && !failed
+  const tooSmall = showImage && naturalWidth > 0 && naturalWidth < 700
 
   return (
     <div
@@ -49,8 +60,8 @@ export default function CoverArt({
         'relative grid place-items-center overflow-hidden text-center',
         // The sheen is a highlight over the gradient; over a photograph it
         // just muddies it, so it only applies in the fallback state.
-        !showImage && 'art-sheen',
-        !showImage && gradientClass,
+        (!showImage || tooSmall) && 'art-sheen',
+        (!showImage || tooSmall) && gradientClass,
         !showImage && fallbackClass,
         className,
         showImage && imageClass,
@@ -61,9 +72,20 @@ export default function CoverArt({
           src={image}
           alt={imageAlt || label || ''}
           loading="lazy"
-          sizes={sizes}
+          /*
+           * Both are dropped for an image being shown at its own size: `sizes`
+           * would be declaring a layout width the image deliberately does not
+           * take, and with one usable candidate there is nothing to choose
+           * between anyway. (It also stops `naturalWidth` reporting Chrome's
+           * density-corrected size, which is a confusing thing to debug.)
+           */
+          srcSet={srcSet && !tooSmall ? srcSet : undefined}
+          sizes={srcSet && !tooSmall ? sizes : undefined}
           onError={() => setFailed(true)}
-          className="h-full w-full object-cover"
+          className={cn(
+            tooSmall ? 'max-h-full max-w-full object-contain' : 'h-full w-full object-cover',
+          )}
+          style={tooSmall ? { width: naturalWidth, height: naturalHeight } : undefined}
         />
       ) : (
         <span className={cn('whitespace-pre-line font-black leading-tight text-white', labelClass)}>

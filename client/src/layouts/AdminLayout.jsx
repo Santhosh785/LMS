@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { adminNav } from '../data/nav.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useFeatures, visibleNav } from '../context/SiteConfigContext.jsx'
@@ -9,7 +9,13 @@ export default function AdminLayout() {
   const { user, logout } = useAuth()
   const features = useFeatures()
   const navigate = useNavigate()
+  const location = useLocation()
   const sections = visibleNav(adminNav, features)
+
+  // The blog is intentionally a self-contained WordPress-style workspace.
+  // It owns its toolbar, sidebar and editor chrome; the rest of the product
+  // keeps the Growth Scholar admin shell below unchanged.
+  if (location.pathname.startsWith('/admin/blog')) return <Outlet />
 
   return (
     <div className="min-h-screen bg-surface-admin">

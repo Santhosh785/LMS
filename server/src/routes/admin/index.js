@@ -18,6 +18,8 @@ import leadRoutes from './lead.routes.js'
 import adminWorkshopRoutes from './workshop.routes.js'
 import userRoutes from './user.routes.js'
 import integrationRoutes from './integration.routes.js'
+import blogRoutes from './blog.routes.js'
+import mediaRoutes from './media.routes.js'
 
 const router = Router()
 
@@ -43,5 +45,7 @@ router.use('/leads', leadRoutes)
 router.use('/workshops', adminWorkshopRoutes)
 router.use('/users', userRoutes)
 router.use('/integrations', integrationRoutes)
+router.use('/blog', blogRoutes)
+router.use('/media', mediaRoutes)
 
 export default router

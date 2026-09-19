@@ -1,0 +1,1109 @@
+/* ---------------------------------------------------------------------------
+   wp-editor.css — the block editor (Gutenberg) surface.
+
+   Split from wp-admin.css because it is a different design language: wp-admin
+   is grey chrome at 13px with #2271b1 links, the block editor is a white canvas
+   at 13px with #3858e9 accents and 36px square icon buttons. Keeping them apart
+   stops one from quietly restyling the other.
+   --------------------------------------------------------------------------- */
+
+.wp-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: #1e1e1e;
+  --wp-accent: #3858e9;
+  --wp-editor-line: #e0e0e0;
+  --wp-editor-grey: #757575;
+}
+
+/* -------------------------------- header ---------------------------------- */
+
+.editor-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 60px;
+  height: 60px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--wp-editor-line);
+  background: #fff;
+}
+.editor-header-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.editor-icon-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: #1e1e1e;
+  cursor: pointer;
+}
+.editor-icon-button .wp-icon {
+  fill: currentColor;
+}
+.editor-icon-button:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+.editor-icon-button:disabled {
+  color: #949494;
+  cursor: default;
+}
+.editor-icon-button.is-pressed {
+  background: #1e1e1e;
+  color: #fff;
+}
+.editor-icon-button:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--wp-accent);
+  outline: 2px solid transparent;
+}
+.editor-inserter-toggle {
+  background: #1e1e1e;
+  color: #fff;
+  border-radius: 2px;
+  width: 32px;
+  height: 32px;
+}
+.editor-inserter-toggle .wp-icon {
+  transition: transform 0.1s ease;
+}
+.editor-inserter-toggle:hover:not(:disabled) {
+  background: #3c3c3c;
+  color: #fff;
+}
+.editor-inserter-toggle.is-open .wp-icon {
+  transform: rotate(45deg);
+}
+.editor-document-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: min(400px, 40vw);
+  height: 36px;
+  margin: 0 auto;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: #f0f0f0;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.editor-document-bar:hover {
+  background: #e0e0e0;
+}
+.editor-document-bar .title {
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.editor-document-bar .kind {
+  color: var(--wp-editor-grey);
+  font-size: 12px;
+}
+.editor-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.editor-text-button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.editor-text-button:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+.editor-text-button:disabled {
+  color: #949494;
+  cursor: default;
+}
+.editor-primary-button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--wp-accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.editor-primary-button:hover:not(:disabled) {
+  background: #2f43bd;
+}
+.editor-primary-button:disabled {
+  background: #d7d7d7;
+  color: #949494;
+  cursor: default;
+}
+.editor-saved-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--wp-editor-grey);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* --------------------------------- body ----------------------------------- */
+
+.editor-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.editor-canvas {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: #fff;
+}
+.editor-canvas-frame {
+  margin: 0 auto;
+  padding: 0 0 40vh;
+}
+.editor-canvas.is-tablet .editor-canvas-frame,
+.editor-canvas.is-mobile .editor-canvas-frame {
+  margin: 24px auto;
+  border: 1px solid var(--wp-editor-line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  background: #fff;
+  min-height: 80%;
+}
+.editor-canvas.is-tablet .editor-canvas-frame {
+  width: 780px;
+  max-width: 100%;
+}
+.editor-canvas.is-mobile .editor-canvas-frame {
+  width: 390px;
+  max-width: 100%;
+}
+.editor-content {
+  max-width: 650px;
+  margin: 0 auto;
+  padding: 60px 40px 0;
+}
+.editor-canvas.is-mobile .editor-content {
+  padding: 32px 20px 0;
+}
+.editor-post-title {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 39px;
+  font-weight: 400;
+  line-height: 1.4;
+  outline: 0;
+  resize: none;
+  overflow: hidden;
+}
+.editor-post-title::placeholder {
+  color: #757575;
+  opacity: 1;
+}
+.editor-blocks {
+  margin-top: 28px;
+}
+
+/* --------------------------------- blocks --------------------------------- */
+
+.editor-block {
+  position: relative;
+  margin: 0 0 36px;
+}
+.editor-block::after {
+  content: '';
+  position: absolute;
+  inset: -8px -12px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.editor-block:hover::after {
+  box-shadow: 0 0 0 1px #ddd;
+}
+.editor-block.is-selected::after {
+  box-shadow: 0 0 0 1px var(--wp-accent);
+}
+.editor-block-input {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.7;
+  outline: 0;
+  resize: none;
+  overflow: hidden;
+}
+.editor-block-input::placeholder {
+  color: #757575;
+  opacity: 1;
+}
+.editor-block-input.is-h2 {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.editor-block-input.is-h3 {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.editor-block-input.is-h4 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.editor-block-input.is-quote {
+  font-style: italic;
+  font-size: 18px;
+}
+.editor-block-input.is-code {
+  font-family: Menlo, Consolas, monaco, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  background: #f0f0f0;
+  padding: 12px;
+  border-radius: 4px;
+}
+.editor-block-quote {
+  border-left: 4px solid #1e1e1e;
+  padding-left: 16px;
+}
+.editor-block-cite {
+  display: block;
+  width: 100%;
+  border: 0;
+  margin-top: 8px;
+  background: transparent;
+  color: var(--wp-editor-grey);
+  font-family: inherit;
+  font-size: 13px;
+  font-style: normal;
+  outline: 0;
+}
+.editor-block-callout {
+  border-radius: 6px;
+  background: #e8faf1;
+  padding: 16px;
+}
+.editor-block-separator {
+  border: 0;
+  border-top: 1px solid #1e1e1e;
+  width: 100px;
+  margin: 12px auto;
+  opacity: 0.4;
+}
+.editor-block-figure {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+.editor-block-figure img {
+  max-width: 100%;
+  max-height: 460px;
+  border-radius: 2px;
+}
+.editor-block-caption {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--wp-editor-grey);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: center;
+  outline: 0;
+}
+.editor-block-placeholder {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 32px 20px;
+  border-radius: 2px;
+  background: #f0f0f0;
+  color: #1e1e1e;
+  text-align: center;
+  font-size: 13px;
+}
+.editor-block-button {
+  display: inline-block;
+  padding: 10px 24px;
+  border: 1px solid var(--wp-accent);
+  border-radius: 999px;
+  background: var(--wp-accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+}
+.editor-block-button.is-outline {
+  background: transparent;
+  color: var(--wp-accent);
+}
+.editor-block-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.editor-block-table td {
+  padding: 0;
+  border: 1px solid #ddd;
+}
+.editor-block-table input {
+  width: 100%;
+  border: 0;
+  padding: 8px 10px;
+  background: transparent;
+  font: inherit;
+  outline: 0;
+}
+.editor-block-table tr:first-child.is-header input {
+  font-weight: 600;
+  background: #f0f0f0;
+}
+.editor-align-center {
+  text-align: center;
+}
+.editor-align-right {
+  text-align: right;
+}
+.editor-align-wide {
+  max-width: none;
+  margin-left: -60px;
+  margin-right: -60px;
+}
+
+/**
+ * Inline formatting, painted behind the transparent textarea.
+ *
+ * The mirror must lay out identically to the field above it, so it repeats the
+ * field's own classes and only overrides position and colour. Emphasis is drawn
+ * with a text stroke rather than a bolder weight, because a weight change would
+ * alter glyph advance widths and slide the visible text out from under the
+ * caret.
+ */
+.editor-rich {
+  position: relative;
+}
+.editor-rich-mirror {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  background: transparent !important;
+  color: #1e1e1e;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.editor-rich-input {
+  position: relative;
+  z-index: 1;
+  color: transparent;
+  caret-color: #1e1e1e;
+  background: transparent;
+}
+.editor-rich-input::selection {
+  background: rgba(56, 88, 233, 0.22);
+}
+.rich-marker {
+  color: #c9c9c9;
+}
+.rich-strong {
+  -webkit-text-stroke: 0.4px currentColor;
+}
+.rich-strike {
+  text-decoration: line-through;
+  text-decoration-color: #b0b0b0;
+}
+.rich-em {
+  color: #3c3c3c;
+}
+.rich-code {
+  color: #6c5ce7;
+}
+.rich-link {
+  color: var(--wp-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* block chrome: movers + toolbar */
+.editor-block-movers {
+  position: absolute;
+  top: -8px;
+  left: -60px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--wp-editor-line);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.editor-block-movers button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: none;
+  color: #1e1e1e;
+  cursor: pointer;
+}
+.editor-block-movers button:disabled {
+  color: #ccc;
+  cursor: default;
+}
+.editor-block-toolbar {
+  position: absolute;
+  top: -42px;
+  left: -12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--wp-editor-line);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.editor-block-toolbar button {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.editor-block-toolbar button:hover {
+  background: #f0f0f0;
+}
+.editor-block-toolbar button.is-active {
+  color: var(--wp-accent);
+}
+.editor-block-toolbar .sep {
+  width: 1px;
+  height: 24px;
+  background: var(--wp-editor-line);
+}
+.editor-block-appender {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: #757575;
+  font-family: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: text;
+}
+.editor-block-appender .plus {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  background: #1e1e1e;
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ------------------------------- inserter --------------------------------- */
+
+.editor-inserter-panel {
+  flex: 0 0 350px;
+  width: 350px;
+  border-right: 1px solid var(--wp-editor-line);
+  background: #fff;
+  overflow-y: auto;
+  padding: 16px;
+}
+.editor-inserter-search {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--wp-editor-line);
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: 0;
+}
+.editor-inserter-search:focus {
+  border-color: var(--wp-accent);
+  box-shadow: 0 0 0 0.5px var(--wp-accent);
+}
+.editor-inserter-category {
+  margin: 20px 0 8px;
+  color: #1e1e1e;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.editor-inserter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.editor-inserter-item {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 84px;
+  padding: 10px 4px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: none;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+}
+.editor-inserter-item:hover {
+  border-color: var(--wp-accent);
+  color: var(--wp-accent);
+}
+.editor-inserter-item .wp-icon {
+  fill: currentColor;
+}
+
+/* slash-command popover */
+.editor-slash-menu {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  top: 100%;
+  width: 280px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--wp-editor-line);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+.editor-slash-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.editor-slash-item:hover,
+.editor-slash-item.is-active {
+  background: #f0f0f0;
+}
+.editor-slash-item.is-active {
+  box-shadow: inset 0 0 0 1px var(--wp-accent);
+}
+.editor-slash-item .wp-icon {
+  fill: currentColor;
+  flex: 0 0 24px;
+}
+.editor-slash-item .desc {
+  color: var(--wp-editor-grey);
+  font-size: 12px;
+}
+
+/* -------------------------------- sidebar --------------------------------- */
+
+.editor-sidebar {
+  flex: 0 0 280px;
+  width: 280px;
+  border-left: 1px solid var(--wp-editor-line);
+  background: #fff;
+  overflow-y: auto;
+}
+.editor-sidebar-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  background: #fff;
+  border-bottom: 1px solid var(--wp-editor-line);
+}
+.editor-sidebar-tab {
+  flex: 1;
+  height: 48px;
+  border: 0;
+  background: none;
+  color: var(--wp-editor-grey);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.editor-sidebar-tab.is-active {
+  color: #1e1e1e;
+  font-weight: 500;
+  box-shadow: inset 0 -2px 0 0 var(--wp-accent);
+}
+.editor-panel {
+  border-bottom: 1px solid var(--wp-editor-line);
+  padding: 16px;
+}
+.editor-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.editor-panel-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.editor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.editor-row-button {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: right;
+  cursor: pointer;
+}
+.editor-row-button:hover {
+  background: #f0f0f0;
+}
+.editor-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #1e1e1e;
+}
+.editor-field > span {
+  font-weight: 500;
+}
+.editor-field input,
+.editor-field select,
+.editor-field textarea {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid #949494;
+  border-radius: 2px;
+  background: #fff;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  outline: 0;
+}
+.editor-field textarea {
+  min-height: 80px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.editor-field input:focus,
+.editor-field select:focus,
+.editor-field textarea:focus {
+  border-color: var(--wp-accent);
+  box-shadow: 0 0 0 0.5px var(--wp-accent);
+}
+.editor-hint {
+  color: var(--wp-editor-grey);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+.editor-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: #949494;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.editor-toggle.is-on {
+  background: var(--wp-accent);
+}
+.editor-toggle span {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.1s ease;
+}
+.editor-toggle.is-on span {
+  transform: translateX(16px);
+}
+.editor-featured-image {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  border-radius: 2px;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+.editor-featured-image img {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+.editor-token-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #949494;
+  border-radius: 2px;
+  min-height: 36px;
+}
+.editor-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 2px;
+  background: #ddd;
+  font-size: 12px;
+}
+.editor-token button {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #1e1e1e;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.editor-token button:hover {
+  background: #1e1e1e;
+  color: #fff;
+}
+.editor-token-input {
+  flex: 1;
+  min-width: 80px;
+  border: 0 !important;
+  box-shadow: none !important;
+  min-height: 24px !important;
+  padding: 0 4px !important;
+}
+.editor-checklist {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.editor-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.editor-checklist input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--wp-accent);
+  cursor: pointer;
+}
+.editor-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #1e1e1e;
+}
+.editor-stat-row span:last-child {
+  font-weight: 500;
+}
+
+/* ------------------------------- list view -------------------------------- */
+
+.editor-listview {
+  flex: 0 0 280px;
+  width: 280px;
+  border-right: 1px solid var(--wp-editor-line);
+  overflow-y: auto;
+  padding: 8px;
+}
+.editor-listview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.editor-listview-row:hover {
+  background: #f0f0f0;
+}
+.editor-listview-row.is-selected {
+  background: #1e1e1e;
+  color: #fff;
+}
+.editor-listview-row .wp-icon {
+  fill: currentColor;
+  flex: 0 0 24px;
+}
+.editor-listview-row .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------- publish + snackbar --------------------------- */
+
+.editor-publish-panel {
+  flex: 0 0 300px;
+  width: 300px;
+  border-left: 1px solid var(--wp-editor-line);
+  background: #fff;
+  overflow-y: auto;
+  padding: 16px;
+}
+.editor-publish-panel h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.editor-copy-row {
+  display: flex;
+  gap: 4px;
+}
+.editor-copy-row input {
+  flex: 1;
+  min-width: 0;
+}
+.editor-snackbars {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 200;
+  display: grid;
+  gap: 8px;
+  max-width: 400px;
+}
+.editor-snackbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  animation: editor-snack 0.2s ease;
+}
+.editor-snackbar button {
+  border: 0;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@keyframes editor-snack {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* -------------------------------- footer ---------------------------------- */
+
+.editor-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 24px;
+  height: 24px;
+  padding: 0 16px;
+  border-top: 1px solid var(--wp-editor-line);
+  color: var(--wp-editor-grey);
+  font-size: 12px;
+}
+.editor-footer .crumb {
+  color: #1e1e1e;
+}
+
+/* -------------------------------- dropdown -------------------------------- */
+
+.editor-dropdown {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--wp-editor-line);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+.editor-dropdown-heading {
+  padding: 8px 8px 4px;
+  color: var(--wp-editor-grey);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.editor-dropdown button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.editor-dropdown button:hover {
+  background: #f0f0f0;
+}
+.editor-dropdown button.is-selected::after {
+  content: '✓';
+  color: var(--wp-accent);
+}
+.editor-dropdown .shortcut {
+  color: var(--wp-editor-grey);
+  font-size: 12px;
+}
+.editor-dropdown hr {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--wp-editor-line);
+}
+
+@media screen and (max-width: 960px) {
+  .editor-sidebar,
+  .editor-publish-panel,
+  .editor-listview,
+  .editor-inserter-panel {
+    position: absolute;
+    right: 0;
+    top: 60px;
+    bottom: 24px;
+    z-index: 60;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+  .editor-inserter-panel,
+  .editor-listview {
+    right: auto;
+    left: 0;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+  .editor-document-bar {
+    display: none;
+  }
+  .editor-block-movers {
+    left: -32px;
+  }
+  .editor-align-wide {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+@media screen and (max-width: 600px) {
+  .editor-content {
+    padding: 32px 16px 0;
+  }
+  .editor-post-title {
+    font-size: 28px;
+  }
+  .editor-block-movers {
+    position: static;
+    flex-direction: row;
+    margin-bottom: 6px;
+    width: max-content;
+  }
+  .editor-block-toolbar {
+    position: static;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+}

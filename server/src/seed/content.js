@@ -157,7 +157,22 @@ export async function seedContent() {
   /* --------------------------- other catalogue --------------------------- */
   tally('programs', await upsertAll(M.Program, 'slug', programs))
   tally('workshops', await upsertAll(M.Workshop, 'slug', workshops))
-  tally('blog posts', await upsertAll(M.BlogPost, 'slug', blogPosts))
+  /**
+   * The seed fixture predates the publishing workflow and carries no `status`,
+   * which the model would default to Draft — leaving a freshly seeded site with
+   * a blog archive that renders nothing. These posts are finished marketing
+   * copy, so a new one is published; an existing one keeps whatever status an
+   * editor gave it, exactly as courses do above, so republishing content never
+   * un-trashes or re-publishes a post somebody deliberately pulled.
+   */
+  tally(
+    'blog posts',
+    await upsertAll(M.BlogPost, 'slug', blogPosts, (post, existing) => ({
+      ...post,
+      status: existing?.status || 'Published',
+      visibility: existing?.visibility || 'Public',
+    })),
+  )
 
   // memberIds is membership, not content: it is deliberately absent from the
   // payload so an existing channel keeps whoever has joined it.

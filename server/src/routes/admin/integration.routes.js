@@ -7,6 +7,7 @@ import { mask, open, seal } from '../../utils/secretBox.js'
 import { isRazorpayConfigured } from '../../services/razorpay.js'
 import { isBunnyConfigured } from '../../services/bunny.js'
 import { isBunnyManagementConfigured } from '../../services/bunnyApi.js'
+import { isBunnyStorageConfigured } from '../../services/bunnyStorage.js'
 import { isUpiConfigured } from '../../services/upi.js'
 
 const router = Router()
@@ -38,6 +39,7 @@ const SECRETS = {
     ['bunnyApiKey', 'bunnyApiKeyEnc'],
     ['bunnyWebhookToken', 'bunnyWebhookTokenEnc'],
   ],
+  media: [['bunnyStoragePassword', 'bunnyStoragePasswordEnc']],
 }
 
 /** Plain fields an admin may write, by block. */
@@ -45,6 +47,7 @@ const PLAIN = {
   payments: ['razorpayKeyId', 'upiVpa', 'upiPayeeName', 'invoicePrefix'],
   mail: ['from'],
   video: ['bunnyLibraryId'],
+  media: ['bunnyStorageZone', 'bunnyStorageRegion', 'bunnyStorageHost'],
   business: [
     'legalName',
     'address',
@@ -100,6 +103,7 @@ router.get(
     const payments = full.payments || {}
     const mail = full.mail || {}
     const video = full.video || {}
+    const media = full.media || {}
 
     res.json({
       features: {
@@ -129,6 +133,12 @@ router.get(
         bunnyApiKey: secretState(cfg.bunnyApiKey, video.bunnyApiKeyEnc),
         bunnyWebhookToken: secretState(cfg.bunnyWebhookToken, video.bunnyWebhookTokenEnc),
       },
+      media: {
+        bunnyStorageZone: cfg.bunnyStorage.zone,
+        bunnyStorageRegion: cfg.bunnyStorage.region,
+        bunnyStorageHost: cfg.bunnyStorage.host,
+        bunnyStoragePassword: secretState(cfg.bunnyStorage.password, media.bunnyStoragePasswordEnc),
+      },
       business: { ...cfg.business, operatorEmail: cfg.adminEmail },
       status: {
         razorpay: isRazorpayConfigured(),
@@ -136,6 +146,7 @@ router.get(
         mail: Boolean(cfg.resendApiKey && cfg.mailFrom),
         playback: isBunnyConfigured(),
         upload: isBunnyManagementConfigured(),
+        imageStorage: isBunnyStorageConfigured(),
       },
     })
   }),
@@ -227,6 +238,22 @@ router.post(
       })
       if (!sent) throw new HttpError(400, 'The mail provider did not accept the message')
       return res.json({ ok: true, message: `Test email sent to ${to}` })
+    }
+
+    if (name === 'bunny-storage') {
+      if (!isBunnyStorageConfigured()) {
+        throw new HttpError(400, 'Add a storage zone, password and CDN hostname first')
+      }
+      const { testConnection } = await import('../../services/bunnyStorage.js')
+      try {
+        const { files } = await testConnection()
+        return res.json({
+          ok: true,
+          message: `Storage zone reachable — ${files} item${files === 1 ? '' : 's'} at its root`,
+        })
+      } catch (err) {
+        throw new HttpError(400, err.message)
+      }
     }
 
     if (name === 'bunny') {

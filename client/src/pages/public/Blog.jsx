@@ -22,20 +22,28 @@ export default function Blog() {
   useDocumentTitle('Blog | Growth Scholar')
   const [category, setCategory] = useState(ALL_POSTS)
   const [slide, setSlide] = useState(0)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const categories = [ALL_POSTS, ...useTerms('blog-category', 'filters').map((t) => t.name)]
 
   const { data, isPending } = useQuery({
-    queryKey: ['blog', category],
+    queryKey: ['blog', category, search, page],
     queryFn: async () =>
       (
         await api.get('/blog', {
-          params: { category: category === ALL_POSTS ? 'latest' : category },
+          params: {
+            category: category === ALL_POSTS ? 'latest' : category,
+            q: search || undefined,
+            page,
+            limit: 12,
+          },
         })
       ).data,
   })
 
   const featured = data?.featured || []
   const items = data?.items || []
+  const pages = data?.pages || 1
 
   // 8s auto-rotate, same cadence as js/blog.js
   useEffect(() => {
@@ -130,7 +138,10 @@ export default function Blog() {
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setCategory(c)}
+                  onClick={() => {
+                    setCategory(c)
+                    setPage(1)
+                  }}
                   className={cn(
                     'flex items-center justify-between rounded-md2 px-3 py-2 text-left text-[0.88rem] transition-colors duration-200 ease-gs',
                     category === c
@@ -145,6 +156,30 @@ export default function Blog() {
           </aside>
 
           <section>
+            <form
+              className="mb-5 flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                setPage(1)
+              }}
+            >
+              <label className="sr-only" htmlFor="blog-search">
+                Search articles
+              </label>
+              <input
+                id="blog-search"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value)
+                  setPage(1)
+                }}
+                placeholder="Search articles…"
+                className="min-h-[42px] w-full rounded-md2 border border-line bg-white px-3 text-[0.88rem] outline-none focus:border-brand"
+              />
+              <Button type="submit" variant="outline" size="sm">
+                Search
+              </Button>
+            </form>
             {isPending ? (
               <Loading />
             ) : items.length === 0 ? (
@@ -187,6 +222,29 @@ export default function Blog() {
                   </article>
                 ))}
               </div>
+            )}
+            {pages > 1 && (
+              <nav className="mt-7 flex items-center justify-center gap-3" aria-label="Blog pages">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page === 1}
+                  onClick={() => setPage((value) => value - 1)}
+                >
+                  Previous
+                </Button>
+                <span className="text-[0.82rem] text-muted">
+                  Page {page} of {pages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page === pages}
+                  onClick={() => setPage((value) => value + 1)}
+                >
+                  Next
+                </Button>
+              </nav>
             )}
           </section>
         </div>

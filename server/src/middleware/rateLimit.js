@@ -116,6 +116,16 @@ export const checkoutLimiter = rateLimit({
   handler: tooMany('Too many attempts. Please wait a few minutes, then try again.'),
 })
 
+/** Comment spam is cheap to create and expensive for an editor to clear. */
+export const blogCommentLimiter = rateLimit({
+  ...skipInTests,
+  windowMs: 60 * 60 * 1000,
+  limit: 8,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: tooMany('Too many comments from this device. Please try again later.'),
+})
+
 /** Reporting content (task 17) is trivially abusable as a harassment tool. */
 export const reportLimiter = rateLimit({
   ...skipInTests,

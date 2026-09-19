@@ -43,6 +43,7 @@ const SECRET_PATHS = [
   '+video.bunnySecurityKeyEnc',
   '+video.bunnyApiKeyEnc',
   '+video.bunnyWebhookTokenEnc',
+  '+media.bunnyStoragePasswordEnc',
 ].join(' ')
 
 /** '' and null both mean "not set here" — only a real value overrides env. */
@@ -71,6 +72,7 @@ function warnOnUnreadableSecrets(doc) {
     ['Bunny security key', doc.video?.bunnySecurityKeyEnc],
     ['Bunny API key', doc.video?.bunnyApiKeyEnc],
     ['Bunny webhook token', doc.video?.bunnyWebhookTokenEnc],
+    ['Bunny Storage password', doc.media?.bunnyStoragePasswordEnc],
   ].filter(([, value]) => Boolean(value))
 
   const broken = sealed.filter(([, value]) => !open(value)).map(([name]) => name)
@@ -163,6 +165,16 @@ export const cfg = {
   },
   get bunnyWebhookToken() {
     return pick(open(current().video?.bunnyWebhookTokenEnc), env.bunnyWebhookToken)
+  },
+
+  get bunnyStorage() {
+    const m = current().media || {}
+    return {
+      zone: pick(m.bunnyStorageZone, env.bunnyStorageZone),
+      password: pick(open(m.bunnyStoragePasswordEnc), env.bunnyStoragePassword),
+      region: pick(m.bunnyStorageRegion, env.bunnyStorageRegion),
+      host: pick(m.bunnyStorageHost, env.bunnyStorageHost),
+    }
   },
 
   get business() {

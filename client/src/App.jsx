@@ -95,6 +95,16 @@ import AdminLeads from './pages/admin/Leads.jsx'
 import AdminWorkshops from './pages/admin/Workshops.jsx'
 import AdminUsers from './pages/admin/Users.jsx'
 import AdminIntegrations from './pages/admin/Integrations.jsx'
+/* The blog is a self-contained WordPress-style workspace — see
+   pages/admin/blog/WpAdmin.jsx for why it owns its own chrome. */
+import WpAdmin from './pages/admin/blog/WpAdmin.jsx'
+import WpDashboard from './pages/admin/blog/Dashboard.jsx'
+import WpPosts from './pages/admin/blog/Posts.jsx'
+import WpPostEditor from './pages/admin/blog/PostEditor.jsx'
+import WpTerms from './pages/admin/blog/Terms.jsx'
+import { MediaLibrary as WpMediaLibrary, MediaUpload as WpMediaUpload } from './pages/admin/blog/Media.jsx'
+import WpComments from './pages/admin/blog/Comments.jsx'
+import WpTools from './pages/admin/blog/Tools.jsx'
 
 /**
  * The static site used .html URLs. Anything already bookmarked or linked from
@@ -358,6 +368,38 @@ export default function App() {
             <Route path="workshops" element={<AdminWorkshops />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="integrations" element={<AdminIntegrations />} />
+            <Route path="blog" element={<WpAdmin />}>
+              <Route index element={<WpPosts />} />
+              <Route path="dashboard" element={<WpDashboard />} />
+              <Route path="new" element={<WpPostEditor />} />
+              <Route path="post/:id" element={<WpPostEditor />} />
+              <Route
+                path="categories"
+                element={
+                  <WpTerms
+                    taxonomy="blog-category"
+                    title="Categories"
+                    singular="Category"
+                    help="Categories group posts by subject and drive the blog's category rail. A post carries one."
+                  />
+                }
+              />
+              <Route
+                path="tags"
+                element={
+                  <WpTerms
+                    taxonomy="tag"
+                    title="Tags"
+                    singular="Tag"
+                    help="Tags are free-form keywords. A post can carry as many as it needs."
+                  />
+                }
+              />
+              <Route path="media" element={<WpMediaLibrary />} />
+              <Route path="media/new" element={<WpMediaUpload />} />
+              <Route path="comments" element={<WpComments />} />
+              <Route path="tools" element={<WpTools />} />
+            </Route>
           </Route>
         </Routes>
       </RouteBoundary>

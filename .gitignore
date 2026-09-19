@@ -6,3 +6,8 @@ dist/
 .DS_Store
 .mail-preview/
 logs/
+
+# Media Library uploads. The blog's image uploads land in server/uploads/media
+# at runtime (see server/src/routes/admin/media.routes.js) — editor content,
+# not source, and it must not end up in a commit or be wiped by a deploy.
+server/uploads/

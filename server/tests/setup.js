@@ -18,6 +18,18 @@ process.env.BUNNY_LIBRARY_ID = '999999'
 process.env.BUNNY_SECURITY_KEY = 'test-bunny-security-key'
 process.env.BUNNY_API_KEY = 'test-bunny-api-key'
 process.env.BUNNY_WEBHOOK_TOKEN = 'test-bunny-webhook-token'
+/*
+ * Blank, not fake. These are read by services/bunnyStorage.js, which makes a
+ * real PUT to a real storage zone — so unlike the Stream values above, a
+ * placeholder is not enough: a developer with working credentials in their
+ * .env would otherwise have the suite write test images into production
+ * storage. Blank means "not configured", and the storage tests opt in by
+ * writing the settings document themselves.
+ */
+process.env.BUNNY_STORAGE_ZONE = ''
+process.env.BUNNY_STORAGE_PASSWORD = ''
+process.env.BUNNY_STORAGE_REGION = ''
+process.env.BUNNY_STORAGE_HOST = ''
 process.env.UPI_VPA = 'test@okbank'
 process.env.UPI_PAYEE_NAME = 'Growth Scholar Test'
 process.env.RAZORPAY_KEY_ID = 'rzp_test_key'

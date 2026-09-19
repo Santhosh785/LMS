@@ -30,6 +30,7 @@ import webhookRoutes from './routes/webhook.routes.js'
 import liveRoutes from './routes/live.routes.js'
 import communityRoutes from './routes/community.routes.js'
 import adminRoutes from './routes/admin/index.js'
+import { mediaDir } from './routes/admin/media.routes.js'
 
 const app = express()
 
@@ -173,6 +174,9 @@ app.use('/api/checkout', checkoutRoutes)
 app.use('/api/live', liveRoutes)
 app.use('/api', communityRoutes)
 app.use('/api/admin', adminRoutes)
+// The Media Library stores public images under a separate path, never inside
+// the client build, so deploys do not wipe an editor's uploaded images.
+app.use('/uploads/media', express.static(mediaDir, { fallthrough: false, maxAge: '7d' }))
 
 /* ------------------------------ the SPA ---------------------------------- */
 /**

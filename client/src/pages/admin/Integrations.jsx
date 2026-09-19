@@ -10,6 +10,7 @@ import {
   Loading,
   Panel,
   Pill,
+  SelectField,
   TextField,
   useToast,
 } from '../../components/ui/index.jsx'
@@ -150,7 +151,7 @@ export default function Integrations() {
       {toast.node}
       <PageHead
         title="Integrations"
-        sub="Payment, email and video credentials, feature switches and business identity. A blank field falls back to the server environment."
+        sub="Payment, email, video and image-storage credentials, feature switches and business identity. A blank field falls back to the server environment."
       />
 
       <div className="mb-5 flex flex-wrap gap-2">
@@ -160,6 +161,7 @@ export default function Integrations() {
           ['Email', status.mail],
           ['Video playback', status.playback],
           ['Video upload', status.upload],
+          ['Image storage', status.imageStorage],
         ].map(([label, ok]) => (
           <Pill key={label} tone={ok ? 'ok' : 'draft'}>
             {ok ? '✓' : '○'} {label}
@@ -334,6 +336,73 @@ export default function Integrations() {
               }
             >
               Save video
+            </Button>
+          </div>
+        </Panel>
+
+        {/* -------------------------- image storage -------------------------- */}
+        <Panel
+          title="Images (Bunny Storage)"
+          actions={
+            <Button size="sm" variant="outline" onClick={() => test.mutate('bunny-storage')}>
+              Test storage
+            </Button>
+          }
+        >
+          <p className="mb-4 text-[0.86rem] text-muted">
+            Where the blog&rsquo;s Media Library keeps its images. This is Bunny&rsquo;s file storage
+            product, separate from the Stream library above — it needs its own zone. Leave it blank
+            and images stay on the server&rsquo;s own disk, which a redeploy replaces.
+          </p>
+          <div className="grid gap-4">
+            <TextField
+              label="Storage zone name"
+              value={val('bunnyStorageZone', data.media.bunnyStorageZone)}
+              onChange={(e) => set('bunnyStorageZone', e.target.value)}
+              hint="Bunny dashboard → Storage → the zone's name, e.g. growth-scholar."
+            />
+            <SecretField
+              label="Storage password"
+              state={data.media.bunnyStoragePassword}
+              value={val('bunnyStoragePassword')}
+              onChange={(v) => set('bunnyStoragePassword', v)}
+              onClear={() => save.mutate({ block: 'media', body: { bunnyStoragePassword: null } })}
+              hint="Storage → the zone → FTP & API Access → Password. It grants write access to the whole zone, so uploads pass through the server rather than the browser."
+            />
+            <SelectField
+              label="Region"
+              value={val('bunnyStorageRegion', data.media.bunnyStorageRegion)}
+              onChange={(e) => set('bunnyStorageRegion', e.target.value)}
+              options={[
+                { value: '', label: 'Germany (default)' },
+                { value: 'uk', label: 'United Kingdom' },
+                { value: 'se', label: 'Sweden' },
+                { value: 'ny', label: 'New York' },
+                { value: 'la', label: 'Los Angeles' },
+                { value: 'sg', label: 'Singapore' },
+                { value: 'syd', label: 'Sydney' },
+                { value: 'br', label: 'Brazil' },
+                { value: 'jh', label: 'Johannesburg' },
+              ]}
+              hint="Must match the zone's main region, or Bunny answers 404."
+            />
+            <TextField
+              label="CDN hostname"
+              value={val('bunnyStorageHost', data.media.bunnyStorageHost)}
+              onChange={(e) => set('bunnyStorageHost', e.target.value)}
+              hint="The Pull Zone that serves the storage zone, e.g. growth-scholar.b-cdn.net. Images are linked from here; the storage endpoint itself is not public."
+            />
+            <Button
+              onClick={() =>
+                saveBlock('media', [
+                  'bunnyStorageZone',
+                  'bunnyStoragePassword',
+                  'bunnyStorageRegion',
+                  'bunnyStorageHost',
+                ])
+              }
+            >
+              Save image storage
             </Button>
           </div>
         </Panel>

@@ -158,6 +158,7 @@ export const adminNav = [
   { label: 'Courses', to: '/admin/courses' },
   { label: 'Programs', to: '/admin/programs' },
   { label: 'Workshops', to: '/admin/workshops' },
+  { label: 'Blog', to: '/admin/blog' },
   { label: 'Marketing Funnels', to: '/admin/funnels', feature: 'funnels' },
   { label: 'Email', to: '/admin/email/broadcasts', feature: 'email' },
   { label: 'Communities', to: '/admin/community' },
