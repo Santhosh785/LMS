@@ -3,10 +3,19 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { api } from '../../api/client.js'
 import { sortLabels } from '../../data/nav.js'
-import { Button, cn, EmptyState, Loading } from '../../components/ui/index.jsx'
+import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
+import useBodyClass from '../../hooks/useBodyClass.js'
 import useFilterGroups from '../../hooks/useFilterGroups.js'
-import CoverArt from '../../components/CoverArt.jsx'
+
+/**
+ * /courses — the 2026 redesign's explore page (.explore-page).
+ *
+ * The filtering is unchanged: same URL contract, same server-side query, same
+ * "Paid is pre-selected when the URL carries no facet" quirk, same 9-per-page
+ * View-more step. Only the markup moved, onto the drop's classes so the
+ * vendored styles/redesign/explore.css applies unchanged.
+ */
 
 const PAGE_SIZE = 9
 
@@ -19,52 +28,86 @@ const readList = (params, key) =>
     .map((s) => s.trim())
     .filter(Boolean)
 
+/**
+ * The drop paints card artwork with `.media-bg.seo`, while the database stores
+ * the older `media-seo` on each course. Both are applied: the stripped tone
+ * picks up the redesign gradient, and the original class stays as the fallback
+ * for a tone the redesign does not define.
+ */
+const thumbTone = (thumbClass) => (thumbClass || '').replace(/^(media|art)-/, '')
+
 export function ExploreCard({ course }) {
+  const label = course.mediaLabel || course.title
   return (
-    <Link
-      to={`/courses/${course.slug}`}
-      className="group flex flex-col overflow-hidden rounded-lg2 border border-line bg-white shadow-softer transition-all duration-[250ms] ease-gs hover:-translate-y-1 hover:shadow-card"
-    >
-      <div className="relative">
-        <CoverArt
-          image={course.image}
-          imageAlt={course.imageAlt}
-          gradientClass={course.thumbClass}
-          label={course.mediaLabel || course.title}
-          className="h-40 px-4"
-          sizes="(max-width: 640px) 100vw, (max-width: 1040px) 50vw, 33vw"
-        />
-        {/* .badge-row sits at the bottom of the media, as in the original */}
-        <div className="absolute inset-x-[0.65rem] bottom-[0.65rem] z-[2] flex justify-between gap-2">
-          <span className="rounded-full bg-white/92 px-2.5 py-1 text-[0.7rem] font-semibold text-brand-deep">
-            🌐 {course.languages?.join(' + ').replace('English', 'EN')}
-          </span>
+    <Link className="explore-card" to={`/courses/${course.slug}`}>
+      <div className="media">
+        {course.image ? (
+          <div
+            className="media-bg"
+            style={{
+              backgroundImage: `url(${course.image})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+            role="img"
+            aria-label={course.imageAlt || label}
+          />
+        ) : (
+          <div className={cn('media-bg', course.thumbClass, thumbTone(course.thumbClass))}>
+            <span className="media-label">{label}</span>
+          </div>
+        )}
+        <div className="badge-row">
+          {course.languages?.length > 0 && (
+            <span className="badge">
+              <span className="ico" aria-hidden="true">
+                🌐
+              </span>{' '}
+              {course.languages.join(' + ')}
+            </span>
+          )}
           {/*
             A rating is a claim about the business made to a prospective buyer.
-            Task 13 zeroes the figures invented for the demo, and a zero rating
-            renders as nothing at all rather than as "★ 0" — no stars is honest,
-            zero stars is a worse lie than the invented number was.
+            The demo figures were zeroed, and a zero rating renders as nothing at
+            all rather than as "★ 0" — no stars is honest, zero stars is a worse
+            lie than the invented number was.
           */}
           {course.rating > 0 && (
-            <span className="rounded-full bg-white/92 px-2.5 py-1 text-[0.7rem] font-semibold text-brand-deep">
-              ★ {course.rating}
+            <span className="badge rating">
+              <span className="ico" aria-hidden="true">
+                ★
+              </span>{' '}
+              {course.rating}
             </span>
           )}
         </div>
       </div>
-      <div className="flex flex-1 flex-col justify-between gap-3 p-4">
-        <h3 className="text-[1.02rem]">{course.title}</h3>
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <p className="flex flex-wrap gap-x-4 gap-y-1 text-[0.78rem] text-muted">
-            <span>⏱ {course.hours} Hrs</span>
+      <div className="body">
+        <h3>{course.title}</h3>
+        <div className="card-foot">
+          <p className="meta-row">
+            {course.hours > 0 && (
+              <span>
+                <span className="ico" aria-hidden="true">
+                  ⏱
+                </span>{' '}
+                {course.hours} Hrs
+              </span>
+            )}
             {course.enrolledCount > 0 && (
-              <span>👤 {course.enrolledLabel || `${course.enrolledCount} Enrolled`}</span>
+              <span>
+                <span className="ico" aria-hidden="true">
+                  👤
+                </span>{' '}
+                {course.enrolledLabel || `${course.enrolledCount} Enrolled`}
+              </span>
             )}
           </p>
-          {/* the catalog card showed a single price; the strike lives on the detail page */}
-          <span className="text-[1.05rem] font-bold text-brand-deep">
-            {course.amount ? inr(course.amount) : 'Free'}
-          </span>
+          <div className="price-row">
+            <span className={cn('price', !course.amount && 'free')}>
+              {course.amount ? inr(course.amount) : 'Free'}
+            </span>
+          </div>
         </div>
       </div>
     </Link>
@@ -73,6 +116,7 @@ export function ExploreCard({ course }) {
 
 export default function Courses() {
   useDocumentTitle('Explore Courses | Growth Scholar')
+  useBodyClass('gs-redesign explore-page--convert')
   const [searchParams, setSearchParams] = useSearchParams()
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -188,36 +232,58 @@ export default function Courses() {
   }
 
   return (
-    <div className="px-5 py-10">
-      <div className="mx-auto max-w-shell">
-        <nav className="mb-4 text-[0.9rem] text-muted" aria-label="Breadcrumb">
-          <Link to="/" className="hover:text-brand">
-            Home
-          </Link>
-          <span className="px-1.5">→</span>
-          <Link to="/courses/category" className="hover:text-brand">
-            Marketing
-          </Link>
-          <span className="px-1.5">→</span>
-          <span>Explore</span>
-        </nav>
+    <div className="explore-page">
+      <section className="explore-hero">
+        <div className="explore-hero-inner">
+          <div>
+            <p className="explore-hero-tag">Full course library</p>
+            <h1>Every self-paced marketing course in one place</h1>
+            <p className="explore-hero-lede">
+              Filter by topic, level, and price — or jump to{' '}
+              <Link to="/courses/category">Marketing</Link> for curated starters, live workshops,
+              and Flagship.
+            </p>
+            <div className="explore-hero-cta">
+              <Link className="explore-btn-primary" to="/courses/category">
+                Browse marketing
+              </Link>
+              <Link className="explore-btn-secondary" to="/courses?price=free">
+                Free courses only
+              </Link>
+            </div>
+          </div>
+          {/*
+            The drop's third stat was "4.8★ avg rating" — an invented figure with
+            no reviews behind it, the same claim that was removed from the
+            homepage. The two that remain are read from the catalogue.
+          */}
+          <ul className="explore-hero-stats">
+            <li>
+              <strong>{total > 0 ? `${total}` : '—'}</strong> courses
+            </li>
+            <li>
+              <strong>Free</strong> starters
+            </li>
+          </ul>
+        </div>
+      </section>
 
-        {/* .explore-top: breadcrumb on the left, tools pushed right */}
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+      <div className="explore-top">
+        <p className="breadcrumb">
+          <Link to="/">Home</Link> → <Link to="/courses/category">Marketing</Link> → Explore
+        </p>
+        <div className="explore-tools">
           <button
+            className="filter-toggle"
             type="button"
             aria-expanded={filtersOpen}
+            aria-controls="filter-panel"
             onClick={() => setFiltersOpen((v) => !v)}
-            className="hidden items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-[0.85rem] font-semibold text-brand mx-960:inline-flex"
           >
-            ⚙ Filters
+            Filters
           </button>
 
-          <form
-            role="search"
-            onSubmit={(e) => e.preventDefault()}
-            className="ml-auto flex h-[42px] w-[min(320px,42vw)] min-w-[240px] items-center rounded-full border border-line bg-white px-4 mx-480:ml-0 mx-480:w-full"
-          >
+          <form className="explore-search" role="search" onSubmit={(e) => e.preventDefault()}>
             <input
               type="search"
               value={search}
@@ -225,172 +291,159 @@ export default function Courses() {
               onBlur={() => commit(selected, search)}
               placeholder="Search"
               aria-label="Search courses"
-              // text-base below 768: iOS zooms the viewport on any focused
-              // input under 16px. See the note on `inputClass`.
-              className="flex-1 border-0 bg-transparent text-[0.92rem] outline-none mx-768:text-base"
             />
-            <span className="pl-2 text-muted" aria-hidden="true">
-              ⌕
-            </span>
+            <span aria-hidden="true">⌕</span>
           </form>
 
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
+          <div className="sort-wrap" onClick={(e) => e.stopPropagation()}>
             <button
+              className="sort-btn"
               type="button"
               aria-expanded={sortOpen}
+              aria-haspopup="listbox"
               onClick={() => setSortOpen((v) => !v)}
-              className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2.5 text-[0.85rem] font-semibold text-brand"
             >
-              Sort by · {sortLabels[sort]} ▾
+              Sort by · {sortLabels[sort]} <span aria-hidden="true">▾</span>
             </button>
-            {sortOpen && (
-              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-56 rounded-lg2 border border-line bg-white p-2 shadow-soft">
-                {Object.entries(sortLabels).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => {
-                      commit(selected, search, value)
-                      setSortOpen(false)
-                    }}
-                    className={cn(
-                      'block w-full rounded-md2 px-3 py-2 text-left text-[0.85rem]',
-                      sort === value
-                        ? 'bg-accent-soft font-semibold text-brand'
-                        : 'text-muted hover:bg-surface-mist',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div
+              className={cn('sort-menu', sortOpen && 'is-open')}
+              role="listbox"
+              hidden={!sortOpen}
+            >
+              {Object.entries(sortLabels).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="option"
+                  aria-selected={sort === value}
+                  className={cn(sort === value && 'is-active')}
+                  onClick={() => {
+                    commit(selected, search, value)
+                    setSortOpen(false)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-[248px_1fr] gap-8 mx-960:grid-cols-1">
-          {/* .filter-panel — one grey sticky panel with collapsible groups */}
-          <aside
-            aria-label="Filters"
-            className={cn(
-              'sticky top-[calc(76px+1rem)] self-start rounded-lg2 bg-[#f3f4f6] px-4 pb-[1.15rem] pt-4 mx-960:static mx-960:hidden',
-              filtersOpen && 'mx-960:block',
-            )}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[1.05rem]">Filter by</h2>
+      <div className="explore-layout">
+        <aside
+          className={cn('filter-panel', filtersOpen && 'is-open')}
+          id="filter-panel"
+          aria-label="Filters"
+        >
+          <div className="head">
+            <h2>Filter by</h2>
+            <button className="reset" type="button" onClick={reset}>
+              Reset all
+            </button>
+          </div>
+          {/*
+            A taxonomy-backed group with nothing published in it renders as an
+            empty accordion, so it is dropped rather than shown — that is also
+            the pre-load state before /api/config resolves.
+          */}
+          {filterGroups
+            .filter((group) => group.options.length > 0)
+            .map((group) => (
+              // only Price started open in the original panel
+              <details className="filter-group" key={group.key} open={group.key === 'price'}>
+                <summary>{group.label}</summary>
+                <div className="filter-options">
+                  {group.options.map((opt) => (
+                    <label key={opt.value}>
+                      <input
+                        type="checkbox"
+                        checked={(selected[group.key] || []).includes(opt.value)}
+                        onChange={() => toggleFilter(group, opt.value)}
+                      />{' '}
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              </details>
+            ))}
+        </aside>
+
+        <section className="explore-main">
+          <div className="chips">
+            {chips.map((chip) => (
+              <span className="chip" key={`${chip.key}-${chip.value || ''}`}>
+                {chip.label}
+                <button type="button" aria-label="Remove" onClick={() => removeChip(chip)}>
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+
+          <p className="result-count">
+            {total === 0
+              ? 'No courses found'
+              : `Showing ${Math.min(visibleLimit, total)} of ${total} courses`}
+          </p>
+
+          {isPending && !items.length ? (
+            <Loading />
+          ) : items.length === 0 ? (
+            <EmptyState
+              icon="🔍"
+              title="No courses match those filters"
+              body="Try removing a filter or searching for a different topic."
+              action={
+                <button className="btn btn-outline" type="button" onClick={reset}>
+                  Reset filters
+                </button>
+              }
+            />
+          ) : (
+            <div className="course-grid">
+              {items.map((course) => (
+                <ExploreCard key={course._id} course={course} />
+              ))}
+            </div>
+          )}
+
+          {total > visibleLimit && (
+            <div className="view-more">
               <button
+                className="btn btn-outline btn-lg"
                 type="button"
-                onClick={reset}
-                className="text-[0.85rem] font-semibold text-brand"
+                onClick={() => setVisibleLimit((v) => v + PAGE_SIZE)}
               >
-                Reset all
+                View more courses
               </button>
             </div>
-            {/*
-              A taxonomy-backed group with nothing published in it renders as
-              an empty accordion, so it is dropped rather than shown — that is
-              also the pre-load state before /api/config resolves.
-            */}
-            {filterGroups
-              .filter((group) => group.options.length > 0)
-              .map((group) => (
-                <details
-                  key={group.key}
-                  // only Price started open in the original panel
-                  open={group.key === 'price'}
-                  className="group border-t border-line-admin"
-                >
-                  <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between py-[0.85rem] text-[0.95rem] font-semibold text-ink">
-                    {group.label}
-                    <span className="text-[1.1rem] font-normal text-muted" aria-hidden="true">
-                      <span className="group-open:hidden">+</span>
-                      <span className="hidden group-open:inline">−</span>
-                    </span>
-                  </summary>
-                  <div className="flex flex-col gap-2 pb-3">
-                    {/*
-                    py-2.5 and a larger box below 960 give each row a ~44px tap
-                    target. A 16px checkbox is comfortable with a mouse and
-                    genuinely hard to hit with a thumb, and this panel is the
-                    first thing a phone visitor touches in the catalogue.
-                  */}
-                    {group.options.map((opt) => (
-                      <label
-                        key={opt.value}
-                        className="flex cursor-pointer items-center gap-2 py-1 text-[0.88rem] text-muted mx-960:py-2.5"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={(selected[group.key] || []).includes(opt.value)}
-                          onChange={() => toggleFilter(group, opt.value)}
-                          className="h-4 w-4 shrink-0 accent-brand mx-960:h-5 mx-960:w-5"
-                        />
-                        {opt.label}
-                      </label>
-                    ))}
-                  </div>
-                </details>
-              ))}
-          </aside>
-
-          <section>
-            <div className="mb-3 flex flex-wrap gap-2">
-              {chips.map((chip) => (
-                <span
-                  key={`${chip.key}-${chip.value || ''}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-[0.78rem] text-muted"
-                >
-                  {chip.label}
-                  <button
-                    type="button"
-                    aria-label="Remove"
-                    onClick={() => removeChip(chip)}
-                    className="text-muted hover:text-danger"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-
-            <p className="mb-4 text-[0.85rem] text-muted">
-              {total === 0
-                ? 'No courses found'
-                : `Showing ${Math.min(visibleLimit, total)} of ${total} courses`}
-            </p>
-
-            {isPending && !items.length ? (
-              <Loading />
-            ) : items.length === 0 ? (
-              <EmptyState
-                icon="🔍"
-                title="No courses match those filters"
-                body="Try removing a filter or searching for a different topic."
-                action={
-                  <Button onClick={reset} variant="outline">
-                    Reset filters
-                  </Button>
-                }
-              />
-            ) : (
-              <div className="grid grid-cols-3 gap-5 mx-1040:grid-cols-2 mx-640:grid-cols-1">
-                {items.map((course) => (
-                  <ExploreCard key={course._id} course={course} />
-                ))}
-              </div>
-            )}
-
-            {total > visibleLimit && (
-              <div className="mt-8 text-center">
-                <Button variant="outline" onClick={() => setVisibleLimit((v) => v + PAGE_SIZE)}>
-                  View more
-                </Button>
-              </div>
-            )}
-          </section>
-        </div>
+          )}
+        </section>
       </div>
+
+      <section className="gs-convert-band" aria-labelledby="explore-convert-heading">
+        <div className="gs-convert-inner">
+          <div className="gs-convert-copy">
+            <p className="eyebrow">Next step</p>
+            <h2 id="explore-convert-heading">
+              Self-paced gets you started. Flagship makes you ship.
+            </h2>
+            <p>
+              Pick free foundation tracks here — apply for Complete Growth Marketing when you want
+              LIVE implementation with mentors.
+            </p>
+          </div>
+          <div className="gs-convert-actions">
+            <Link className="gs-btn-solid" to="/programs/complete-growth-marketing">
+              Apply for Flagship
+            </Link>
+            <Link className="gs-btn-outline" to="/workshops">
+              Join a live workshop
+            </Link>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }

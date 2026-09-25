@@ -1,43 +1,74 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { Button, cn, ErrorNote, Loading, useToast } from '../../components/ui/index.jsx'
+import { Button, cn, Loading, useToast } from '../../components/ui/index.jsx'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import CoverArt from '../../components/CoverArt.jsx'
+import useBodyClass from '../../hooks/useBodyClass.js'
+
+/**
+ * /courses/:slug — the 2026 redesign's course page (.course-page).
+ *
+ * Markup follows courses/seo.html so the vendored styles/redesign/course.css
+ * applies unchanged. The purchase path is untouched: paid courses still go to
+ * /checkout/:slug logged out, and only free courses reach POST /api/enrollments.
+ */
 
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`
 
-const TOC = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'journey', label: 'Learning journey' },
-  { id: 'curriculum', label: 'Curriculum' },
-  { id: 'tools', label: 'Tools' },
-  { id: 'who', label: 'Who should enroll' },
-  { id: 'careers', label: 'Careers' },
-  { id: 'faq', label: 'FAQ' },
-]
+const thumbTone = (thumbClass) => (thumbClass || '').replace(/^(media|art)-/, '')
 
-function Accordion({ summary, meta, children, defaultOpen }) {
-  const [open, setOpen] = useState(!!defaultOpen)
+/** Only the sections this course actually has get a link in the rail. */
+const tocFor = (course) =>
+  [
+    course.overview?.length && { id: 'overview', label: 'Course Overview' },
+    course.journey?.length && { id: 'journey', label: 'Learning Journey' },
+    course.sections?.length && { id: 'syllabus', label: 'Syllabus' },
+    course.tools?.length && { id: 'tools', label: 'Tools' },
+    course.whoShouldEnroll?.points?.length && { id: 'who', label: 'Who Should Enroll' },
+    course.careers?.length && { id: 'careers', label: 'Careers' },
+    course.faqs?.length && { id: 'faq', label: 'FAQ' },
+  ].filter(Boolean)
+
+/** The drop's sticky price bar, shown once the buy box has scrolled away. */
+function StickyBar({ course, onEnroll, isPaid }) {
+  const [shown, setShown] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => {
+      const buyBox = document.getElementById('enroll')
+      let overlapping = false
+      if (buyBox) {
+        const rect = buyBox.getBoundingClientRect()
+        overlapping = rect.bottom > 0
+      }
+      setShown(window.scrollY > 480 && !overlapping)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   return (
-    <div className="overflow-hidden rounded-lg2 border border-line bg-white">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-      >
-        <span className="font-semibold text-brand-deep">{summary}</span>
-        <span className="flex shrink-0 items-center gap-3 text-[0.8rem] text-muted">
-          {meta}
-          <span className={cn('transition-transform duration-200 ease-gs', open && 'rotate-180')}>
-            ▾
+    <div className={cn('course-sticky', shown && 'is-visible')} aria-hidden={!shown}>
+      <div className="course-sticky-inner">
+        <div className="course-sticky-price">
+          <span className="now">{course.amount ? inr(course.amount) : 'Free'}</span>
+          {course.strikeAmount > 0 && <span className="was">{inr(course.strikeAmount)}</span>}
+          <span className="label">
+            {course.title} · {course.kind || 'Self-paced'}
           </span>
-        </span>
-      </button>
-      {open && <div className="border-t border-line px-5 py-4">{children}</div>}
+        </div>
+        <button
+          className="course-btn-primary course-btn-sm"
+          type="button"
+          onClick={onEnroll}
+          tabIndex={shown ? 0 : -1}
+        >
+          {isPaid ? 'Enroll now' : 'Start free'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -59,6 +90,7 @@ export default function CourseDetail() {
   })
 
   useDocumentTitle(course ? `${course.title} | Growth Scholar` : 'Course | Growth Scholar')
+  useBodyClass('gs-redesign course-page--convert')
 
   /**
    * Only free courses self-enrol. POST /api/enrollments answers a paid slug with
@@ -92,6 +124,11 @@ export default function CourseDetail() {
   }
 
   const isPaid = course.price !== 'free'
+  const toc = tocFor(course)
+  const discount =
+    course.strikeAmount > 0 && course.amount > 0
+      ? Math.round(100 - (course.amount / course.strikeAmount) * 100)
+      : 0
 
   /**
    * Paid courses go to checkout, and go there logged out — requiring an account
@@ -105,258 +142,274 @@ export default function CourseDetail() {
     return enroll.mutate()
   }
 
+  const enrollLabel = isPaid ? `Enroll — ${inr(course.amount)}` : 'Start free'
+
   return (
-    <>
+    <div className="course-page">
       {toast.node}
 
-      {/* -------------------------------- hero ------------------------------- */}
-      <section className="border-b border-line bg-white px-5 py-10">
-        {/*
-          On a phone the purchase card is moved above the description with
-          `order`. Stacked in source order it lands below a full page of copy,
-          which on the highest-traffic width means the price and the buy button
-          are off-screen on arrival — a conversion problem, not a polish one.
-        */}
-        <div className="mx-auto grid max-w-shell grid-cols-[1.6fr_1fr] items-start gap-10 mx-960:grid-cols-1 mx-960:gap-6">
-          <div className="mx-960:order-2">
-            <nav className="mb-3 text-[0.8rem] text-muted" aria-label="Breadcrumb">
-              <Link to="/" className="hover:text-brand">
-                Home
-              </Link>
-              <span className="px-1.5">/</span>
-              <Link to="/courses" className="hover:text-brand">
-                Courses
-              </Link>
-              <span className="px-1.5">/</span>
-              <span className="text-brand-deep">{course.topic}</span>
-            </nav>
-            <p className="mb-2 text-[0.8rem] font-bold uppercase tracking-[0.14em] text-accent-mid">
-              {course.kind}
+      <section className="course-hero">
+        <div className="course-hero-inner">
+          <div>
+            <p className="breadcrumb">
+              <Link to="/">Home</Link> / <Link to="/courses">Courses</Link> / {course.topic}
             </p>
-            <h1 className="text-[clamp(1.8rem,3.2vw,2.5rem)]">{course.title}</h1>
-            <p className="mt-3 max-w-2xl text-[1rem] text-muted">{course.summary}</p>
+            {discount > 0 && (
+              <p className="course-hero-ribbon">
+                Limited-time · <strong>{discount}% off</strong>
+              </p>
+            )}
+            {course.kind && <p className="eyebrow">{course.kind}</p>}
+            <h1>{course.title}</h1>
+            {course.summary && <p className="hero-sub">{course.summary}</p>}
 
             {/* The Enrolled stat drops out entirely until real enrolments exist
                 — see the note in Courses.jsx. */}
-            <div className="mt-6 grid grid-cols-4 gap-4 mx-960:grid-cols-3 mx-640:grid-cols-2">
-              {[
-                course.enrolledCount > 0 && {
-                  value: course.enrolledLabel?.replace(' Enrolled', '') || course.enrolledCount,
-                  label: 'Enrolled',
-                },
-                { value: `${course.hours} Hours`, label: 'Recorded content' },
-                { value: `${course.sections?.length || 0} Modules`, label: 'With projects' },
-                {
-                  value: course.languages?.join(' + ').replace('English', 'EN'),
-                  label: 'Language',
-                },
-              ]
-                .filter(Boolean)
-                .map((s) => (
-                  <div key={s.label}>
-                    <strong className="block text-[1.1rem] text-brand-deep">{s.value}</strong>
-                    <span className="text-[0.78rem] text-muted">{s.label}</span>
-                  </div>
-                ))}
+            <div className="course-stats">
+              {course.enrolledCount > 0 && (
+                <div>
+                  <strong>
+                    {course.enrolledLabel?.replace(' Enrolled', '') || course.enrolledCount}
+                  </strong>
+                  <span>Enrolled</span>
+                </div>
+              )}
+              {course.hours > 0 && (
+                <div>
+                  <strong>{course.hours} Hours</strong>
+                  <span>Recorded content</span>
+                </div>
+              )}
+              {course.sections?.length > 0 && (
+                <div>
+                  <strong>{course.sections.length} Modules</strong>
+                  <span>With projects</span>
+                </div>
+              )}
+              {course.languages?.length > 0 && (
+                <div>
+                  <strong>{course.languages.join(' + ')}</strong>
+                  <span>Language</span>
+                </div>
+              )}
             </div>
+
+            <div className="course-hero-cta">
+              <button className="course-btn-primary" type="button" onClick={onEnroll}>
+                {enrollLabel}
+              </button>
+              <Link className="course-btn-secondary" to="/workshops">
+                Try a free live workshop
+              </Link>
+            </div>
+            <p className="course-hero-micro">
+              Lifetime access · Certificate · 7-day refund on self-paced
+            </p>
           </div>
 
-          {/* `static` below 960: a sticky element inside a single-column stack
-              pins itself over the content the buyer is trying to read. */}
-          <aside className="sticky top-[calc(var(--h,76px)+1rem)] rounded-xl2 border border-line bg-white p-6 shadow-soft mx-960:static mx-960:order-1 mx-480:p-5">
-            <CoverArt
-              image={course.image}
-              imageAlt={course.imageAlt}
-              gradientClass={course.thumbClass}
-              label={course.mediaLabel || course.title}
-              labelClass="text-[1.2rem]"
-              className="mb-4 rounded-lg2"
-              fallbackClass="h-32"
-              imageClass="aspect-[16/9]"
-              sizes="(max-width: 960px) 100vw, 400px"
-            />
-            <div className="flex items-baseline gap-2">
-              <span className="text-[1.7rem] font-black text-brand-deep">
-                {course.amount ? inr(course.amount) : 'Free'}
-              </span>
-              {course.strikeAmount ? (
-                <span className="text-muted line-through">{inr(course.strikeAmount)}</span>
-              ) : null}
+          {/*
+            The purchase card is a grid sibling of the copy, which is how the
+            stylesheet is able to lift it above the description on a phone. In
+            source order it would land below a full page of copy — on the
+            highest-traffic width that puts the price and the buy button
+            off-screen on arrival, which is a conversion problem, not polish.
+          */}
+          <aside className="course-buy" id="enroll">
+            {course.image ? (
+              <div
+                className="course-buy-media"
+                style={{
+                  backgroundImage: `url(${course.image})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+                role="img"
+                aria-label={course.imageAlt || course.title}
+              />
+            ) : (
+              <div
+                className={cn(
+                  'course-buy-media',
+                  course.thumbClass,
+                  thumbTone(course.thumbClass),
+                )}
+              >
+                {course.mediaLabel || course.title}
+              </div>
+            )}
+            <div className="course-buy-body">
+              {discount > 0 && <p className="course-buy-tag">Limited-time pricing</p>}
+              <div className="price-row">
+                <span className="price">{course.amount ? inr(course.amount) : 'Free'}</span>
+                {course.strikeAmount > 0 && (
+                  <span className="strike">{inr(course.strikeAmount)}</span>
+                )}
+                {discount > 0 && <span className="save-pill">Save {discount}%</span>}
+              </div>
+              <button
+                className="course-btn-primary course-btn-block"
+                type="button"
+                onClick={onEnroll}
+                disabled={enroll.isPending}
+              >
+                {enroll.isPending ? 'Enrolling…' : enrollLabel}
+              </button>
+              <Link className="course-buy-alt" to="/workshops">
+                Not ready? Join a free live workshop →
+              </Link>
+              <ul className="buy-list">
+                <li>Lifetime access to lessons</li>
+                <li>Practice worksheets &amp; templates</li>
+                <li>Certificate on completion</li>
+                <li>Community doubt support</li>
+              </ul>
             </div>
-            <Button block className="mt-4" onClick={onEnroll} disabled={enroll.isPending}>
-              {enroll.isPending
-                ? 'Enrolling…'
-                : isPaid && course.amount
-                  ? `Enroll Now — ${inr(course.amount)}`
-                  : 'Start for free'}
-            </Button>
-            <ul className="mt-4 grid gap-2 text-[0.85rem] text-muted">
-              {[
-                'Lifetime access to lessons',
-                'Practice worksheets & templates',
-                'Certificate on completion',
-                'Community doubt support',
-              ].map((b) => (
-                <li key={b} className="flex gap-2">
-                  <span className="text-accent-mid">✓</span>
-                  {b}
-                </li>
-              ))}
-            </ul>
           </aside>
         </div>
       </section>
 
-      {/* --------------------------------- toc ------------------------------- */}
-      <nav className="sticky top-header z-30 border-b border-line bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-shell gap-1 overflow-x-auto px-5 no-scrollbar">
-          {TOC.map((t) => (
-            <a
-              key={t.id}
-              href={`#${t.id}`}
-              className="whitespace-nowrap px-3 py-3 text-[0.85rem] font-medium text-muted hover:text-brand"
-            >
-              {t.label}
-            </a>
-          ))}
-        </div>
-      </nav>
-
-      <div className="mx-auto max-w-shell px-5 py-12">
-        <section id="overview" className="scroll-mt-32">
-          <h2 className="mb-4 text-[1.5rem]">Course Overview</h2>
-          <div className="grid gap-3 text-[0.98rem] leading-relaxed text-muted">
-            {(course.overview?.length ? course.overview : [course.summary]).map((p) => (
-              <p key={p?.slice(0, 20)}>{p}</p>
+      {toc.length > 0 && (
+        <nav className="course-toc" aria-label="Course sections">
+          <div className="course-toc-inner">
+            {toc.map((t) => (
+              <a key={t.id} href={`#${t.id}`}>
+                {t.label}
+              </a>
             ))}
           </div>
-        </section>
+        </nav>
+      )}
 
-        {course.journey?.length > 0 && (
-          <section id="journey" className="mt-14 scroll-mt-32">
-            <h2 className="mb-4 text-[1.5rem]">Your learning journey</h2>
-            <div className="grid gap-3">
-              {course.journey.map((j) => (
-                <article
-                  key={j.step}
-                  className="flex gap-4 rounded-lg2 border border-line bg-white p-5"
-                >
-                  <span className="text-[1.3rem] font-black text-accent-mid">{j.step}</span>
-                  <div>
-                    <h3 className="text-[1rem]">{j.title}</h3>
-                    <p className="mt-1 text-[0.9rem] text-muted">{j.body}</p>
+      <div className="course-layout">
+        <div className="course-main">
+          {course.overview?.length > 0 && (
+            <section id="overview">
+              <h2>Course Overview</h2>
+              <div className="prose">
+                {course.overview.map((p) => (
+                  <p key={p.slice(0, 40)}>{p}</p>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {course.journey?.length > 0 && (
+            <section id="journey">
+              <h2>Your learning journey</h2>
+              <div className="journey">
+                {course.journey.map((step) => (
+                  <article className="journey-step" key={step.title}>
+                    <span className="num">{step.step}</span>
+                    <div>
+                      <h3>{step.title}</h3>
+                      <p>{step.body}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {course.sections?.length > 0 && (
+            <section id="syllabus">
+              <h2>Curriculum</h2>
+              <p className="lede" style={{ marginBottom: '1.25rem' }}>
+                Expand each module for key topics and industry relevance.
+              </p>
+              {course.sections.map((section, i) => (
+                <details className="module" key={section._id || section.name} open={i === 0}>
+                  <summary>
+                    <span>{section.name}</span>
+                    <span className="meta">
+                      {section.lessons?.length || 0}{' '}
+                      {section.lessons?.length === 1 ? 'lesson' : 'lessons'}
+                    </span>
+                  </summary>
+                  <div className="module-body">
+                    <div>
+                      <h4>Lessons</h4>
+                      <ul>
+                        {(section.lessons || []).map((lesson) => (
+                          <li key={lesson._id || lesson.name}>{lesson.name}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                </article>
+                </details>
               ))}
-            </div>
-          </section>
-        )}
+            </section>
+          )}
 
-        <section id="curriculum" className="mt-14 scroll-mt-32">
-          <h2 className="mb-4 text-[1.5rem]">Curriculum</h2>
-          <div className="grid gap-2">
-            {course.sections?.map((section, i) => (
-              <Accordion
-                key={section._id}
-                defaultOpen={i === 0}
-                summary={section.name}
-                meta={[section.duration, section.difficulty].filter(Boolean).join(' · ')}
-              >
-                <div className="grid grid-cols-2 gap-6 mx-640:grid-cols-1">
-                  {section.keyTopics?.length > 0 && (
-                    <div>
-                      <h4 className="mb-2 text-[0.85rem] uppercase tracking-wide text-muted">
-                        Key Topics
-                      </h4>
-                      <ul className="grid gap-1.5 text-[0.9rem] text-muted">
-                        {section.keyTopics.map((t) => (
-                          <li key={t}>• {t}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {section.industryRelevance?.length > 0 && (
-                    <div>
-                      <h4 className="mb-2 text-[0.85rem] uppercase tracking-wide text-muted">
-                        Industry Relevance
-                      </h4>
-                      <ul className="grid gap-1.5 text-[0.9rem] text-muted">
-                        {section.industryRelevance.map((t) => (
-                          <li key={t}>• {t}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </Accordion>
-            ))}
-          </div>
-        </section>
+          {course.tools?.length > 0 && (
+            <section id="tools">
+              <h2>Tools you’ll practice with</h2>
+              <div className="tools" style={{ marginTop: '1rem' }}>
+                {course.tools.map((t) => (
+                  <span key={t}>{t}</span>
+                ))}
+              </div>
+            </section>
+          )}
 
-        {course.tools?.length > 0 && (
-          <section id="tools" className="mt-14 scroll-mt-32">
-            <h2 className="mb-4 text-[1.5rem]">Tools you’ll practice with</h2>
-            <div className="flex flex-wrap gap-2">
-              {course.tools.map((tool) => (
-                <span
-                  key={tool}
-                  className="rounded-full border border-line bg-white px-3.5 py-2 text-[0.85rem] text-muted"
-                >
-                  {tool}
-                </span>
-              ))}
-            </div>
-          </section>
-        )}
+          {course.whoShouldEnroll?.points?.length > 0 && (
+            <section id="who">
+              <h2>Who should enroll in {course.title}?</h2>
+              <div className="prose">
+                {course.whoShouldEnroll.intro && <p>{course.whoShouldEnroll.intro}</p>}
+                <ul>
+                  {course.whoShouldEnroll.points.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
 
-        {course.whoShouldEnroll?.intro && (
-          <section id="who" className="mt-14 scroll-mt-32">
-            <h2 className="mb-4 text-[1.5rem]">Who should enroll in {course.title}?</h2>
-            <p className="text-[0.98rem] leading-relaxed text-muted">
-              {course.whoShouldEnroll.intro}
+          {course.careers?.length > 0 && (
+            <section id="careers">
+              <h2>What you’ll be ready for after {course.title}</h2>
+              <div className="prose">
+                <ul>
+                  {course.careers.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
+
+          <section className="course-convert-band">
+            <h2>Want live feedback before you enroll?</h2>
+            <p>
+              Join the next live workshop — three hours live with mentors, certificate included.
             </p>
-            <ul className="mt-4 grid gap-2 text-[0.92rem] text-muted">
-              {course.whoShouldEnroll.points?.map((p) => (
-                <li key={p} className="flex gap-2">
-                  <span className="text-accent-mid">✓</span>
-                  {p}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {course.careers?.length > 0 && (
-          <section id="careers" className="mt-14 scroll-mt-32">
-            <h2 className="mb-4 text-[1.5rem]">What you’ll be ready for</h2>
-            <div className="grid grid-cols-2 gap-3 mx-640:grid-cols-1">
-              {course.careers.map((c) => (
-                <div
-                  key={c}
-                  className="rounded-lg2 border border-line bg-white px-4 py-3.5 font-medium text-brand-deep"
-                >
-                  {c}
-                </div>
-              ))}
+            <div className="course-convert-actions">
+              <Link className="course-btn-primary" to="/workshops">
+                Browse live workshops
+              </Link>
+              <a className="course-btn-secondary on-dark" href="#enroll">
+                Enroll self-paced
+              </a>
             </div>
           </section>
-        )}
 
-        {course.faqs?.length > 0 && (
-          <section id="faq" className="mt-14 scroll-mt-32">
-            <h2 className="mb-4 text-[1.5rem]">Frequently Asked Questions</h2>
-            <div className="grid gap-2">
-              {course.faqs.map((f) => (
-                <Accordion key={f.q} summary={f.q}>
-                  <p className="text-[0.92rem] leading-relaxed text-muted">{f.a}</p>
-                </Accordion>
+          {course.faqs?.length > 0 && (
+            <section id="faq" className="faq">
+              <h2>Frequently Asked Questions</h2>
+              {course.faqs.map((f, i) => (
+                <details key={f.q} open={i === 0}>
+                  <summary>{f.q}</summary>
+                  <p>{f.a}</p>
+                </details>
               ))}
-            </div>
-          </section>
-        )}
+            </section>
+          )}
+        </div>
 
-        <ErrorNote error={enroll.error && apiError(enroll.error)} />
+        <div className="course-side" aria-hidden="true" />
       </div>
-    </>
+
+      <StickyBar course={course} onEnroll={onEnroll} isPaid={isPaid} />
+    </div>
   )
 }

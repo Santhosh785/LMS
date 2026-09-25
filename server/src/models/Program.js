@@ -20,7 +20,50 @@ const programSchema = new mongoose.Schema(
       ours: { title: String, points: [String] },
     },
     curriculum: [{ week: String, title: String, points: [String], output: String }],
-    audience: [{ step: String, title: String, body: String }],
+    /** `image` is a public URL (e.g. /assets/flagship/who-01.jpg), so it is swappable without a build. */
+    audience: [{ step: String, title: String, body: String, image: String, imageAlt: String }],
+
+    /* ----------------------- 2026 redesign additions ----------------------- */
+    /**
+     * Seven sections the redesigned flagship page adds. All optional: a program
+     * that has not been given one simply does not render that section, so the
+     * other programs in the collection keep working untouched.
+     */
+
+    /** Scarcity line repeated in the hero, the pricing panel and the sticky bar. */
+    batchNote: String,
+    /** The four figures in the bar directly under the hero. */
+    trustBar: [{ value: String, label: String }],
+    /** "The Why behind the program" — prose, a brochure link and a photograph. */
+    why: {
+      paragraphs: [String],
+      brochureUrl: String,
+      brochureLabel: String,
+      image: String,
+      imageAlt: String,
+    },
+    /**
+     * The Common-Core-then-track comparison table. `values` lines up with
+     * `columns`; a row with one value spans them, which is how the shared
+     * Common Core row is drawn.
+     */
+    structure: {
+      columns: [String],
+      rows: [{ stage: String, values: [String], isTotal: Boolean }],
+    },
+    /** The two post-Common-Core tracks. */
+    tracks: [
+      {
+        tag: String,
+        title: String,
+        goal: String,
+        variant: String,
+        modules: [{ code: String, body: String }],
+        milestone: String,
+      },
+    ],
+    /** "Recommended tools", grouped by discipline. */
+    toolGroups: [{ title: String, items: [String] }],
     admission: [{ title: String, body: String }],
     mentors: [{ name: String, role: String, initials: String }],
     testimonials: [{ quote: String, author: String, location: String }],
@@ -54,6 +97,17 @@ const programSchema = new mongoose.Schema(
       strikeAmount: Number,
       note: String,
       benefits: [String],
+      /* --- 2026 redesign: the fuller pricing panel --- */
+      /** ISO code shown before the amount ("INR"). */
+      currency: String,
+      /** Tax wording after the figure, e.g. "/– (inc. tax)". */
+      taxNote: String,
+      scholarship: String,
+      duration: String,
+      status: String,
+      slots: String,
+      /** "What your fee is actually funding" — the list beside the price. */
+      funding: [{ title: String, body: String }],
     },
   },
   { timestamps: true },

@@ -1,0 +1,157 @@
+/* ---------------------------------------------------------------------------
+ * Partial vendor of the 2026 redesign drop's "Growth Scholar/css/styles.css".
+ *
+ * That file mixes cross-page primitives with the site header and footer. The
+ * chrome is React components here (SiteHeader/SiteFooter) and its rules would
+ * fight them, so only the primitives several redesign pages depend on are
+ * copied — verbatim, lines 111-154 of the drop.
+ *
+ * `.btn-lm-primary` / `.btn-lm-ghost` are used by About, Blog and the program
+ * pages; `.arr` is the circular arrow badge inside the primary pill.
+ * --------------------------------------------------------------------------- */
+
+.btn-lm-ghost {
+  padding: 0.5rem 0.85rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #374151;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+}
+
+.btn-lm-ghost:hover {
+  color: var(--brand);
+}
+
+.btn-lm-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  padding: 0 1.15rem;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.88rem;
+  box-shadow: 0 8px 22px rgba(19, 88, 85, 0.18);
+}
+
+.btn-lm-primary:hover {
+  background: var(--brand-deep);
+}
+
+.btn-lm-primary .arr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * From the drop's css/base.css (lines 257-272). Cross-page typography helpers
+ * used by the program, about and resources pages. The rest of base.css is the
+ * global reset and chrome, which index.css and the React components already own.
+ * --------------------------------------------------------------------------- */
+
+.eyebrow {
+  color: var(--accent-mid);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.lede {
+  max-width: 40rem;
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 400;
+  line-height: 1.65;
+}
+
+/* ---------------------------------------------------------------------------
+ * From the drop's css/base.css (lines 149-203): the .btn family. The explore
+ * page uses .btn / .btn-lg / .btn-outline directly rather than a React Button.
+ * --------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 42px;
+  padding: 0 1.15rem;
+  border-radius: 999px;
+  font-family: var(--font);
+  font-size: 0.92rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 0.25s var(--ease), background 0.25s var(--ease), border-color 0.25s var(--ease), color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(19, 88, 85, 0.22);
+}
+
+.btn-primary:hover {
+  background: var(--brand-deep);
+}
+
+.btn-outline {
+  border-color: rgba(19, 88, 85, 0.25);
+  color: var(--brand);
+  background: transparent;
+}
+
+.btn-outline:hover {
+  border-color: var(--brand);
+  background: var(--accent-soft);
+}
+
+.btn-ghost {
+  color: var(--muted);
+  background: transparent;
+}
+
+.btn-ghost:hover {
+  color: var(--brand);
+}
+
+.btn-lg {
+  min-height: 52px;
+  padding: 0 1.45rem;
+  font-size: 1rem;
+}
+
+/**
+ * The blog markup uses `.visually-hidden` for its screen-reader-only headings;
+ * the drop never defines it. Standard clip-rect implementation, equivalent to
+ * Tailwind's `sr-only`, which the rest of the app uses.
+ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

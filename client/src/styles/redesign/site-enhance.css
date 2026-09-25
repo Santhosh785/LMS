@@ -1,0 +1,310 @@
+/* ---------------------------------------------------------------------------
+ * Vendored verbatim from the 2026 redesign drop: "Growth Scholar/css/site-enhance.css".
+ * Do not hand-edit — see README.md in this directory.
+ * --------------------------------------------------------------------------- */
+
+/* Site-wide brand polish, motion, and CRO helpers */
+
+.guvi-header {
+  border-bottom-color: var(--line);
+}
+
+.guvi-nav--lemlist > .nav-link {
+  color: var(--text);
+}
+
+.nav-link {
+  color: var(--muted);
+}
+
+.nav-link:hover {
+  color: var(--brand);
+}
+
+.nav-menu--lemlist {
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+
+.nav-menu--lemlist .nav-menu-label {
+  color: var(--muted);
+}
+
+.nav-menu--lemlist .nav-menu-divider {
+  background: var(--line);
+}
+
+.btn-lm-ghost {
+  color: var(--muted);
+}
+
+.header-actions--lm .btn-lm-primary {
+  box-shadow: 0 8px 22px rgba(19, 88, 85, 0.22);
+  transition: transform 0.25s var(--ease), background 0.25s, box-shadow 0.3s;
+}
+
+.header-actions--lm .btn-lm-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(19, 88, 85, 0.28);
+}
+
+/* Subtle attention on primary header CTA (not homepage duplicate) */
+body:not(.home-lm) .header-actions--lm .btn-lm-primary {
+  animation: gs-cta-glow 4s ease-in-out infinite;
+}
+
+@keyframes gs-cta-glow {
+  0%,
+  100% {
+    box-shadow: 0 8px 22px rgba(19, 88, 85, 0.22);
+  }
+  50% {
+    box-shadow: 0 8px 26px rgba(62, 207, 142, 0.35);
+  }
+}
+
+.btn-lm-primary:focus-visible,
+.btn-lm-ghost:focus-visible,
+.cat-btn-primary:focus-visible,
+.prog-btn-primary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Scroll reveal (marketing pages) */
+.gs-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+}
+
+.gs-reveal.is-visible {
+  animation: gs-fade-up 0.65s var(--ease) forwards;
+  animation-delay: calc(var(--gs-i, 0) * 0.07s);
+}
+
+@keyframes gs-fade-up {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Shared convert band */
+.gs-convert-band {
+  margin: 0;
+  padding: 2.75rem clamp(1rem, 3vw, 2rem);
+  background:
+    radial-gradient(640px 240px at 0% 50%, rgba(62, 207, 142, 0.28), transparent 55%),
+    linear-gradient(135deg, var(--brand-deep) 0%, var(--brand) 100%);
+  color: #fff;
+  border-top: 1px solid rgba(62, 207, 142, 0.2);
+}
+
+.gs-convert-inner {
+  max-width: var(--max);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.2fr auto;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.gs-convert-band .eyebrow {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  margin-bottom: 0.35rem;
+}
+
+.gs-convert-copy h2 {
+  font-size: clamp(1.35rem, 2.8vw, 1.85rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #fff;
+  max-width: 26ch;
+  margin-bottom: 0.65rem;
+}
+
+.gs-convert-copy p {
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 48ch;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.gs-convert-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-width: 210px;
+}
+
+.gs-convert-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0.65rem 1.25rem;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.88rem;
+  text-align: center;
+  transition: transform 0.25s var(--ease), box-shadow 0.25s;
+}
+
+.gs-convert-actions a:hover {
+  transform: translateY(-2px);
+}
+
+.gs-convert-actions .gs-btn-solid {
+  background: #fff;
+  color: var(--brand-deep);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.gs-convert-actions .gs-btn-outline {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
+}
+
+.gs-convert-actions .gs-btn-outline:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Sticky CTA bar */
+.gs-sticky {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 28px rgba(19, 88, 85, 0.08);
+  transform: translateY(110%);
+  transition: transform 0.35s var(--ease);
+}
+
+.gs-sticky.is-visible {
+  transform: none;
+}
+
+.gs-sticky-inner {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.gs-sticky-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.gs-sticky-copy strong {
+  color: var(--brand-deep);
+  font-size: 0.95rem;
+}
+
+.gs-sticky-btns {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.gs-sticky-btns a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.gs-sticky-btns .gs-sticky-primary {
+  background: var(--brand);
+  color: #fff;
+}
+
+.gs-sticky-btns .gs-sticky-primary:hover {
+  background: var(--brand-deep);
+}
+
+.gs-sticky-btns .gs-sticky-ghost {
+  border: 1px solid var(--line);
+  color: var(--brand-deep);
+}
+
+/* Footer social — brand hover */
+.upgrad-footer .footer-social a {
+  transition: background 0.25s, color 0.25s, transform 0.25s var(--ease);
+}
+
+.upgrad-footer .footer-social a:hover {
+  background: var(--accent-soft);
+  color: var(--brand-deep);
+  transform: translateY(-2px);
+}
+
+/* Card hover lift on explore/workshop cards */
+.explore-card,
+.ws-card {
+  transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+
+.explore-card:hover,
+.ws-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 768px) {
+  .gs-convert-inner,
+  .gs-sticky-inner {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gs-convert-actions {
+    width: 100%;
+  }
+
+  .gs-sticky-btns {
+    width: 100%;
+  }
+
+  .gs-sticky-btns a {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:not(.home-lm) .header-actions--lm .btn-lm-primary {
+    animation: none;
+  }
+
+  .gs-reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .gs-reveal.is-visible {
+    animation: none;
+  }
+
+  .explore-card:hover,
+  .ws-card:hover {
+    transform: none;
+  }
+}

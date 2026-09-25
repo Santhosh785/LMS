@@ -9,48 +9,65 @@
  */
 
 /* --------------------------------- public -------------------------------- */
+/**
+ * Playbooks and Claude Skills are in the redesign's header, footer and homepage,
+ * but their pages are not built yet (they need the Playbook and Skill models and
+ * their seed content). Until then the links are withheld rather than pointed at
+ * a route that renders "Page not found" — the same reasoning as the
+ * FEATURE_* flags in server/src/config/env.js: finished UI with nothing behind
+ * it ships hidden.
+ *
+ * Flip this to `true` in the commit that adds `/resources/playbooks` and
+ * `/resources/claude-skills`. Nothing else needs to change.
+ */
+export const RESOURCES_PAGES_READY = false
+
+const whenResourcesReady = (entries) =>
+  RESOURCES_PAGES_READY ? entries : entries.filter((e) => !e.to?.startsWith('/resources/'))
+
+/**
+ * The 2026 redesign restructured the header from five entries to four:
+ * Courses ▾ · Workshops · Flagship Program · Resources ▾.
+ *
+ * Dropdown children may be a link, a `kind: 'label'` section heading, or a
+ * `kind: 'divider'` rule — the three things the redesign's .nav-menu--lemlist
+ * markup contains. `feature: true` renders the bolder .nav-menu-feature link.
+ * The divider is listed last so the topics appended by `termsFrom` fall below
+ * it, matching the static markup; SiteHeader drops a divider left trailing when
+ * every topic is hidden.
+ */
 export const primaryNav = [
-  {
-    label: 'LIVE Classes',
-    menu: [
-      { label: 'Yoda Class', to: '/programs/complete-growth-marketing', live: true },
-      { label: 'Complete Growth Marketing', to: '/programs/complete-growth-marketing' },
-    ],
-  },
-  { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
   {
     label: 'Courses',
     menuKey: 'showCourses',
-    // The nine topic links that used to be hardcoded here now come from the
-    // course topics an operator has flagged "show in menu".
+    // The five topic links under the rule come from the taxonomy, so a topic an
+    // operator renames or unpublishes cannot leave a dead facet in the header.
     termsFrom: 'topic',
-    menu: [{ label: 'Marketing', to: '/courses/category' }],
-  },
-  {
-    label: 'Practice',
-    menuKey: 'showPractice',
     menu: [
-      { label: 'Practice Hub', to: '/community' },
-      { label: 'Campaign Challenges', to: '/community/challenge-submission' },
-      { label: 'Interview Prep', to: '/community' },
+      { kind: 'label', label: 'Self-paced' },
+      { label: 'Show courses', to: '/courses/category', feature: true },
+      { label: 'Course library', to: '/courses' },
+      { label: 'Foundation & gap tracks', to: '/#self-paced' },
+      { kind: 'divider' },
     ],
   },
+  { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
+  { label: 'Flagship Program', to: '/programs/complete-growth-marketing' },
   {
     label: 'Resources',
-    menu: [
-      { label: 'Our Story', to: '/#story' },
+    menu: whenResourcesReady([
+      { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
+      { label: 'Playbooks', to: '/resources/playbooks' },
       { label: 'Blog', to: '/blog', menuKey: 'showBlog' },
-      { label: 'FAQs', to: '#' },
-      { label: 'Free Resources', to: '#' },
-    ],
+      { label: 'Claude Skills', to: '/resources/claude-skills' },
+    ]),
   },
 ]
 
 export const mobileNav = [
+  { label: 'Show courses', to: '/courses/category', menuKey: 'showCourses' },
   { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
-  { label: 'LIVE Classes', to: '/programs/complete-growth-marketing' },
-  { label: 'Courses', to: '/courses/category', menuKey: 'showCourses' },
-  { label: 'Practice', to: '/community', menuKey: 'showPractice' },
+  { label: 'Flagship Program', to: '/programs/complete-growth-marketing' },
   { label: 'Resources', to: '/blog', menuKey: 'showBlog' },
 ]
 
@@ -58,43 +75,34 @@ export const footerColumns = [
   {
     title: 'LIVE Programs',
     links: [
-      { label: 'Workshops', to: '/workshops' },
+      { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
       { label: 'Complete Growth Marketing', to: '/programs/complete-growth-marketing' },
-      { label: 'Yoda Class', to: '/programs/complete-growth-marketing' },
     ],
   },
   {
     title: 'Courses',
     menuKey: 'showCourses',
-    // Generated from the topics flagged "show in menu" — these were nine
-    // hardcoded links that a renamed topic would have left pointing at a facet
-    // no course carries any more.
     termsFrom: 'topic',
     links: [{ label: 'Marketing', to: '/courses/category' }],
   },
   {
-    title: 'Practice & Community',
-    links: [
-      { label: 'Practice Hub', to: '/community' },
-      { label: 'Campaign Challenges', to: '/community/challenge-submission' },
-      { label: 'VIP Community', to: '/community' },
-      { label: 'WhatsApp Channel', to: '/community' },
-    ],
-  },
-  {
     title: 'Resources',
-    links: [
-      { label: 'Our Story', to: '/#story' },
-      { label: 'Blog', to: '/blog' },
-      { label: 'Free Resources', to: '#' },
-      { label: 'Success Stories', to: '#' },
-      { label: 'FAQs', to: '#' },
-    ],
+    links: whenResourcesReady([
+      { label: 'Blog', to: '/blog', menuKey: 'showBlog' },
+      { label: 'Playbooks', to: '/resources/playbooks' },
+      { label: 'Claude Skills', to: '/resources/claude-skills' },
+      // The redesign leaves these two as "#". A dead anchor reads as a broken
+      // site to a visitor and to a payment-gateway reviewer, so they point at
+      // the pages that actually hold the content the labels promise.
+      { label: 'Free Resources', to: '/courses?price=free' },
+      { label: 'Success Stories', to: '/#community' },
+      { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
+    ]),
   },
   {
     title: 'Company',
     links: [
-      { label: 'About Us', to: '/#story' },
+      { label: 'About us', to: '/about' },
       { label: 'Contact Us', to: '/contact' },
       { label: 'Refund Policy', to: '/refund' },
       { label: 'Delivery Policy', to: '/delivery' },

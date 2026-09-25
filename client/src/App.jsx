@@ -13,6 +13,7 @@ import { useFeatures } from './context/SiteConfigContext.jsx'
 
 /* --------------------------------- public --------------------------------- */
 import Home from './pages/public/Home.jsx'
+import About from './pages/public/About.jsx'
 import Courses from './pages/public/Courses.jsx'
 import CourseCategory from './pages/public/CourseCategory.jsx'
 import CourseDetail from './pages/public/CourseDetail.jsx'
@@ -223,6 +224,7 @@ export default function App() {
           {/* ------------------------------ public ------------------------------ */}
           <Route element={<PublicLayout />}>
             <Route index element={<Home />} />
+            <Route path="about" element={<About />} />
             <Route path="courses" element={<Courses />} />
             <Route path="courses/category" element={<CourseCategory />} />
             <Route path="courses/:slug" element={<CourseDetail />} />

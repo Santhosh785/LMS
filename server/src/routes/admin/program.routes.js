@@ -25,10 +25,27 @@ const TAB_FIELDS = {
     'heroImage',
     'categories',
     'tags',
+    // Hero scarcity line — changes every batch, so it sits with the other
+    // information fields rather than the structural content below.
+    'batchNote',
   ],
   // The page furniture that used to be hardcoded in ProgramDetail.jsx.
   copy: ['sectionCopy', 'ctas', 'phaseLabels'],
-  content: ['outcomes', 'stats', 'comparison', 'audience', 'admission', 'mentors', 'testimonials'],
+  content: [
+    'outcomes',
+    'stats',
+    'comparison',
+    'audience',
+    'admission',
+    'mentors',
+    'testimonials',
+    // 2026 redesign sections — see models/Program.js.
+    'trustBar',
+    'why',
+    'structure',
+    'tracks',
+    'toolGroups',
+  ],
   curriculum: ['curriculum'],
   pricing: ['pricing'],
   faqs: ['faqs'],

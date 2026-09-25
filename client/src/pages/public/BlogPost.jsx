@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { Button, cn, Loading, TextAreaField, TextField, useToast } from '../../components/ui/index.jsx'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
+import { AskAiMetaBar, AskAiRail } from '../../components/public/AskAiBar.jsx'
 import CoverArt from '../../components/CoverArt.jsx'
 import { plainText, renderRich, safeHref } from '../../lib/richText.jsx'
 import { embedFrom } from '../../lib/embed.js'
@@ -326,9 +327,14 @@ export default function BlogPost() {
   }
 
   return (
-    <div className="px-5 py-10">
+    <div>
       {toast.node}
-      <div className="mx-auto max-w-shell">
+      {/*
+        .post-wrap is the drop's 1160px centred column. The gutter it leaves is
+        where the fixed Ask-AI rail sits — on a full-bleed container the rail
+        lands on top of the article text.
+      */}
+      <div className="post-wrap">
         <nav className="mb-4 text-[0.8rem] text-muted" aria-label="Breadcrumb">
           <Link to="/" className="hover:text-brand">
             Home
@@ -341,7 +347,7 @@ export default function BlogPost() {
           <span className="text-brand-deep">{post.category}</span>
         </nav>
 
-        <div className="grid grid-cols-[1fr_260px] gap-10 mx-960:grid-cols-1">
+        <div className="post-layout">
           <article>
             <h1 className="text-[clamp(1.7rem,3vw,2.3rem)]">{post.title}</h1>
             <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.82rem] text-muted">
@@ -349,6 +355,14 @@ export default function BlogPost() {
               <span>· Updated on {fmt(post.publishedAt)}</span>
               <span>| {post.readTime}</span>
             </p>
+
+            {/* The redesign's Ask-AI bar: assistant deep links with a
+                summarise prompt for this article prefilled. */}
+            <AskAiMetaBar
+              title={post.title}
+              publishedLabel={fmt(post.publishedAt)}
+              readTime={post.readTime}
+            />
 
             <div className="mt-4 flex items-center gap-2">
               <span className="text-[0.8rem] text-muted">Share:</span>
@@ -548,6 +562,8 @@ export default function BlogPost() {
           </section>
         )}
       </div>
+
+      <AskAiRail title={post.title} />
     </div>
   )
 }

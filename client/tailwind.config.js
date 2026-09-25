@@ -105,6 +105,15 @@ export default {
         shell: '100%',
         shellSm: '100%',
         admin: '100%',
+        /**
+         * The 2026 redesign reintroduced centred columns on the public pages.
+         * Four widths, taken from the static build: .lm-wrap, .lm-hero-inner /
+         * .lm-flagship-grid, .lm-gap-inner, and .footer-top / .footer-bottom.
+         */
+        wrap: '1080px',
+        hero: '1120px',
+        narrow: '900px',
+        footer: '1200px',
       },
       spacing: {
         header: '76px',

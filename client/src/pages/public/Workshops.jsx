@@ -1,10 +1,20 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Button, cn, Loading, Modal, TextField, useToast } from '../../components/ui/index.jsx'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
+import useBodyClass from '../../hooks/useBodyClass.js'
+import useRevealOnScroll from '../../hooks/useRevealOnScroll.js'
+
+/**
+ * /workshops — the 2026 redesign's listing (.ws-page).
+ *
+ * Registration is unchanged: a signed-in learner registers in one click, a
+ * guest fills the name/email/phone modal, and POST /api/workshops/:id/register
+ * stays idempotent. Only the markup moved onto the drop's classes.
+ */
 
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`
 
@@ -17,14 +27,14 @@ const SECTION_ORDER = {
 const sectionTitle = (mode, key) =>
   mode === 'online' ? `${key} workshops${key === 'English' ? ' (India)' : ''}` : `${key} workshops`
 
+/** The drop paints banners with `.ws-banner.seo`; the database stores `ws-seo`. */
+const bannerTone = (bannerClass) => (bannerClass || '').replace(/^ws-/, '')
+
 function WorkshopCard({ workshop, onRegister, registered }) {
   return (
-    <article className="overflow-hidden rounded-lg2 border border-line bg-white shadow-softer transition-transform duration-200 ease-gs hover:-translate-y-1">
+    <article className="ws-card">
       <div
-        className={cn(
-          'art-sheen relative grid h-36 place-items-center px-4 text-center',
-          workshop.bannerClass,
-        )}
+        className={cn('ws-banner', workshop.bannerClass, bannerTone(workshop.bannerClass))}
         style={
           workshop.image
             ? {
@@ -35,55 +45,56 @@ function WorkshopCard({ workshop, onRegister, registered }) {
             : undefined
         }
       >
-        <div>
-          <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-white/80">
-            Growth Scholar{workshop.mode === 'offline' ? ' · Offline' : ''}
-          </p>
-          <p className="mt-1 text-[1.15rem] font-black leading-tight text-white">
-            {workshop.bannerTitle}
-          </p>
-        </div>
-        <span className="absolute bottom-3 right-3 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-[0.7rem] font-bold text-brand-deep">
-          {workshop.hostInitials}
-        </span>
-      </div>
-      <div className="p-4">
-        <h3 className="text-[1rem]">
-          <Link to={`/workshops/${workshop.slug}`} className="hover:text-brand">
-            {workshop.title}
-          </Link>
-        </h3>
-        <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.8rem] text-muted">
-          <span>
-            {workshop.mode === 'offline' ? '📍' : '👤'} {workshop.venue || workshop.level}
-          </span>
-          <span>🌐 {workshop.language}</span>
+        <p className="brand-mini">
+          Growth Scholar{workshop.mode === 'offline' ? ' · Offline' : ''}
         </p>
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <div className="flex items-baseline gap-2">
+        <p className="banner-title">{workshop.bannerTitle || workshop.title}</p>
+        <span className="banner-cta">Register Now</span>
+        {workshop.hostInitials && (
+          <div className="face" aria-hidden="true">
+            {workshop.hostInitials}
+          </div>
+        )}
+      </div>
+      <div className="ws-card-body">
+        <h3>
+          <Link to={`/workshops/${workshop.slug}`}>{workshop.title}</Link>
+        </h3>
+        <div className="ws-meta">
+          <span>
+            <span className="ico" aria-hidden="true">
+              {workshop.mode === 'offline' ? '📍' : '👤'}
+            </span>{' '}
+            {workshop.venue || workshop.level}
+          </span>
+          {workshop.language && (
+            <span>
+              <span className="ico" aria-hidden="true">
+                🌐
+              </span>{' '}
+              {workshop.language}
+            </span>
+          )}
+          <span className="ws-price">
             {workshop.priceNew ? (
               <>
-                {workshop.priceOld ? (
-                  <span className="text-[0.85rem] text-muted line-through">
-                    {inr(workshop.priceOld)}
-                  </span>
-                ) : null}
-                <span className="text-[1.05rem] font-bold text-brand-deep">
-                  {inr(workshop.priceNew)}
-                </span>
+                {workshop.priceOld > 0 && <span className="old">{inr(workshop.priceOld)}</span>}{' '}
+                {inr(workshop.priceNew)}
               </>
             ) : (
-              <span className="text-[1.05rem] font-bold text-brand-deep">Free</span>
+              <span className="free">Free</span>
             )}
-          </div>
-          <Button
-            size="sm"
-            variant={registered ? 'outline' : 'primary'}
+          </span>
+        </div>
+        <div className="ws-register">
+          <button
+            className="btn-reg"
+            type="button"
             onClick={() => onRegister(workshop)}
             disabled={registered}
           >
             {registered ? 'Registered ✓' : 'Register'}
-          </Button>
+          </button>
         </div>
       </div>
     </article>
@@ -92,8 +103,10 @@ function WorkshopCard({ workshop, onRegister, registered }) {
 
 export default function Workshops() {
   useDocumentTitle('Workshops | Growth Scholar')
+  useBodyClass('gs-redesign')
   const [mode, setMode] = useState('online')
   const [target, setTarget] = useState(null)
+  const pageRef = useRef(null)
   const [registeredIds, setRegisteredIds] = useState([])
   const { user } = useAuth()
   const toast = useToast()
@@ -125,6 +138,18 @@ export default function Workshops() {
   }
 
   const items = data?.items || []
+  /**
+   * .ws-card ships at opacity 0 and is painted by `.is-visible`, which the
+   * drop's workshops.js added on scroll. Without this the grid renders as
+   * blank space under each heading. Re-runs when the cards change.
+   */
+  useRevealOnScroll(pageRef, {
+    selectors: ['.ws-card'],
+    revealClass: '',
+    visibleClass: 'is-visible',
+    deps: [items.length, mode],
+  })
+
   const groups = SECTION_ORDER[mode]
     .map((key) => ({
       key,
@@ -132,86 +157,133 @@ export default function Workshops() {
     }))
     .filter((g) => g.items.length)
 
-  return (
-    <div className="px-5 py-10">
-      {toast.node}
-      <div className="mx-auto max-w-shell">
-        <nav className="mb-4 text-[0.8rem] text-muted" aria-label="Breadcrumb">
-          <Link to="/" className="hover:text-brand">
-            Home
-          </Link>
-          <span className="px-1.5">/</span>
-          <span className="text-brand-deep">Workshops</span>
-        </nav>
+  const switchMode = (next) => {
+    setMode(next)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
-        <h1 className="text-[clamp(1.7rem,3vw,2.3rem)]">Live workshops</h1>
-        <p className="mt-2 max-w-2xl text-muted">
-          Short, hands-on sessions in Tamil, English and Hindi — online and in person.
+  return (
+    <div className="ws-page" ref={pageRef}>
+      {toast.node}
+      <div className="ws-inner">
+        <p className="ws-crumb">
+          <Link to="/">Home</Link> <span>›</span> Workshops
         </p>
 
-        <div
-          className="my-7 inline-flex rounded-full border border-line bg-white p-1"
-          role="tablist"
-          aria-label="Workshop mode"
-        >
-          {[
-            { id: 'online', label: '🖥 Online workshops' },
-            { id: 'offline', label: '🏢 Offline workshops' },
-          ].map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={mode === t.id}
-              onClick={() => {
-                setMode(t.id)
-                window.scrollTo({ top: 0, behavior: 'smooth' })
-              }}
-              className={cn(
-                'rounded-full px-5 py-2.5 text-[0.88rem] font-semibold transition-colors duration-200 ease-gs',
-                mode === t.id ? 'bg-brand text-white' : 'text-muted hover:text-brand',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+        <header className="ws-hero">
+          <p className="ws-hero-eyebrow">
+            <span className="pulse" aria-hidden="true" /> Live sessions · Online &amp; offline
+          </p>
+          <h1 className="ws-page-title">Live workshops</h1>
+          <p className="ws-hero-deck">
+            Short, high-energy live builds with mentors. Leave with templates you can run this
+            week.
+          </p>
+          <div className="ws-hero-chips" aria-label="Launch language">
+            <span>த Tamil</span>
+            <span className="ws-chip-muted">Launching now</span>
+          </div>
+        </header>
+
+        <div className="ws-mode" role="tablist" aria-label="Workshop format">
+          <div className="ws-mode-track" data-active={mode}>
+            <span className="ws-mode-glider" aria-hidden="true" />
+            {[
+              { id: 'online', icon: '🖥', label: 'Online workshops' },
+              { id: 'offline', icon: '🏢', label: 'Offline workshops' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                className={cn('ws-mode-btn', mode === t.id && 'is-active')}
+                type="button"
+                role="tab"
+                aria-selected={mode === t.id}
+                onClick={() => switchMode(t.id)}
+              >
+                <span className="ico" aria-hidden="true">
+                  {t.icon}
+                </span>{' '}
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {isPending ? (
-          <Loading />
-        ) : (
-          groups.map((group) => (
-            <section key={group.key} className="mb-12">
-              <h2 id={group.key.toLowerCase()} className="mb-5 text-[1.25rem]">
-                <span aria-hidden="true">✨</span> {sectionTitle(mode, group.key)}{' '}
-                <span aria-hidden="true">✨</span>
-              </h2>
-              <div className="grid grid-cols-3 gap-5 mx-1040:grid-cols-2 mx-640:grid-cols-1">
-                {group.items.map((w) => (
-                  <WorkshopCard
-                    key={w._id}
-                    workshop={w}
-                    onRegister={onRegister}
-                    registered={registeredIds.includes(w._id)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))
-        )}
+        <div>
+          {isPending ? (
+            <Loading />
+          ) : (
+            groups.map((group) => (
+              <section className="ws-section" key={group.key} aria-labelledby={group.key.toLowerCase()}>
+                <div className="ws-section-head">
+                  <h2 id={group.key.toLowerCase()}>
+                    <span className="spark" aria-hidden="true">
+                      ✨
+                    </span>{' '}
+                    {sectionTitle(mode, group.key)}{' '}
+                    <span className="spark" aria-hidden="true">
+                      ✨
+                    </span>
+                  </h2>
+                </div>
+                <div className="ws-grid">
+                  {group.items.map((w) => (
+                    <WorkshopCard
+                      key={w._id}
+                      workshop={w}
+                      onRegister={onRegister}
+                      registered={registeredIds.includes(w._id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
 
-        <p className="text-[0.9rem] text-muted">
-          More cities soon. Prefer live online?{' '}
-          <button
-            type="button"
-            onClick={() => setMode(mode === 'online' ? 'offline' : 'online')}
-            className="font-semibold text-brand hover:underline"
-          >
-            Switch to {mode === 'online' ? 'Offline' : 'Online'} workshops
-          </button>
-          .
-        </p>
+          <p className="ws-footnote">
+            More cities soon. Prefer live {mode === 'online' ? 'in person' : 'online'}?{' '}
+            <button
+              type="button"
+              onClick={() => switchMode(mode === 'online' ? 'offline' : 'online')}
+              style={{
+                background: 'none',
+                border: 0,
+                color: 'var(--accent)',
+                font: 'inherit',
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              Switch to {mode === 'online' ? 'Offline' : 'Online'} workshops
+            </button>
+            .
+          </p>
+        </div>
       </div>
+
+      <section className="gs-convert-band" aria-labelledby="ws-convert-heading">
+        <div className="gs-convert-inner">
+          <div className="gs-convert-copy">
+            <p className="eyebrow">Ready for implementation?</p>
+            <h2 id="ws-convert-heading">
+              Workshops practice one skill. Flagship connects the full stack.
+            </h2>
+            <p>
+              10 seats per batch · LIVE builds · offline masterclass · apply when you’re ready to
+              implement for real.
+            </p>
+          </div>
+          <div className="gs-convert-actions">
+            <Link className="gs-btn-solid" to="/programs/complete-growth-marketing">
+              Apply for Flagship
+            </Link>
+            <Link className="gs-btn-outline" to="/courses/category">
+              Browse self-paced courses
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <Modal
         open={!!target}

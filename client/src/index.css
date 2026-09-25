@@ -6,6 +6,39 @@
    Base — mirrors the original css/base.css body/heading defaults so typography
    lands identically without repeating the same utilities on every element.
    --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   Design tokens — the :root block from the static build's css/base.css.
+
+   tailwind.config.js mirrors these same values as theme keys, which is what the
+   ported Tailwind components use. They are declared here as custom properties
+   too because the 2026 redesign ships whole stylesheets (home-lemlist.css and
+   friends) that reference them through var(). Keeping one set of literals in
+   both places means a redesign drop can be imported verbatim instead of being
+   hand-translated. If you change a value here, change it in the Tailwind config
+   in the same commit.
+   --------------------------------------------------------------------------- */
+:root {
+  --brand: #135855;
+  --brand-deep: #0d3f3d;
+  --accent: #3ecf8e;
+  --accent-soft: #e8faf1;
+  --accent-mid: #68c088;
+  --bg: #f6f8f7;
+  --bg-white: #ffffff;
+  --bg-mist: #eef3f1;
+  --text: #1a2423;
+  --muted: #5c6f6d;
+  --line: rgba(19, 88, 85, 0.12);
+  --shadow: 0 10px 30px rgba(19, 88, 85, 0.08);
+  --shadow-sm: 0 4px 14px rgba(19, 88, 85, 0.06);
+  --radius: 14px;
+  --radius-lg: 20px;
+  --header-h: 76px;
+  --font: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --max: 1160px;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;

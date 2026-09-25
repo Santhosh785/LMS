@@ -125,6 +125,7 @@ export default function Programs() {
           weeks: Number(draft.weeks) || 0,
           meta: draft.meta || [],
           heroImage: draft.heroImage,
+          batchNote: draft.batchNote,
           categories: draft.categories || [],
           tags: draft.tags || [],
         },
@@ -148,7 +149,13 @@ export default function Programs() {
     return save.mutate({
       id: editingId,
       tab: 'pricing',
-      body: { pricing: { ...draft.pricing, amount: Number(draft.pricing.amount) || 0 } },
+      body: {
+        pricing: {
+          ...draft.pricing,
+          amount: Number(draft.pricing.amount) || 0,
+          funding: (draft.pricing.funding || []).filter((f) => f.title || f.body),
+        },
+      },
     })
   }
 
@@ -302,6 +309,12 @@ export default function Programs() {
                   />
                 </div>
                 <TextField
+                  label="Batch note"
+                  value={draft.batchNote || ''}
+                  onChange={(e) => field('batchNote', e.target.value)}
+                  hint="The scarcity line in the hero, the pricing panel and the sticky bar — e.g. “Batch 4 open · 10 seats per batch”. Leave empty to hide it."
+                />
+                <TextField
                   label="Hero chips"
                   value={(draft.meta || []).join(', ')}
                   onChange={(e) =>
@@ -417,6 +430,107 @@ export default function Programs() {
                   value={draft.pricing.note || ''}
                   onChange={(e) => field('pricing', { ...draft.pricing, note: e.target.value })}
                 />
+                <div className="grid grid-cols-2 gap-4 mx-640:grid-cols-1">
+                  <TextField
+                    label="Currency label"
+                    value={draft.pricing.currency || ''}
+                    onChange={(e) =>
+                      field('pricing', { ...draft.pricing, currency: e.target.value })
+                    }
+                    hint="Shown before the figure, e.g. INR."
+                  />
+                  <TextField
+                    label="Tax note"
+                    value={draft.pricing.taxNote || ''}
+                    onChange={(e) =>
+                      field('pricing', { ...draft.pricing, taxNote: e.target.value })
+                    }
+                    hint="After the figure, e.g. /– (inc. tax)."
+                  />
+                </div>
+                <TextField
+                  label="Scholarship line"
+                  value={draft.pricing.scholarship || ''}
+                  onChange={(e) =>
+                    field('pricing', { ...draft.pricing, scholarship: e.target.value })
+                  }
+                />
+                <div className="grid grid-cols-2 gap-4 mx-640:grid-cols-1">
+                  <TextField
+                    label="Duration line"
+                    value={draft.pricing.duration || ''}
+                    onChange={(e) =>
+                      field('pricing', { ...draft.pricing, duration: e.target.value })
+                    }
+                  />
+                  <TextField
+                    label="Seats line"
+                    value={draft.pricing.slots || ''}
+                    onChange={(e) => field('pricing', { ...draft.pricing, slots: e.target.value })}
+                  />
+                </div>
+                <TextField
+                  label="Batch status"
+                  value={draft.pricing.status || ''}
+                  onChange={(e) => field('pricing', { ...draft.pricing, status: e.target.value })}
+                  hint="e.g. “Batch 4 open · 10 seats remaining”. Update this every intake."
+                />
+
+                {/* "What your fee is actually funding" — the list beside the price. */}
+                <div className="grid gap-2">
+                  <p className="text-[0.86rem] font-semibold text-brand-deep">
+                    What your fee is funding
+                  </p>
+                  {(draft.pricing.funding || []).map((row, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_2fr_auto] gap-2 mx-640:grid-cols-1">
+                      <TextField
+                        label={i === 0 ? 'Title' : undefined}
+                        value={row.title || ''}
+                        onChange={(e) => {
+                          const funding = [...draft.pricing.funding]
+                          funding[i] = { ...row, title: e.target.value }
+                          field('pricing', { ...draft.pricing, funding })
+                        }}
+                      />
+                      <TextField
+                        label={i === 0 ? 'Description' : undefined}
+                        value={row.body || ''}
+                        onChange={(e) => {
+                          const funding = [...draft.pricing.funding]
+                          funding[i] = { ...row, body: e.target.value }
+                          field('pricing', { ...draft.pricing, funding })
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={i === 0 ? 'self-end' : undefined}
+                        onClick={() =>
+                          field('pricing', {
+                            ...draft.pricing,
+                            funding: draft.pricing.funding.filter((_, j) => j !== i),
+                          })
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="justify-self-start"
+                    onClick={() =>
+                      field('pricing', {
+                        ...draft.pricing,
+                        funding: [...(draft.pricing.funding || []), { title: '', body: '' }],
+                      })
+                    }
+                  >
+                    Add row
+                  </Button>
+                </div>
+
                 <TextAreaField
                   label="What's included"
                   rows={5}
@@ -427,7 +541,7 @@ export default function Programs() {
                       benefits: e.target.value.split('\n').filter(Boolean),
                     })
                   }
-                  hint="One per line."
+                  hint="One per line. Only used by programs that have no funding rows above."
                 />
               </div>
             )}

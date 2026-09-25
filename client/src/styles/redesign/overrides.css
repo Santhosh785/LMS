@@ -1,0 +1,52 @@
+/* ---------------------------------------------------------------------------
+ * The only hand-written file in this directory.
+ *
+ * Everything beside it is a verbatim copy of the client's redesign drop. When a
+ * vendored sheet has to behave differently inside the React app, the difference
+ * goes here so the mirrors stay re-copyable. Loaded last.
+ * --------------------------------------------------------------------------- */
+
+/**
+ * Header offset.
+ *
+ * PublicLayout puts `pt-header` on <main> because the header is fixed and the
+ * ported pages start flush against it. Every redesign page instead pads its own
+ * first section by calc(var(--header-h) + …), the way the static build did — so
+ * on those pages the layout's offset is applied twice and leaves a 76px gap
+ * above the hero. `gs-redesign` is set by useBodyClass() on each redesign page
+ * alongside its page-specific class, and cancels it.
+ */
+body.gs-redesign main {
+  padding-top: 0;
+}
+
+/**
+ * Class collision: `.ws-meta`.
+ *
+ * index.css has carried `.ws-meta` since the first port — it is the *gradient*
+ * for a Meta Ads workshop banner, and workshops in the database store it in
+ * `bannerClass`. The 2026 redesign independently uses `.ws-meta` for the
+ * metadata row inside a card, so the gradient paints itself across the
+ * "Beginners · Tamil · ₹299" line and makes it unreadable.
+ *
+ * Renaming the gradient would need a data migration of every workshop, so the
+ * redesign's usage is disambiguated by context instead: a `.ws-meta` inside a
+ * card body is the text row and never wants a background. The gradient keeps
+ * working on `.ws-banner`, which is the only place it was ever meant to be.
+ */
+.ws-card-body .ws-meta {
+  background: none;
+}
+
+/**
+ * `.blog-spotlight-body p` sets `-webkit-box` to line-clamp the excerpt, and
+ * because it is more specific than `.blog-spotlight-meta` it also clamps the
+ * category/date/read-time row that sits in the same container — collapsing the
+ * flex gaps so it renders as "CAREER6 Aug 202612 min read".
+ *
+ * Present in the drop as delivered; the meta row is restored to flex here
+ * rather than by editing the vendored sheet.
+ */
+.blog-spotlight-body p.blog-spotlight-meta {
+  display: flex;
+}

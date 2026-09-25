@@ -1,26 +1,71 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client.js'
-import { Button, cn, EmptyState, Loading } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import { useTerms } from '../../context/SiteConfigContext.jsx'
-import CoverArt from '../../components/CoverArt.jsx'
+import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'
+import { RESOURCES_PAGES_READY } from '../../data/nav.js'
+import useDocumentTitle from '../../hooks/useDocumentTitle.js'
+import useBodyClass from '../../hooks/useBodyClass.js'
 
 /**
- * "Latest Articles" is the unfiltered view rather than a category, so it stays
- * here as the leading entry; everything after it comes from the Term registry
- * and is editable in admin.
+ * /blog — the 2026 redesign's archive (.blog-wrap).
+ *
+ * Masthead, topic rail, spotlight, latest strip and a category-filtered grid.
+ * Categories come from the taxonomy, and the query, pagination and 8-second
+ * featured rotation are unchanged.
  */
+
 const ALL_POSTS = 'Latest Articles'
 const ROTATE_MS = 8000
 
-const fmt = (d) =>
-  new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+const dateLabel = (d) =>
+  d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+
+/** The drop paints thumbnails with `.thumb.seo`; the database stores `feat-seo`. */
+const heroTone = (heroClass) => (heroClass || '').replace(/^(feat|thumb)-/, '')
+
+function BlogCard({ post }) {
+  return (
+    <Link className="blog-card" to={`/blog/${post.slug}`}>
+      <div
+        className={cn('thumb', post.heroClass, heroTone(post.heroClass))}
+        style={
+          post.image
+            ? {
+                backgroundImage: `url(${post.image})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined
+        }
+      >
+        <span className="bookmark" aria-hidden="true">
+          🔖
+        </span>
+        {!post.image && <span className="thumb-label">{post.heroLabel || post.title}</span>}
+      </div>
+      <div className="body">
+        {post.category && <p className="cat-label">{post.category}</p>}
+        <h3>{post.title}</h3>
+        <p className="card-meta">
+          By {post.author?.name || 'Growth Scholar'}
+          <br />
+          {dateLabel(post.publishedAt)}
+          {post.readTime ? ` | ${post.readTime}` : ''}
+        </p>
+      </div>
+    </Link>
+  )
+}
 
 export default function Blog() {
   useDocumentTitle('Blog | Growth Scholar')
-  const [category, setCategory] = useState(ALL_POSTS)
+  useBodyClass('gs-redesign')
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Category lives in the URL so the topic rail is real, shareable links —
+  // `.blog-topic-row a` is also what the stylesheet targets.
+  const category = searchParams.get('category') || ALL_POSTS
   const [slide, setSlide] = useState(0)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -53,212 +98,231 @@ export default function Blog() {
   }, [featured.length])
 
   const current = featured[slide]
+  const latest = items.slice(0, 8)
+
+  const categoryHref = (c) =>
+    c === ALL_POSTS ? '/blog' : `/blog?category=${encodeURIComponent(c)}`
+
+  const pick = (c) => {
+    setSearchParams(c === ALL_POSTS ? {} : { category: c }, { replace: true })
+    setPage(1)
+  }
 
   return (
-    <div className="px-5 py-10">
-      <div className="mx-auto max-w-shell">
-        <nav className="mb-4 text-[0.8rem] text-muted" aria-label="Breadcrumb">
-          <Link to="/" className="hover:text-brand">
-            Home
+    <div className="blog-wrap">
+      <p className="blog-crumb">
+        <Link to="/">Home</Link> <span>›</span> Blog
+      </p>
+
+      <header className="blog-masthead">
+        <div className="blog-masthead-copy">
+          <p className="blog-masthead-eyebrow">Digital marketing strategies for growth marketers</p>
+          <h1>Smart marketing starts here.</h1>
+          <p className="blog-masthead-deck">
+            SEO, paid media, AI discovery, funnels, and career guides — written for founders,
+            freelancers, and growth teams in India.
+          </p>
+        </div>
+        <form
+          className="blog-search blog-search--masthead"
+          role="search"
+          onSubmit={(e) => e.preventDefault()}
+        >
+          <label className="sr-only" htmlFor="blog-search-input">
+            Search blog
+          </label>
+          <input
+            id="blog-search-input"
+            type="search"
+            placeholder="Search articles…"
+            autoComplete="off"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+          />
+        </form>
+      </header>
+
+      <nav className="blog-topic-row" aria-label="Blog topics">
+        {categories.map((c) => (
+          <Link
+            key={c}
+            to={categoryHref(c)}
+            className={cn(category === c && 'is-active')}
+            onClick={() => setPage(1)}
+          >
+            {c === ALL_POSTS ? 'All' : c}
           </Link>
-          <span className="px-1.5">/</span>
-          <span className="text-brand-deep">Blog</span>
-        </nav>
+        ))}
+      </nav>
 
-        <h1 className="mb-7 text-[clamp(1.7rem,3vw,2.3rem)]">Growth Scholar Blog</h1>
-
-        {/* ---------------------------- featured rail --------------------------- */}
-        {current && (
-          <section className="relative mb-12 overflow-hidden rounded-xl2 border border-line bg-white shadow-softer">
-            <div className="grid grid-cols-[1fr_1.1fr] mx-960:grid-cols-1">
-              <CoverArt
-                image={current.image}
-                imageAlt={current.imageAlt}
-                gradientClass={current.heroClass}
-                label={current.heroLabel}
-                labelClass="text-[1.6rem]"
-                className="min-h-[260px] px-6"
-                sizes="(max-width: 960px) 100vw, 50vw"
-              />
-              <div className="flex flex-col justify-center gap-3 p-8">
-                <p className="flex flex-wrap items-center gap-2 text-[0.78rem] text-muted">
-                  <span className="rounded-full bg-accent-soft px-2.5 py-1 font-semibold text-brand">
-                    {current.category}
-                  </span>
-                  <span>{fmt(current.publishedAt)}</span>
-                  <span>· {current.readTime}</span>
-                </p>
-                <h2 className="text-[clamp(1.2rem,2.2vw,1.7rem)]">
-                  <Link to={`/blog/${current.slug}`} className="hover:text-brand">
-                    {current.title}
-                  </Link>
-                </h2>
-                <p className="text-[0.95rem] text-muted">{current.excerpt}</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="grid h-9 w-9 place-items-center rounded-full bg-accent-soft text-[0.75rem] font-bold text-brand">
-                    {current.author?.avatar}
-                  </span>
-                  <span className="text-[0.85rem] font-medium text-muted">
-                    {current.author?.name}
-                  </span>
-                </div>
-              </div>
+      {current && (
+        <section className="blog-spotlight" aria-label="Featured article">
+          <Link className="blog-spotlight-link" to={`/blog/${current.slug}`}>
+            <div
+              className={cn('blog-spotlight-media', current.heroClass, heroTone(current.heroClass))}
+              style={
+                current.image
+                  ? {
+                      backgroundImage: `url(${current.image})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }
+                  : undefined
+              }
+              role="img"
+              aria-label={current.imageAlt || `Featured: ${current.title}`}
+            />
+            <div className="blog-spotlight-body">
+              <p className="blog-spotlight-meta">
+                {current.category && <span>{current.category}</span>}
+                <span>{dateLabel(current.publishedAt)}</span>
+                {current.readTime && <span>{current.readTime}</span>}
+              </p>
+              <h2>{current.title}</h2>
+              {current.excerpt && <p>{current.excerpt}</p>}
+              <span className="blog-spotlight-cta">Read the full study →</span>
             </div>
+          </Link>
+        </section>
+      )}
 
-            <div className="absolute bottom-4 left-8 flex gap-2 mx-960:left-1/2 mx-960:-translate-x-1/2">
-              {featured.map((f, i) => (
-                <button
-                  key={f._id}
-                  type="button"
-                  aria-label={`Go to slide ${i + 1}`}
-                  onClick={() => setSlide(i)}
-                  className={cn(
-                    'h-2 rounded-full transition-all duration-200',
-                    i === slide ? 'w-6 bg-brand' : 'w-2 bg-line-solid',
-                  )}
+      {/*
+        The drop's strip opened with "12,000+ learners trained", which
+        contradicts the 1,000+ figure the homepage and About page both carry.
+        The consistent number is used here; the rest are cadence claims, not
+        counts, so they stand as written.
+      */}
+      <ul className="blog-stats-strip" aria-label="Growth Scholar impact">
+        <li>
+          <strong>1,000+</strong> learners trained
+        </li>
+        <li>
+          <strong>Weekly</strong> new articles
+        </li>
+        <li>
+          <strong>10</strong> seats per Flagship batch
+        </li>
+        <li>
+          <strong>Weekly</strong> workshop drops
+        </li>
+      </ul>
+
+      {latest.length > 0 && (
+        <section className="blog-latest-strip" aria-labelledby="latest-heading">
+          <div className="blog-latest-head">
+            <h2 id="latest-heading">Latest from the blog</h2>
+            <a href="#discover-heading">View all categories</a>
+          </div>
+          <div className="blog-latest-scroll">
+            {latest.map((p) => (
+              <Link className="blog-latest-card" to={`/blog/${p.slug}`} key={p._id}>
+                <div
+                  className={cn('blog-latest-thumb', p.heroClass, heroTone(p.heroClass))}
+                  style={
+                    p.image
+                      ? {
+                          backgroundImage: `url(${p.image})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                        }
+                      : undefined
+                  }
                 />
-              ))}
-            </div>
-            <button
-              type="button"
-              aria-label="Next article"
-              onClick={() => setSlide((s) => (s + 1) % featured.length)}
-              className="absolute bottom-4 right-4 grid h-9 w-9 place-items-center rounded-full border border-line bg-white text-muted hover:border-brand hover:text-brand"
-            >
-              ›
-            </button>
-          </section>
-        )}
+                {p.category && <p className="blog-latest-cat">{p.category}</p>}
+                <h3>{p.title}</h3>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
-        <div className="grid grid-cols-[220px_1fr] gap-8 mx-960:grid-cols-1">
-          <aside>
-            <h2 className="mb-3 text-[1rem]">Discover blogs by category</h2>
-            <nav className="flex flex-col gap-1 mx-960:flex-row mx-960:flex-wrap">
-              {categories.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => {
-                    setCategory(c)
-                    setPage(1)
-                  }}
-                  className={cn(
-                    'flex items-center justify-between rounded-md2 px-3 py-2 text-left text-[0.88rem] transition-colors duration-200 ease-gs',
-                    category === c
-                      ? 'bg-accent-soft font-semibold text-brand'
-                      : 'text-muted hover:bg-surface-mist hover:text-brand',
-                  )}
-                >
-                  {c} <span aria-hidden="true">›</span>
-                </button>
-              ))}
-            </nav>
+      {/* Hidden until the Resources pages exist — see RESOURCES_PAGES_READY. */}
+      {RESOURCES_PAGES_READY && (
+        <section className="blog-ai-promo" aria-labelledby="ai-promo-heading">
+          <div>
+            <h2 id="ai-promo-heading">Learn how to level-up with AI</h2>
+            <p>
+              Use our Claude skills and playbooks to audit pages, draft campaigns, and ship faster —
+              then practice live in Flagship.
+            </p>
+          </div>
+          <div className="blog-ai-promo-actions">
+            <Link className="btn-lm-primary" to="/resources/claude-skills">
+              Browse Claude Skills
+            </Link>
+            <Link className="btn-lm-ghost" to="/resources/playbooks">
+              Open playbooks
+            </Link>
+          </div>
+        </section>
+      )}
+
+      <section className="blog-discover" aria-labelledby="discover-heading">
+        <h2 id="discover-heading">
+          Discover Blogs by <em>Categories</em>
+        </h2>
+
+        <div className="blog-layout">
+          <aside className="blog-cats" aria-label="Blog categories">
+            {categories.map((c) => (
+              <button
+                key={c}
+                className={cn('blog-cat', category === c && 'is-active')}
+                type="button"
+                onClick={() => pick(c)}
+              >
+                {c} <span className="chev">›</span>
+              </button>
+            ))}
           </aside>
 
-          <section>
-            <form
-              className="mb-5 flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault()
-                setPage(1)
-              }}
-            >
-              <label className="sr-only" htmlFor="blog-search">
-                Search articles
-              </label>
-              <input
-                id="blog-search"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value)
-                  setPage(1)
-                }}
-                placeholder="Search articles…"
-                className="min-h-[42px] w-full rounded-md2 border border-line bg-white px-3 text-[0.88rem] outline-none focus:border-brand"
-              />
-              <Button type="submit" variant="outline" size="sm">
-                Search
-              </Button>
-            </form>
+          <div>
+            <h3 className="visually-hidden">{category}</h3>
             {isPending ? (
               <Loading />
             ) : items.length === 0 ? (
               <EmptyState
                 icon="📝"
-                title="No articles in this category yet"
-                body="Try another category — more posts are published every week."
+                title="Nothing here yet"
+                body="No articles match this category or search."
               />
             ) : (
-              <div className="grid grid-cols-3 gap-5 mx-1040:grid-cols-2 mx-640:grid-cols-1">
-                {items.map((post) => (
-                  <article
-                    key={post._id}
-                    className="overflow-hidden rounded-lg2 border border-line bg-white shadow-softer transition-transform duration-200 ease-gs hover:-translate-y-1"
-                  >
-                    <Link to={`/blog/${post.slug}`}>
-                      <CoverArt
-                        image={post.image}
-                        imageAlt={post.imageAlt}
-                        gradientClass={post.heroClass}
-                        label={post.heroLabel}
-                        labelClass="text-[1.05rem]"
-                        className="h-32 px-4"
-                        sizes="(max-width: 640px) 100vw, 33vw"
-                      />
-                    </Link>
-                    <div className="p-4">
-                      <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[0.7rem] font-semibold text-brand">
-                        {post.category}
-                      </span>
-                      <h3 className="mt-2.5 text-[1rem] leading-snug">
-                        <Link to={`/blog/${post.slug}`} className="hover:text-brand">
-                          {post.title}
-                        </Link>
-                      </h3>
-                      <p className="mt-3 text-[0.78rem] text-muted">
-                        By {post.author?.name} · {fmt(post.publishedAt)} | {post.readTime}
-                      </p>
-                    </div>
-                  </article>
+              <div className="blog-grid">
+                {items.map((p) => (
+                  <BlogCard post={p} key={p._id} />
                 ))}
               </div>
             )}
+
             {pages > 1 && (
-              <nav className="mt-7 flex items-center justify-center gap-3" aria-label="Blog pages">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={page === 1}
-                  onClick={() => setPage((value) => value - 1)}
+              <div className="blog-pager">
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  Previous
-                </Button>
-                <span className="text-[0.82rem] text-muted">
+                  ← Newer
+                </button>
+                <span>
                   Page {page} of {pages}
                 </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={page === pages}
-                  onClick={() => setPage((value) => value + 1)}
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  disabled={page >= pages}
+                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
                 >
-                  Next
-                </Button>
-              </nav>
+                  Older →
+                </button>
+              </div>
             )}
-          </section>
+          </div>
         </div>
-
-        <section className="feat-cta mt-14 rounded-xl2 px-8 py-12 text-center text-white">
-          <h2 className="text-white">Learn it, then ship it</h2>
-          <p className="mx-auto mt-2 max-w-lg text-white/85">
-            Reading is a start. Our courses turn these ideas into campaigns you actually run.
-          </p>
-          <Button to="/courses" variant="light" className="mt-5">
-            Browse courses
-          </Button>
-        </section>
-      </div>
+      </section>
     </div>
   )
 }
