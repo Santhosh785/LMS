@@ -10,6 +10,9 @@ import {
   LeaderboardEntry,
   LiveClass,
   Booking,
+  Course,
+  Post,
+  WorkshopRegistration,
 } from '../models/index.js'
 import { cfg } from '../services/runtimeConfig.js'
 
@@ -33,7 +36,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const [enrollments, upcoming] = await Promise.all([
       Enrollment.find({ userId: req.user._id })
-        .populate('courseId', 'title slug thumbClass hours kind type sections mediaLabel')
+        .populate('courseId', 'title slug thumbClass hours kind type sections mediaLabel topic')
         .sort({ lastAccessedAt: -1 })
         .lean(),
       LiveClass.find({ startsAt: { $gte: new Date() } })
@@ -44,6 +47,90 @@ router.get(
 
     const current =
       enrollments.find((e) => e.progressPct > 0 && e.progressPct < 100) || enrollments[0]
+
+    /**
+     * The three sections the 2026 redesign added to this page. Each is built
+     * from something the database actually records — the drop illustrated them
+     * with invented rows (a "Module 3 quiz", "+40 Seeds"), and there is no quiz
+     * deadline or activity log to read those from. A section with nothing real
+     * behind it returns empty and the page omits it.
+     */
+    const now = new Date()
+    const [registrations, certificates, posts] = await Promise.all([
+      // "Deadlines & next steps" — sessions this learner actually signed up for.
+      WorkshopRegistration.find({ userId: req.user._id })
+        .populate({
+          path: 'workshopId',
+          select: 'title slug startsAt mode venue',
+          match: { startsAt: { $gte: now } },
+        })
+        .lean(),
+      Certificate.find({ userId: req.user._id }).sort({ issuedAt: -1 }).limit(4).lean(),
+      Post.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(4).select('body createdAt').lean(),
+    ])
+
+    const deadlines = [
+      ...registrations
+        .filter((r) => r.workshopId)
+        .map((r) => ({
+          kind: 'workshop',
+          title: r.workshopId.title,
+          body: r.workshopId.mode === 'offline' ? r.workshopId.venue : 'Live online · joining link by email',
+          at: r.workshopId.startsAt,
+          to: `/workshops/${r.workshopId.slug}`,
+        })),
+      ...upcoming.map((c) => ({
+        kind: 'live',
+        title: c.topic || c.title,
+        body: 'Live class',
+        at: c.startsAt,
+        to: '/student/live',
+      })),
+    ]
+      .sort((a, b) => new Date(a.at) - new Date(b.at))
+      .slice(0, 4)
+
+    const activity = [
+      ...certificates.map((c) => ({
+        icon: '🎓',
+        text: `Certificate unlocked: ${c.courseTitle}`,
+        at: c.issuedAt,
+      })),
+      ...enrollments
+        .filter((e) => e.progressPct === 100 && e.lastAccessedAt)
+        .map((e) => ({
+          icon: '✅',
+          text: `Completed ${e.courseId?.title || 'a course'}`,
+          at: e.lastAccessedAt,
+        })),
+      ...posts.map((p) => ({
+        icon: '💬',
+        text: `Posted in the community: “${p.body.slice(0, 60)}${p.body.length > 60 ? '…' : ''}”`,
+        at: p.createdAt,
+      })),
+    ]
+      .sort((a, b) => new Date(b.at) - new Date(a.at))
+      .slice(0, 5)
+
+    /**
+     * "Recommended for you" — published courses in the topics this learner is
+     * already studying, minus the ones they hold. No enrolments means no
+     * signal, so the section stays empty rather than showing a generic list.
+     */
+    const enrolledIds = enrollments.map((e) => e.courseId?._id).filter(Boolean)
+    const topics = [...new Set(enrollments.map((e) => e.courseId?.topic).filter(Boolean))]
+    const recommended = topics.length
+      ? await Course.find({
+          topic: { $in: topics },
+          _id: { $nin: enrolledIds },
+          status: 'Published',
+          visibility: 'Public',
+        })
+          .select('title slug topic summary thumbClass mediaLabel amount price')
+          .sort({ popularity: -1 })
+          .limit(3)
+          .lean()
+      : []
 
     // Seeds and the streak are only meaningful once something awards them.
     // While gamification is off they are left out of the payload entirely
@@ -68,6 +155,9 @@ router.get(
       current,
       inProgress: enrollments.filter((e) => e.progressPct > 0 && e.progressPct < 100),
       upcoming,
+      deadlines,
+      activity,
+      recommended,
     })
   }),
 )

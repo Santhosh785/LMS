@@ -275,7 +275,7 @@ export default function Workshops() {
             </p>
           </div>
           <div className="gs-convert-actions">
-            <Link className="gs-btn-solid" to="/programs/complete-growth-marketing">
+            <Link className="gs-btn-solid" to="/programs/apply">
               Apply for Flagship
             </Link>
             <Link className="gs-btn-outline" to="/courses/category">

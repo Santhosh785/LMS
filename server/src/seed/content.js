@@ -26,6 +26,7 @@ import { workshops } from './data/workshops.js'
 import { blogPosts } from './data/blog.js'
 import { channels } from './data/community.js'
 import { practiceItems } from './data/admin.js'
+import { playbooks, claudeSkills } from './data/resources.js'
 import { pointRules, badges } from './data/gamification.js'
 import { seedTaxonomy } from './taxonomy.js'
 
@@ -157,6 +158,8 @@ export async function seedContent() {
   /* --------------------------- other catalogue --------------------------- */
   tally('programs', await upsertAll(M.Program, 'slug', programs))
   tally('workshops', await upsertAll(M.Workshop, 'slug', workshops))
+  tally('playbooks', await upsertAll(M.Playbook, 'slug', playbooks))
+  tally('claude skills', await upsertAll(M.ClaudeSkill, 'slug', claudeSkills))
   /**
    * The seed fixture predates the publishing workflow and carries no `status`,
    * which the model would default to Draft — leaving a freshly seeded site with

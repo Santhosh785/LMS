@@ -14,6 +14,17 @@ import {
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import CoverArt from '../../components/CoverArt.jsx'
 
+/** "Today", "Yesterday", or a short date — the drop's activity/deadline stamps. */
+function dayLabel(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  const days = Math.round((d.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86400000)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Tomorrow'
+  if (days === -1) return 'Yesterday'
+  return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
 export default function Dashboard() {
   useDocumentTitle('My Learning Dashboard | Growth Scholar')
   const { user } = useAuth()
@@ -26,7 +37,7 @@ export default function Dashboard() {
 
   if (isPending) return <Loading />
 
-  const { stats, current, inProgress, upcoming } = data
+  const { stats, current, inProgress, upcoming, deadlines, activity, recommended } = data
   const currentCourse = current?.courseId
   const goalPct = Math.round((stats.hoursThisWeek / (user?.weeklyGoalHours || 8)) * 100)
 
@@ -167,6 +178,99 @@ export default function Dashboard() {
           ))}
         </div>
       </section>
+
+      {/*
+        The three sections the 2026 redesign added. Each is built from a real
+        signal — registered sessions, issued certificates, completed courses,
+        community posts, and the topics this learner studies — so each is
+        omitted rather than filled with placeholders when there is nothing yet.
+      */}
+      {(deadlines?.length > 0 || activity?.length > 0) && (
+        <div className="mt-8 grid grid-cols-2 gap-6 mx-960:grid-cols-1">
+          {deadlines?.length > 0 && (
+            <section className="rounded-lg2 border border-line bg-white p-5 shadow-tiny">
+              <h3 className="mb-4 text-[1rem]">Deadlines &amp; next steps</h3>
+              <div className="grid gap-3">
+                {deadlines.map((d) => (
+                  <Link
+                    key={`${d.kind}-${d.title}-${d.at}`}
+                    to={d.to}
+                    className="flex items-center gap-3 rounded-md2 p-2 hover:bg-surface-mist"
+                  >
+                    <span
+                      className={cn(
+                        'h-2.5 w-2.5 shrink-0 rounded-full',
+                        d.kind === 'live' ? 'bg-danger' : 'bg-accent',
+                      )}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="truncate text-[0.92rem]">{d.title}</h4>
+                      <p className="truncate text-[0.78rem] text-muted">{d.body}</p>
+                    </div>
+                    <span className="shrink-0 text-[0.78rem] font-semibold text-brand">
+                      {dayLabel(d.at)}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {activity?.length > 0 && (
+            <section className="rounded-lg2 border border-line bg-white p-5 shadow-tiny">
+              <h3 className="mb-4 text-[1rem]">Recent activity</h3>
+              <ul className="grid gap-3">
+                {activity.map((a) => (
+                  <li key={`${a.text}-${a.at}`} className="flex items-start gap-3">
+                    <span
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-mist text-[0.85rem]"
+                      aria-hidden="true"
+                    >
+                      {a.icon}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[0.88rem] text-ink">{a.text}</p>
+                      <time className="text-[0.75rem] text-muted">{dayLabel(a.at)}</time>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
+
+      {recommended?.length > 0 && (
+        <section className="mt-8">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-[1.15rem]">Recommended for you</h2>
+            <Link
+              to="/courses/category"
+              className="text-[0.85rem] font-semibold text-brand hover:underline"
+            >
+              Browse catalog →
+            </Link>
+          </div>
+          <div className="grid grid-cols-3 gap-4 mx-960:grid-cols-2 mx-560:grid-cols-1">
+            {recommended.map((c) => (
+              <Link
+                key={c.slug}
+                to={`/courses/${c.slug}`}
+                className="rounded-lg2 border border-line bg-white p-5 shadow-tiny transition-transform duration-200 ease-gs hover:-translate-y-1"
+              >
+                <p className="text-[0.72rem] font-bold uppercase tracking-wide text-accent-mid">
+                  Because you study {c.topic}
+                </p>
+                <h3 className="mt-1 text-[1rem]">{c.title}</h3>
+                {c.summary && (
+                  <p className="mt-2 line-clamp-2 text-[0.85rem] text-muted">{c.summary}</p>
+                )}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </>
   )
 }

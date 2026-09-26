@@ -14,6 +14,12 @@ import { useFeatures } from './context/SiteConfigContext.jsx'
 /* --------------------------------- public --------------------------------- */
 import Home from './pages/public/Home.jsx'
 import About from './pages/public/About.jsx'
+import Apply from './pages/public/Apply.jsx'
+import FitCall from './pages/public/FitCall.jsx'
+import Playbooks from './pages/public/Playbooks.jsx'
+import PlaybookDetail from './pages/public/PlaybookDetail.jsx'
+import ClaudeSkills from './pages/public/ClaudeSkills.jsx'
+import SkillDetail from './pages/public/SkillDetail.jsx'
 import Courses from './pages/public/Courses.jsx'
 import CourseCategory from './pages/public/CourseCategory.jsx'
 import CourseDetail from './pages/public/CourseDetail.jsx'
@@ -93,6 +99,9 @@ import AdminSettings from './pages/admin/Settings.jsx'
 import AdminTaxonomy from './pages/admin/Taxonomy.jsx'
 import AdminPrograms from './pages/admin/Programs.jsx'
 import AdminLeads from './pages/admin/Leads.jsx'
+import AdminApplications from './pages/admin/Applications.jsx'
+import AdminResources from './pages/admin/Resources.jsx'
+import AdminFitCalls from './pages/admin/FitCalls.jsx'
 import AdminWorkshops from './pages/admin/Workshops.jsx'
 import AdminUsers from './pages/admin/Users.jsx'
 import AdminIntegrations from './pages/admin/Integrations.jsx'
@@ -228,9 +237,16 @@ export default function App() {
             <Route path="courses" element={<Courses />} />
             <Route path="courses/category" element={<CourseCategory />} />
             <Route path="courses/:slug" element={<CourseDetail />} />
+            {/* Declared before the :slug route so they are not swallowed by it. */}
+            <Route path="programs/apply" element={<Apply />} />
+            <Route path="programs/fit-call" element={<FitCall />} />
             <Route path="programs/:slug" element={<ProgramDetail />} />
             <Route path="workshops" element={<Workshops />} />
             <Route path="workshops/:slug" element={<WorkshopDetail />} />
+            <Route path="resources/playbooks" element={<Playbooks />} />
+            <Route path="resources/playbooks/:slug" element={<PlaybookDetail />} />
+            <Route path="resources/claude-skills" element={<ClaudeSkills />} />
+            <Route path="resources/claude-skills/:slug" element={<SkillDetail />} />
             <Route path="blog" element={<Blog />} />
             <Route path="blog/:slug" element={<BlogPost />} />
             <Route path="login" element={<Login />} />
@@ -366,6 +382,9 @@ export default function App() {
             <Route path="settings" element={<AdminSettings />} />
             <Route path="taxonomy" element={<AdminTaxonomy />} />
             <Route path="programs" element={<AdminPrograms />} />
+            <Route path="resources" element={<AdminResources />} />
+            <Route path="applications" element={<AdminApplications />} />
+            <Route path="fit-calls" element={<AdminFitCalls />} />
             <Route path="leads" element={<AdminLeads />} />
             <Route path="workshops" element={<AdminWorkshops />} />
             <Route path="users" element={<AdminUsers />} />

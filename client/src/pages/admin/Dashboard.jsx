@@ -48,7 +48,11 @@ export default function AdminDashboard() {
 
   if (isPending) return <Loading />
 
-  const { kpis, series, recentTransactions, recentBroadcasts } = data
+  const { kpis, series, recentTransactions, recentBroadcasts, salesBreakdown, thisMonth, overview } =
+    data
+
+  /** `null` when there is no prior period to compare against — no delta shown. */
+  const pct = (v) => (typeof v === 'number' ? `${v >= 0 ? '+' : ''}${v}%` : undefined)
 
   return (
     <>
@@ -56,18 +60,23 @@ export default function AdminDashboard() {
 
       <KpiRow>
         <StatCard label="Total revenue" value={inr(kpis.revenue)} sub="All successful payments" />
+        {/*
+          The deltas here used to be the literals "+32%", "+18%" and "+19%",
+          carried over from the static mock. Only the revenue one can actually
+          be computed — month against previous month — so the other two are
+          gone rather than left reading as measured.
+        */}
         <StatCard
           label="This month"
-          value={inr(kpis.monthRevenue)}
-          sub="Settled to date"
-          delta="+32%"
+          value={inr(thisMonth?.revenue ?? kpis.monthRevenue)}
+          sub={`${thisMonth?.payments ?? 0} payments`}
+          delta={pct(thisMonth?.deltaPct)}
         />
-        <StatCard label="Customers" value={kpis.customers} sub="Students & buyers" delta="+18%" />
+        <StatCard label="Customers" value={kpis.customers} sub="Students & buyers" />
         <StatCard
           label="Enrollments"
           value={kpis.enrollments}
           sub={`${kpis.courses} courses · ${kpis.published} published`}
-          delta="+19%"
         />
       </KpiRow>
 
@@ -98,6 +107,69 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ))}
+          </div>
+        </Panel>
+      </div>
+
+      {/*
+        Two panels the 2026 redesign added. The drop's Overview also led with a
+        visitor count; nothing here measures traffic, so that tile is omitted
+        rather than invented.
+      */}
+      <div className="mb-6 grid grid-cols-2 gap-5 mx-960:grid-cols-1">
+        <Panel title="Sales breakdown">
+          <p className="text-[1.6rem] font-bold leading-none text-brand-deep">
+            {inr(salesBreakdown?.total)}
+          </p>
+          <ul className="mt-4 grid gap-2">
+            {[
+              ['One-time', salesBreakdown?.oneTime, 'bg-brand'],
+              ['Subscriptions', salesBreakdown?.subscription, 'bg-accent'],
+            ].map(([label, value, dot]) => (
+              <li key={label} className="flex items-center justify-between text-[0.88rem]">
+                <span className="flex items-center gap-2 text-muted-admin">
+                  <span className={cn('h-2 w-2 rounded-full', dot)} aria-hidden="true" />
+                  {label}
+                </span>
+                <span className="font-semibold text-ink">{inr(value)}</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+
+        <Panel title="Overview">
+          <div className="grid gap-3">
+            {[
+              {
+                key: 'L',
+                value: overview?.leads ?? 0,
+                label:
+                  overview?.leadConversionPct !== null && overview?.leadConversionPct !== undefined
+                    ? `Leads · ${overview.leadConversionPct}% converted`
+                    : 'Leads captured',
+              },
+              {
+                key: 'S',
+                value: overview?.signups ?? 0,
+                label: `Site signups${
+                  overview?.signupsDeltaPct !== null && overview?.signupsDeltaPct !== undefined
+                    ? ` · ${pct(overview.signupsDeltaPct)} this month`
+                    : ''
+                }`,
+              },
+            ].map((s) => (
+              <div key={s.key} className="flex items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md2 bg-surface-mist text-[0.85rem] font-bold text-brand">
+                  {s.key}
+                </span>
+                <div>
+                  <strong className="block text-[1.05rem] leading-none text-brand-deep">
+                    {s.value}
+                  </strong>
+                  <span className="text-[0.78rem] text-muted-admin">{s.label}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </Panel>
       </div>

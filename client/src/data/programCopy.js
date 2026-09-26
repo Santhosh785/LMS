@@ -44,22 +44,15 @@ export const DEFAULT_SECTION_COPY = {
   },
 }
 
-/**
- * Button labels, keyed the same way. `to` is the destination.
- *
- * The redesign points the apply buttons at a dedicated /programs/apply page and
- * the fit call at /programs/fit-call. Neither exists yet, so the fallbacks are
- * destinations that work today; the seed carries the same choice. Repointing is
- * a data edit in Admin → Programs → Page copy, not a code change.
- */
+/** Button labels, keyed the same way. `to` is the destination. */
 export const DEFAULT_CTAS = {
-  heroApply: { label: 'Apply for this batch', to: '/signup' },
+  heroApply: { label: 'Apply for this batch', to: '/programs/apply' },
   heroPricing: { label: 'See pricing', to: '#apply' },
-  pricingApply: { label: 'Apply for this batch', to: '/signup' },
-  pricingFitCall: { label: 'Book fit call', to: '/?mentor=1' },
-  finalApply: { label: 'Apply for this batch', to: '/signup' },
+  pricingApply: { label: 'Apply for this batch', to: '/programs/apply' },
+  pricingFitCall: { label: 'Book fit call', to: '/programs/fit-call' },
+  finalApply: { label: 'Apply for this batch', to: '/programs/apply' },
   finalSecondary: { label: '', to: '' },
-  stickyApply: { label: 'Apply now', to: '/signup' },
+  stickyApply: { label: 'Apply now', to: '/programs/apply' },
 }
 
 export const DEFAULT_PHASE_LABELS = ['During the Program', 'After the Program']

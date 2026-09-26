@@ -23,6 +23,8 @@ import programRoutes from './routes/program.routes.js'
 import workshopRoutes from './routes/workshop.routes.js'
 import blogRoutes from './routes/blog.routes.js'
 import leadRoutes from './routes/lead.routes.js'
+import applicationRoutes from './routes/application.routes.js'
+import resourceRoutes from './routes/resource.routes.js'
 import meRoutes from './routes/me.routes.js'
 import enrollmentRoutes from './routes/enrollment.routes.js'
 import checkoutRoutes from './routes/checkout.routes.js'
@@ -168,6 +170,10 @@ app.use('/api/programs', programRoutes)
 app.use('/api/workshops', workshopRoutes)
 app.use('/api/blog', blogRoutes)
 app.use('/api/leads', leadRoutes)
+// Flagship intake: POST /api/applications and POST /api/fit-calls
+app.use('/api', applicationRoutes)
+// Resources: playbooks and Claude skills
+app.use('/api/resources', resourceRoutes)
 app.use('/api/me', meRoutes)
 app.use('/api/enrollments', enrollmentRoutes)
 app.use('/api/checkout', checkoutRoutes)

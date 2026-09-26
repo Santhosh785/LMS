@@ -32,3 +32,9 @@ export { default as Term } from './Term.js'
 export { default as Counter } from './Counter.js'
 export { default as Report } from './Report.js'
 export { default as Block } from './Block.js'
+// The 2026 redesign's Flagship intake: the application form and the fit call.
+export { default as FlagshipApplication } from './FlagshipApplication.js'
+export { default as FitCallBooking } from './FitCallBooking.js'
+// The 2026 redesign's Resources section.
+export { default as Playbook } from './Playbook.js'
+export { default as ClaudeSkill } from './ClaudeSkill.js'

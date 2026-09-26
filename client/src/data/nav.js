@@ -10,17 +10,13 @@
 
 /* --------------------------------- public -------------------------------- */
 /**
- * Playbooks and Claude Skills are in the redesign's header, footer and homepage,
- * but their pages are not built yet (they need the Playbook and Skill models and
- * their seed content). Until then the links are withheld rather than pointed at
- * a route that renders "Page not found" — the same reasoning as the
- * FEATURE_* flags in server/src/config/env.js: finished UI with nothing behind
- * it ships hidden.
- *
- * Flip this to `true` in the commit that adds `/resources/playbooks` and
- * `/resources/claude-skills`. Nothing else needs to change.
+ * Playbooks and Claude Skills shipped with the Resources section, so their
+ * links are live. The gate is kept because it is the switch that hides them
+ * again if the section is ever pulled: set it to `false` and every reference —
+ * header, footer, and the homepage teasers — disappears together rather than
+ * leaving one of them pointing at a dead route.
  */
-export const RESOURCES_PAGES_READY = false
+export const RESOURCES_PAGES_READY = true
 
 const whenResourcesReady = (entries) =>
   RESOURCES_PAGES_READY ? entries : entries.filter((e) => !e.to?.startsWith('/resources/'))
@@ -171,6 +167,9 @@ export const adminNav = [
   { label: 'Email', to: '/admin/email/broadcasts', feature: 'email' },
   { label: 'Communities', to: '/admin/community' },
   { label: 'Gamification', to: '/admin/gamification/points', feature: 'gamification' },
+  { label: 'Resources', to: '/admin/resources' },
+  { label: 'Applications', to: '/admin/applications' },
+  { label: 'Fit calls', to: '/admin/fit-calls' },
   { label: 'Leads', to: '/admin/leads' },
   { label: 'Customers', to: '/admin/customers' },
   { label: 'Users', to: '/admin/users' },

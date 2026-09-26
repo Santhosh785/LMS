@@ -74,21 +74,15 @@ export const programs = [
           'Common Core + your track. One live milestone that proves you can grow in the AI era.',
       },
     ],
-    /*
-     * The redesign points every apply button at a dedicated /programs/apply
-     * page and the fit call at /programs/fit-call. Those two pages are not
-     * built yet, so the destinations below are the ones that work today.
-     * Repointing them is a data edit under Admin → Programs → Page copy — no
-     * code change — and is part of shipping the apply flow.
-     */
+    /** Every apply button goes to the application; the fit call to its form. */
     ctas: [
-      { key: 'heroApply', label: 'Apply for Batch 4', to: '/signup' },
+      { key: 'heroApply', label: 'Apply for Batch 4', to: '/programs/apply' },
       { key: 'heroPricing', label: 'See pricing', to: '#apply' },
-      { key: 'pricingApply', label: 'Apply for Batch 4', to: '/signup' },
-      { key: 'pricingFitCall', label: 'Book fit call', to: '/?mentor=1' },
-      { key: 'finalApply', label: 'Apply for this batch', to: '/signup' },
+      { key: 'pricingApply', label: 'Apply for Batch 4', to: '/programs/apply' },
+      { key: 'pricingFitCall', label: 'Book fit call', to: '/programs/fit-call' },
+      { key: 'finalApply', label: 'Apply for this batch', to: '/programs/apply' },
       { key: 'finalSecondary', label: 'Try a free workshop first', to: '/workshops/seo-mastery' },
-      { key: 'stickyApply', label: 'Apply now', to: '/signup' },
+      { key: 'stickyApply', label: 'Apply now', to: '/programs/apply' },
     ],
     phaseLabels: ['During the Program', 'After the Program'],
     description:

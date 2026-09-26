@@ -15,6 +15,8 @@ import settingsRoutes from './settings.routes.js'
 import taxonomyRoutes from './taxonomy.routes.js'
 import programRoutes from './program.routes.js'
 import leadRoutes from './lead.routes.js'
+import intakeRoutes from './application.routes.js'
+import adminResourceRoutes from './resource.routes.js'
 import adminWorkshopRoutes from './workshop.routes.js'
 import userRoutes from './user.routes.js'
 import integrationRoutes from './integration.routes.js'
@@ -42,6 +44,10 @@ router.use('/settings', settingsRoutes)
 router.use('/taxonomy', taxonomyRoutes)
 router.use('/programs', programRoutes)
 router.use('/leads', leadRoutes)
+// Flagship intake inboxes: /admin/applications and /admin/fit-calls
+router.use('/', intakeRoutes)
+// Resources CRUD: /admin/playbooks and /admin/skills
+router.use('/', adminResourceRoutes)
 router.use('/workshops', adminWorkshopRoutes)
 router.use('/users', userRoutes)
 router.use('/integrations', integrationRoutes)

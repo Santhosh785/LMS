@@ -50,3 +50,36 @@ body.gs-redesign main {
 .blog-spotlight-body p.blog-spotlight-meta {
   display: flex;
 }
+
+/**
+ * Inline field errors on the Flagship application and fit-call forms.
+ *
+ * The drop leans on native `:invalid` styling and the browser's own bubbles.
+ * Those cannot express the rules these forms actually have — a word ceiling on
+ * five essays, "pick at least one" checkbox groups, and the Batch 4 gotcha — so
+ * the React forms validate explicitly and render a message per field. The drop
+ * has no class for that, so it is defined here rather than in the mirror.
+ */
+.pa-error {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+/* The counter turns red once an essay runs past its limit. */
+.pa-word-count.is-over {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/**
+ * The playbook notify form posts to the API instead of doing nothing, so it has
+ * a success state the drop never had a class for.
+ */
+.pb-notify-done {
+  margin-top: 0.75rem;
+  font-weight: 600;
+  color: var(--brand);
+}
