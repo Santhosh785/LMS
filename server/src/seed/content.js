@@ -13,12 +13,28 @@
  *      No User, Enrollment, Transaction, Customer, Certificate, Post, Booking
  *      or LeaderboardEntry document is touched here — not even to count.
  *
- * Embedded section/lesson _ids are preserved across runs (see preserveIds):
- * enrollments store completedLessonIds pointing at them, so regenerating those
+ * Section/lesson ids are preserved across runs (see preserveIds): enrollment
+ * progress rows point at them, so regenerating those
  * ids on every publish would silently reset everybody's progress.
  */
-import * as M from '../models/index.js'
+import { eq } from 'drizzle-orm'
+import { db } from '../db/index.js'
+import {
+  badges as badgesTable,
+  blogPosts as blogPostsTable,
+  channels as channelsTable,
+  claudeSkills as claudeSkillsTable,
+  courses as coursesTable,
+  playbooks as playbooksTable,
+  pointRules as pointRulesTable,
+  practiceItems as practiceItemsTable,
+  programs as programsTable,
+  workshops as workshopsTable,
+} from '../db/schema/index.js'
+import { createCourse, findCourseBySlug, updateCourse } from '../db/repos/courses.js'
+import { getSettings } from '../db/repos/settings.js'
 import { log } from './guard.js'
+import { upsertAll } from './db.js'
 
 import { courses, fillerSections } from './data/courses.js'
 import { programs } from './data/program.js'
@@ -29,29 +45,6 @@ import { practiceItems } from './data/admin.js'
 import { playbooks, claudeSkills } from './data/resources.js'
 import { pointRules, badges } from './data/gamification.js'
 import { seedTaxonomy } from './taxonomy.js'
-
-/**
- * Upsert a list of plain seed objects by natural key.
- * `build(doc, existing)` may reshape the payload using the current document —
- * used to carry stable ids and user-owned subdocuments forward.
- */
-async function upsertAll(Model, key, docs, build) {
-  let created = 0
-  let updated = 0
-  for (const doc of docs) {
-    const existing = await Model.findOne({ [key]: doc[key] })
-    const payload = build ? build(doc, existing) : doc
-    if (existing) {
-      existing.set(payload)
-      await existing.save()
-      updated += 1
-    } else {
-      await Model.create(payload)
-      created += 1
-    }
-  }
-  return { created, updated }
-}
 
 const tally = (label, { created, updated }) =>
   log(`${label}: ${created} created, ${updated} updated`)
@@ -101,7 +94,10 @@ function preserveIds(incoming, existing) {
 
 export async function seedContent() {
   /* ------------------------------- courses ------------------------------- */
-  const courseStats = await upsertAll(M.Course, 'slug', courses, (c, existing) => {
+  let courseCreated = 0
+  let courseUpdated = 0
+  for (const c of courses) {
+    const existing = await findCourseBySlug(c.slug)
     // every course needs a curriculum so the player and admin editor work
     const sections = c.sections?.length ? c.sections : fillerSections(c.title)
 
@@ -126,7 +122,7 @@ export async function seedContent() {
       ...content
     } = c
 
-    return {
+    const payload = {
       ...content,
       /*
        * The seeded images are stock placeholders. Once an operator has put
@@ -152,14 +148,21 @@ export async function seedContent() {
             },
           ],
     }
-  })
-  tally('courses', courseStats)
+    if (existing) {
+      await updateCourse(existing.id, payload)
+      courseUpdated += 1
+    } else {
+      await createCourse(payload)
+      courseCreated += 1
+    }
+  }
+  tally('courses', { created: courseCreated, updated: courseUpdated })
 
   /* --------------------------- other catalogue --------------------------- */
-  tally('programs', await upsertAll(M.Program, 'slug', programs))
-  tally('workshops', await upsertAll(M.Workshop, 'slug', workshops))
-  tally('playbooks', await upsertAll(M.Playbook, 'slug', playbooks))
-  tally('claude skills', await upsertAll(M.ClaudeSkill, 'slug', claudeSkills))
+  tally('programs', await upsertAll(programsTable, 'slug', programs))
+  tally('workshops', await upsertAll(workshopsTable, 'slug', workshops))
+  tally('playbooks', await upsertAll(playbooksTable, 'slug', playbooks))
+  tally('claude skills', await upsertAll(claudeSkillsTable, 'slug', claudeSkills))
   /**
    * The seed fixture predates the publishing workflow and carries no `status`,
    * which the model would default to Draft — leaving a freshly seeded site with
@@ -170,31 +173,34 @@ export async function seedContent() {
    */
   tally(
     'blog posts',
-    await upsertAll(M.BlogPost, 'slug', blogPosts, (post, existing) => ({
+    await upsertAll(blogPostsTable, 'slug', blogPosts, (post, existing) => ({
       ...post,
       status: existing?.status || 'Published',
       visibility: existing?.visibility || 'Public',
     })),
   )
 
-  // memberIds is membership, not content: it is deliberately absent from the
-  // payload so an existing channel keeps whoever has joined it.
-  tally('channels', await upsertAll(M.Channel, 'slug', channels))
+  // Membership is its own table (channel_members), so republishing a channel
+  // cannot touch whoever has joined it.
+  tally('channels', await upsertAll(channelsTable, 'slug', channels))
 
   /* ----------------------------- practice -------------------------------- */
-  const seoCourse = await M.Course.findOne({ slug: 'seo-mastery' }).select('_id')
-  // `attempts` holds per-student progress, so it is never part of the payload.
+  const [seoCourse] = await db
+    .select({ id: coursesTable.id })
+    .from(coursesTable)
+    .where(eq(coursesTable.slug, 'seo-mastery'))
+  // Attempts are per-student progress in practice_attempts, never part of the payload.
   tally(
     'practice items',
-    await upsertAll(M.PracticeItem, 'title', practiceItems, (p) => ({
+    await upsertAll(practiceItemsTable, 'title', practiceItems, (p) => ({
       ...p,
-      courseId: seoCourse?._id,
+      courseId: seoCourse?.id ?? null,
     })),
   )
 
   /* --------------------------- gamification ------------------------------ */
-  tally('point rules', await upsertAll(M.PointRule, 'activity', pointRules))
-  tally('badges', await upsertAll(M.Badge, 'name', badges))
+  tally('point rules', await upsertAll(pointRulesTable, 'activity', pointRules))
+  tally('badges', await upsertAll(badgesTable, 'name', badges))
 
   /* ------------------------------ taxonomy ------------------------------- */
   // Runs after the catalogue so it can observe the topics, languages and
@@ -204,7 +210,7 @@ export async function seedContent() {
 
   /* ------------------------------ settings ------------------------------- */
   // Created on first run only — the admin settings screen owns it afterwards.
-  await M.Setting.getSingleton()
+  await getSettings()
   log('settings: singleton present')
 
   log(

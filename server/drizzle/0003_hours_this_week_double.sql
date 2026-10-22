@@ -1,0 +1,1 @@
+ALTER TABLE "users" ALTER COLUMN "hours_this_week" SET DATA TYPE double precision;

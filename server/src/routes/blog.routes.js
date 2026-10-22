@@ -1,71 +1,115 @@
 import { Router } from 'express'
+import {
+  and,
+  arrayContains,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+} from 'drizzle-orm'
 import { asyncHandler, HttpError } from '../middleware/error.js'
-import BlogPost from '../models/BlogPost.js'
-import BlogComment from '../models/BlogComment.js'
-import Media from '../models/Media.js'
+import { db, withMongoId } from '../db/index.js'
+import { blogComments, blogPosts, media } from '../db/schema/index.js'
+import { listColumns, withoutColumns } from '../db/repos/blog.js'
 import { blogCommentLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
 
-// Seeded documents predate the publishing workflow and therefore have no
-// status. Treat them as published; every post created from the new editor has
-// an explicit status.
-const publicFilter = () => ({
-  $and: [
-    { $or: [{ status: { $in: ['Published', 'Scheduled'] } }, { status: { $exists: false } }] },
+// Only published (or scheduled-and-due) posts are public. Rows migrated from
+// seeded documents that predate the publishing workflow are given 'Published'
+// by the ETL, so there is no "status missing" case left to allow for.
+const publicFilter = () =>
+  and(
+    inArray(blogPosts.status, ['Published', 'Scheduled']),
     // Private and password-protected posts are editorial states, not public
     // ones — they stay out of the archive and out of a direct slug hit alike.
-    { $or: [{ visibility: 'Public' }, { visibility: { $exists: false } }] },
-    { publishedAt: { $lte: new Date() } },
-  ],
-})
+    eq(blogPosts.visibility, 'Public'),
+    lte(blogPosts.publishedAt, new Date()),
+  )
+
+const escapeLike = (q) => q.replace(/[\\%_]/g, (c) => `\\${c}`)
 
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const filter = publicFilter()
+    const clauses = [publicFilter()]
     // "latest" is the catch-all tab in the original category rail
     if (req.query.category && req.query.category !== 'latest') {
-      filter.$and.push({ category: req.query.category })
+      clauses.push(eq(blogPosts.category, req.query.category))
     }
-    if (req.query.tag) filter.$and.push({ tags: req.query.tag })
+    if (req.query.tag) clauses.push(arrayContains(blogPosts.tags, [String(req.query.tag)]))
     if (req.query.q?.trim()) {
-      const q = req.query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      filter.$and.push({ $or: [{ title: new RegExp(q, 'i') }, { excerpt: new RegExp(q, 'i') }] })
+      const pattern = `%${escapeLike(req.query.q.trim())}%`
+      clauses.push(or(ilike(blogPosts.title, pattern), ilike(blogPosts.excerpt, pattern)))
     }
+    const where = and(...clauses)
     const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 100)
     const page = Math.max(Number(req.query.page) || 1, 1)
-    const [items, total, featured, categories] = await Promise.all([
-      BlogPost.find(filter)
-        .select('-body -revisions')
-        .sort({ publishedAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      BlogPost.countDocuments(filter),
-      BlogPost.find({ ...publicFilter(), featured: true })
-        .select('-body -revisions')
-        .sort({ publishedAt: -1 })
-        .lean(),
-      BlogPost.distinct('category', publicFilter()),
+    const list = listColumns()
+    const [items, [{ total }], featured, categories] = await Promise.all([
+      db
+        .select(list)
+        .from(blogPosts)
+        .where(where)
+        .orderBy(desc(blogPosts.publishedAt))
+        .offset((page - 1) * limit)
+        .limit(limit),
+      db.select({ total: count() }).from(blogPosts).where(where),
+      db
+        .select(list)
+        .from(blogPosts)
+        .where(and(publicFilter(), eq(blogPosts.featured, true)))
+        .orderBy(desc(blogPosts.publishedAt)),
+      db
+        .selectDistinct({ category: blogPosts.category })
+        .from(blogPosts)
+        .where(and(publicFilter(), isNotNull(blogPosts.category))),
     ])
-    res.json({ items, total, page, pages: Math.max(1, Math.ceil(total / limit)), featured, categories: categories.filter(Boolean) })
+    res.json({
+      items: withMongoId(items),
+      total,
+      page,
+      pages: Math.max(1, Math.ceil(total / limit)),
+      featured: withMongoId(featured),
+      categories: categories.map((c) => c.category).filter(Boolean),
+    })
   }),
 )
+
+async function findPublicPost(slug, columns) {
+  const [row] = await db
+    .select(columns)
+    .from(blogPosts)
+    .where(and(eq(blogPosts.slug, String(slug).toLowerCase()), publicFilter()))
+  return row || null
+}
 
 router.get(
   '/:slug/comments',
   asyncHandler(async (req, res) => {
-    const post = await BlogPost.findOne({ slug: req.params.slug, ...publicFilter() })
-      .select('allowComments')
-      .lean()
+    const post = await findPublicPost(req.params.slug, {
+      id: blogPosts.id,
+      allowComments: blogPosts.allowComments,
+    })
     if (!post) throw new HttpError(404, 'Article not found')
     if (!post.allowComments) return res.json({ items: [], commentsOpen: false })
-    const items = await BlogComment.find({ postId: post._id, status: 'Approved' })
-      .select('name body createdAt')
-      .sort({ createdAt: -1 })
-      .lean()
-    res.json({ items, commentsOpen: true })
+    const items = await db
+      .select({
+        id: blogComments.id,
+        name: blogComments.name,
+        body: blogComments.body,
+        createdAt: blogComments.createdAt,
+      })
+      .from(blogComments)
+      .where(and(eq(blogComments.postId, post.id), eq(blogComments.status, 'Approved')))
+      .orderBy(desc(blogComments.createdAt))
+    res.json({ items: withMongoId(items), commentsOpen: true })
   }),
 )
 
@@ -73,15 +117,26 @@ router.post(
   '/:slug/comments',
   blogCommentLimiter,
   asyncHandler(async (req, res) => {
-    const post = await BlogPost.findOne({ slug: req.params.slug, ...publicFilter() }).select('allowComments')
+    const post = await findPublicPost(req.params.slug, {
+      id: blogPosts.id,
+      allowComments: blogPosts.allowComments,
+    })
     if (!post) throw new HttpError(404, 'Article not found')
     if (!post.allowComments) throw new HttpError(403, 'Comments are closed for this article')
     const name = String(req.body?.name || '').trim()
-    const email = String(req.body?.email || '').trim().toLowerCase()
+    const email = String(req.body?.email || '')
+      .trim()
+      .toLowerCase()
     const body = String(req.body?.body || '').trim()
     if (!name || !email || !body) throw new HttpError(400, 'Name, email and comment are required')
     if (!/^\S+@\S+\.\S+$/.test(email)) throw new HttpError(400, 'Enter a valid email address')
-    await BlogComment.create({ postId: post._id, name, email, body })
+    // The length caps the Mongoose schema enforced, applied before the insert.
+    await db.insert(blogComments).values({
+      postId: post.id,
+      name: name.slice(0, 100),
+      email: email.slice(0, 254),
+      body: body.slice(0, 4000),
+    })
     res.status(201).json({ ok: true, message: 'Thanks — your comment is awaiting approval.' })
   }),
 )
@@ -95,14 +150,23 @@ router.post(
  * than a copy of today's URLs baked into every post body.
  */
 async function withImageSources(post) {
-  const ids = [
-    post.imageMediaId,
-    ...(post.body || []).map((block) => block.mediaId),
-  ].filter(Boolean)
+  const ids = [post.imageMediaId, ...(post.body || []).map((block) => block.mediaId)]
+    .filter(Boolean)
+    .map(String)
+    .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
   if (!ids.length) return post
 
-  const media = await Media.find({ _id: { $in: ids } }).select('url width height sizes').lean()
-  const byId = new Map(media.map((row) => [String(row._id), row]))
+  const rows = await db
+    .select({
+      id: media.id,
+      url: media.url,
+      width: media.width,
+      height: media.height,
+      sizes: media.sizes,
+    })
+    .from(media)
+    .where(inArray(media.id, ids))
+  const byId = new Map(rows.map((row) => [String(row.id), row]))
 
   // Widest last: a browser picks the first candidate that satisfies `sizes`.
   const srcsetFor = (row) =>
@@ -115,7 +179,9 @@ async function withImageSources(post) {
   const cover = post.imageMediaId && byId.get(String(post.imageMediaId))
   return {
     ...post,
-    ...(cover ? { imageSrcset: srcsetFor(cover), imageWidth: cover.width, imageHeight: cover.height } : {}),
+    ...(cover
+      ? { imageSrcset: srcsetFor(cover), imageWidth: cover.width, imageHeight: cover.height }
+      : {}),
     body: (post.body || []).map((block) => {
       const row = block.mediaId && byId.get(String(block.mediaId))
       return row ? { ...block, srcset: srcsetFor(row) } : block
@@ -126,18 +192,21 @@ async function withImageSources(post) {
 router.get(
   '/:slug',
   asyncHandler(async (req, res) => {
-    const found = await BlogPost.findOne({ slug: req.params.slug, ...publicFilter() }).select('-revisions').lean()
+    const found = await findPublicPost(req.params.slug, withoutColumns(['revisions']))
     if (!found) throw new HttpError(404, 'Article not found')
-    const post = await withImageSources(found)
-    const related = await BlogPost.find({
-      _id: { $ne: post._id },
-      category: post.category,
-      ...publicFilter(),
-    })
-      .select('-body')
+    const post = await withImageSources(withMongoId(found))
+    const related = await db
+      .select(withoutColumns(['body', 'revisions']))
+      .from(blogPosts)
+      .where(
+        and(
+          ne(blogPosts.id, post.id),
+          found.category ? eq(blogPosts.category, found.category) : isNull(blogPosts.category),
+          publicFilter(),
+        ),
+      )
       .limit(3)
-      .lean()
-    res.json({ post, related })
+    res.json({ post, related: withMongoId(related) })
   }),
 )
 

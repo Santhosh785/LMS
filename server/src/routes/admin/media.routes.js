@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url'
 import multer from 'multer'
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
-import Media from '../../models/Media.js'
+import { and, asc, count, desc, eq, gte, ilike, inArray, lt, or, sql } from 'drizzle-orm'
+import { db, withMongoId } from '../../db/index.js'
+import { coerce, isUuid } from '../../db/coerce.js'
+import { media as mediaTable } from '../../db/schema/index.js'
 import {
   deleteObject,
   getObject,
@@ -72,8 +75,10 @@ const upload = multer({
   },
 })
 
-const rx = (value) => new RegExp(String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-const str = (value, max = 500) => String(value ?? '').trim().slice(0, max)
+const str = (value, max = 500) =>
+  String(value ?? '')
+    .trim()
+    .slice(0, max)
 const titleFrom = (name) => str(path.basename(name, path.extname(name)).replace(/[-_]+/g, ' '), 200)
 
 /** Resolves a stored filename inside a directory, or null if it escapes it. */
@@ -95,7 +100,9 @@ const unlinkQuietly = async (file) => {
 async function removeBytes(media) {
   const derivatives = media.sizes || []
   if (media.storage === 'bunny' && media.path) {
-    await Promise.all(derivatives.map((s) => (s.path ? deleteObject(s.path).catch(() => {}) : null)))
+    await Promise.all(
+      derivatives.map((s) => (s.path ? deleteObject(s.path).catch(() => {}) : null)),
+    )
     return deleteObject(media.path)
   }
   await Promise.all(
@@ -121,7 +128,14 @@ async function storeDerivative(fullPath, variant, mimeType, toBunny) {
   try {
     if (toBunny) {
       const { url } = await putObject(target, variant.buffer, mimeType)
-      return { name: variant.name, width: variant.width, height: variant.height, url, path: target, size: variant.buffer.length }
+      return {
+        name: variant.name,
+        width: variant.width,
+        height: variant.height,
+        url,
+        path: target,
+        size: variant.buffer.length,
+      }
     }
     const file = resolveInside(mediaDir, path.basename(target))
     if (!file) return null
@@ -159,7 +173,9 @@ async function store(file, uploadedBy) {
     // The original is already where it belongs; only the derivatives are new.
     const variants = await renderSizes(buffer, file.mimetype, dimensions)
     const sizes = await Promise.all(
-      variants.map((variant) => storeDerivative(`/${file.filename}`, variant, file.mimetype, false)),
+      variants.map((variant) =>
+        storeDerivative(`/${file.filename}`, variant, file.mimetype, false),
+      ),
     )
     return {
       ...base,
@@ -201,7 +217,10 @@ async function rebuildSizes(media, buffer) {
         : unlinkQuietly(resolveInside(mediaDir, path.basename(variant.url || ''))),
     ),
   )
-  const dimensions = media.width && media.height ? { width: media.width, height: media.height } : await measure(buffer)
+  const dimensions =
+    media.width && media.height
+      ? { width: media.width, height: media.height }
+      : await measure(buffer)
   const variants = await renderSizes(buffer, media.mimeType, dimensions)
   const basePath = toBunny ? media.path : `/${media.filename}`
   const sizes = await Promise.all(
@@ -218,82 +237,137 @@ async function readOriginal(media) {
   return fs.promises.readFile(file)
 }
 
-router.get('/', asyncHandler(async (req, res) => {
-  const filter = {}
-  if (req.query.q?.trim()) {
-    const q = rx(req.query.q.trim())
-    filter.$or = [{ originalName: q }, { title: q }, { altText: q }, { caption: q }, { description: q }]
-  }
-  if (/^\d{6}$/.test(req.query.m || '')) {
-    const year = Number(req.query.m.slice(0, 4))
-    const month = Number(req.query.m.slice(4)) - 1
-    filter.createdAt = { $gte: new Date(year, month, 1), $lt: new Date(year, month + 1, 1) }
-  }
+/** Rows with no derivatives yet — Mongo's `$size: 0` or a missing field. */
+const withoutSizesClause = sql`jsonb_array_length(${mediaTable.sizes}) = 0`
+const likeOf = (value) => `%${String(value).replace(/[\\%_]/g, (c) => `\\${c}`)}%`
 
-  const perPage = Math.min(Math.max(Number(req.query.perPage) || 40, 1), 200)
-  const page = Math.max(Number(req.query.page) || 1, 1)
+async function findMedia(id) {
+  if (!isUuid(id)) return null
+  const [row] = await db.select().from(mediaTable).where(eq(mediaTable.id, id))
+  return row || null
+}
 
-  const [items, total, months, byStorage, withoutSizes] = await Promise.all([
-    Media.find(filter).sort({ createdAt: -1 }).skip((page - 1) * perPage).limit(perPage).lean(),
-    Media.countDocuments(filter),
-    Media.aggregate([
-      { $group: { _id: { $dateToString: { date: '$createdAt', format: '%Y%m' } }, count: { $sum: 1 } } },
-      { $sort: { _id: -1 } },
-      { $limit: 60 },
-    ]),
-    Media.aggregate([{ $group: { _id: '$storage', count: { $sum: 1 } } }]),
-    Media.countDocuments({ $or: [{ sizes: { $size: 0 } }, { sizes: { $exists: false } }] }),
-  ])
+/** Persists the fields a migrate/regenerate pass changed on a row. */
+async function saveMedia(row) {
+  await db
+    .update(mediaTable)
+    .set(coerce(mediaTable, row, { allow: ['storage', 'path', 'url', 'sizes', 'width', 'height'] }))
+    .where(eq(mediaTable.id, row.id))
+}
 
-  const counts = Object.fromEntries(byStorage.map((row) => [row._id || 'local', row.count]))
-  res.json({
-    items,
-    total,
-    page,
-    perPage,
-    pages: Math.max(1, Math.ceil(total / perPage)),
-    months: months.filter((m) => m._id).map((m) => ({ key: m._id, count: m.count })),
-    // Lets the library tell an operator where new uploads will go, and how many
-    // older files are still sitting on the server's disk.
-    storage: {
-      backend: isBunnyStorageConfigured() ? 'bunny' : 'local',
-      // Named so a half-filled configuration reads as "the hostname is
-      // missing" rather than as "Bunny is off".
-      missing: storageGaps(),
-      local: counts.local || 0,
-      bunny: counts.bunny || 0,
-      withoutSizes,
-    },
-  })
-}))
+router.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const clauses = []
+    if (req.query.q?.trim()) {
+      const q = likeOf(req.query.q.trim())
+      clauses.push(
+        or(
+          ilike(mediaTable.originalName, q),
+          ilike(mediaTable.title, q),
+          ilike(mediaTable.altText, q),
+          ilike(mediaTable.caption, q),
+          ilike(mediaTable.description, q),
+        ),
+      )
+    }
+    if (/^\d{6}$/.test(req.query.m || '')) {
+      const year = Number(req.query.m.slice(0, 4))
+      const month = Number(req.query.m.slice(4)) - 1
+      clauses.push(
+        gte(mediaTable.createdAt, new Date(year, month, 1)),
+        lt(mediaTable.createdAt, new Date(year, month + 1, 1)),
+      )
+    }
+    const where = clauses.length ? and(...clauses) : undefined
+
+    const perPage = Math.min(Math.max(Number(req.query.perPage) || 40, 1), 200)
+    const page = Math.max(Number(req.query.page) || 1, 1)
+    // UTC, as Mongo's $dateToString was.
+    const monthKey = sql`to_char(${mediaTable.createdAt} at time zone 'UTC', 'YYYYMM')`
+
+    const [items, [{ total }], months, byStorage, [{ withoutSizes }]] = await Promise.all([
+      db
+        .select()
+        .from(mediaTable)
+        .where(where)
+        .orderBy(desc(mediaTable.createdAt))
+        .offset((page - 1) * perPage)
+        .limit(perPage),
+      db.select({ total: count() }).from(mediaTable).where(where),
+      db
+        .select({ key: monthKey.as('key'), count: count() })
+        .from(mediaTable)
+        .groupBy(monthKey)
+        .orderBy(desc(monthKey))
+        .limit(60),
+      db
+        .select({ storage: mediaTable.storage, count: count() })
+        .from(mediaTable)
+        .groupBy(mediaTable.storage),
+      db.select({ withoutSizes: count() }).from(mediaTable).where(withoutSizesClause),
+    ])
+
+    const counts = Object.fromEntries(byStorage.map((row) => [row.storage || 'local', row.count]))
+    res.json({
+      items: withMongoId(items),
+      total,
+      page,
+      perPage,
+      pages: Math.max(1, Math.ceil(total / perPage)),
+      months: months.filter((m) => m.key).map((m) => ({ key: m.key, count: m.count })),
+      // Lets the library tell an operator where new uploads will go, and how many
+      // older files are still sitting on the server's disk.
+      storage: {
+        backend: isBunnyStorageConfigured() ? 'bunny' : 'local',
+        // Named so a half-filled configuration reads as "the hostname is
+        // missing" rather than as "Bunny is off".
+        missing: storageGaps(),
+        local: counts.local || 0,
+        bunny: counts.bunny || 0,
+        withoutSizes,
+      },
+    })
+  }),
+)
 
 /** Accepts either a single `file` or a multi-select drop of `files`. */
-router.post('/', upload.any(), asyncHandler(async (req, res) => {
-  const files = req.files || []
-  if (!files.length) throw new HttpError(400, 'Choose an image to upload')
+router.post(
+  '/',
+  upload.any(),
+  asyncHandler(async (req, res) => {
+    const files = req.files || []
+    if (!files.length) throw new HttpError(400, 'Choose an image to upload')
 
-  const created = []
-  try {
-    // Sequential on purpose: see stagingDir above — one image in memory at a time.
-    for (const file of files) {
-      created.push(await Media.create(await store(file, req.user?.name || 'Admin')))
+    const created = []
+    try {
+      // Sequential on purpose: see stagingDir above — one image in memory at a time.
+      for (const file of files) {
+        const [row] = await db
+          .insert(mediaTable)
+          .values(coerce(mediaTable, await store(file, req.user?.name || 'Admin')))
+          .returning()
+        created.push(withMongoId(row))
+      }
+    } catch (err) {
+      // Whatever did not make it leaves nothing behind in the staging directory.
+      await Promise.all(
+        files.map((file) => unlinkQuietly(resolveInside(stagingDir, file.filename))),
+      )
+      if (created.length) {
+        return res.status(207).json({
+          items: created,
+          error: `Uploaded ${created.length} of ${files.length} files. ${err.message}`,
+        })
+      }
+      throw new HttpError(502, `Upload failed: ${err.message}`)
     }
-  } catch (err) {
-    // Whatever did not make it leaves nothing behind in the staging directory.
-    await Promise.all(files.map((file) => unlinkQuietly(resolveInside(stagingDir, file.filename))))
-    if (created.length) {
-      return res.status(207).json({
-        items: created,
-        error: `Uploaded ${created.length} of ${files.length} files. ${err.message}`,
-      })
-    }
-    throw new HttpError(502, `Upload failed: ${err.message}`)
-  }
 
-  // One file keeps the single-object shape the editor's featured-image picker
-  // expects; a multi-drop returns the whole batch.
-  res.status(201).json(created.length === 1 ? created[0] : { items: created })
-}))
+    // One file keeps the single-object shape the editor's featured-image picker
+    // expects; a multi-drop returns the whole batch.
+    res.status(201).json(created.length === 1 ? created[0] : { items: created })
+  }),
+)
 
 /**
  * Moves files already on this disk into the storage zone.
@@ -304,56 +378,67 @@ router.post('/', upload.any(), asyncHandler(async (req, res) => {
  * otherwise be one request that times out halfway through with no record of
  * how far it got — each file is committed as it lands.
  */
-router.post('/migrate', asyncHandler(async (req, res) => {
-  if (!isBunnyStorageConfigured()) throw new HttpError(400, 'Configure Bunny Storage first')
-  const limit = Math.min(Math.max(Number(req.body?.limit) || 25, 1), 100)
+router.post(
+  '/migrate',
+  asyncHandler(async (req, res) => {
+    if (!isBunnyStorageConfigured()) throw new HttpError(400, 'Configure Bunny Storage first')
+    const limit = Math.min(Math.max(Number(req.body?.limit) || 25, 1), 100)
 
-  const pending = await Media.find({ $or: [{ storage: 'local' }, { storage: { $exists: false } }] })
-    .sort({ createdAt: 1 })
-    .limit(limit)
+    const pending = await db
+      .select()
+      .from(mediaTable)
+      .where(eq(mediaTable.storage, 'local'))
+      .orderBy(asc(mediaTable.createdAt))
+      .limit(limit)
 
-  let moved = 0
-  let missing = 0
-  const failures = []
+    let moved = 0
+    let missing = 0
+    const failures = []
 
-  for (const media of pending) {
-    const local = resolveInside(mediaDir, media.filename)
-    if (!local || !fs.existsSync(local)) {
-      // The row points at a file this disk no longer has — a previous deploy
-      // already took it. Nothing to move, and nothing to be done about it.
-      missing += 1
-      continue
+    for (const media of pending) {
+      const local = resolveInside(mediaDir, media.filename)
+      if (!local || !fs.existsSync(local)) {
+        // The row points at a file this disk no longer has — a previous deploy
+        // already took it. Nothing to move, and nothing to be done about it.
+        missing += 1
+        continue
+      }
+      try {
+        const buffer = await fs.promises.readFile(local)
+        const objectPath = objectPathFor(media.originalName, media.createdAt)
+        const { url } = await putObject(objectPath, buffer, media.mimeType)
+
+        // The derivatives have to move with the original — they are separate
+        // files, and leaving them on the disk would point the Size dropdown at
+        // URLs the next deploy removes.
+        const staleSizes = media.sizes || []
+        media.storage = 'bunny'
+        media.path = objectPath
+        media.url = url
+        media.sizes = []
+        const rebuilt = await rebuildSizes(media, buffer)
+        Object.assign(media, rebuilt)
+        await saveMedia(media)
+
+        await Promise.all(
+          staleSizes.map((variant) =>
+            unlinkQuietly(resolveInside(mediaDir, path.basename(variant.url || ''))),
+          ),
+        )
+        await unlinkQuietly(local)
+        moved += 1
+      } catch (err) {
+        failures.push(`${media.originalName}: ${err.message}`)
+      }
     }
-    try {
-      const buffer = await fs.promises.readFile(local)
-      const objectPath = objectPathFor(media.originalName, media.createdAt)
-      const { url } = await putObject(objectPath, buffer, media.mimeType)
 
-      // The derivatives have to move with the original — they are separate
-      // files, and leaving them on the disk would point the Size dropdown at
-      // URLs the next deploy removes.
-      const staleSizes = media.sizes || []
-      media.storage = 'bunny'
-      media.path = objectPath
-      media.url = url
-      media.sizes = []
-      const rebuilt = await rebuildSizes(media, buffer)
-      Object.assign(media, rebuilt)
-      await media.save()
-
-      await Promise.all(
-        staleSizes.map((variant) => unlinkQuietly(resolveInside(mediaDir, path.basename(variant.url || '')))),
-      )
-      await unlinkQuietly(local)
-      moved += 1
-    } catch (err) {
-      failures.push(`${media.originalName}: ${err.message}`)
-    }
-  }
-
-  const remaining = await Media.countDocuments({ $or: [{ storage: 'local' }, { storage: { $exists: false } }] })
-  res.json({ ok: true, moved, missing, remaining, failures })
-}))
+    const [{ remaining }] = await db
+      .select({ remaining: count() })
+      .from(mediaTable)
+      .where(eq(mediaTable.storage, 'local'))
+    res.json({ ok: true, moved, missing, remaining, failures })
+  }),
+)
 
 /**
  * Rebuilds the derivative sizes for images that have none.
@@ -362,75 +447,100 @@ router.post('/migrate', asyncHandler(async (req, res) => {
  * dropdown would offer nothing for it. `all=true` rebuilds every image instead,
  * which is what to run after changing the size list in services/imageSizes.js.
  */
-router.post('/regenerate', asyncHandler(async (req, res) => {
-  const limit = Math.min(Math.max(Number(req.body?.limit) || 25, 1), 100)
-  const filter = req.body?.all ? {} : { $or: [{ sizes: { $size: 0 } }, { sizes: { $exists: false } }] }
+router.post(
+  '/regenerate',
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Math.max(Number(req.body?.limit) || 25, 1), 100)
+    const pending = await db
+      .select()
+      .from(mediaTable)
+      .where(req.body?.all ? undefined : withoutSizesClause)
+      .orderBy(asc(mediaTable.createdAt))
+      .limit(limit)
+    let rebuilt = 0
+    let skipped = 0
+    const failures = []
 
-  const pending = await Media.find(filter).sort({ createdAt: 1 }).limit(limit)
-  let rebuilt = 0
-  let skipped = 0
-  const failures = []
-
-  for (const media of pending) {
-    try {
-      const buffer = await readOriginal(media)
-      if (!buffer) {
-        skipped += 1
-        continue
+    for (const media of pending) {
+      try {
+        const buffer = await readOriginal(media)
+        if (!buffer) {
+          skipped += 1
+          continue
+        }
+        const next = await rebuildSizes(media, buffer)
+        Object.assign(media, next)
+        await saveMedia(media)
+        rebuilt += media.sizes.length ? 1 : 0
+        if (!media.sizes.length) skipped += 1
+      } catch (err) {
+        failures.push(`${media.originalName}: ${err.message}`)
       }
-      const next = await rebuildSizes(media, buffer)
-      Object.assign(media, next)
-      await media.save()
-      rebuilt += media.sizes.length ? 1 : 0
-      if (!media.sizes.length) skipped += 1
-    } catch (err) {
-      failures.push(`${media.originalName}: ${err.message}`)
     }
-  }
 
-  const remaining = await Media.countDocuments({ $or: [{ sizes: { $size: 0 } }, { sizes: { $exists: false } }] })
-  res.json({ ok: true, rebuilt, skipped, remaining, failures })
-}))
+    const [{ remaining }] = await db
+      .select({ remaining: count() })
+      .from(mediaTable)
+      .where(withoutSizesClause)
+    res.json({ ok: true, rebuilt, skipped, remaining, failures })
+  }),
+)
 
-router.post('/bulk', asyncHandler(async (req, res) => {
-  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [])
-    .map(String)
-    .filter((id) => /^[a-f\d]{24}$/i.test(id))
-  if (!ids.length) throw new HttpError(400, 'Select at least one item')
-  if (req.body?.action !== 'delete') throw new HttpError(400, 'Choose a bulk action')
+router.post(
+  '/bulk',
+  asyncHandler(async (req, res) => {
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [])
+      .map(String)
+      .filter((id) => isUuid(id))
+    if (!ids.length) throw new HttpError(400, 'Select at least one item')
+    if (req.body?.action !== 'delete') throw new HttpError(400, 'Choose a bulk action')
 
-  const items = await Media.find({ _id: { $in: ids } }).lean()
-  await Media.deleteMany({ _id: { $in: ids } })
-  // Best effort: the rows are gone either way, and a storage object that
-  // outlives its row costs pennies, where a failed delete blocking the whole
-  // batch would leave the library inconsistent.
-  await Promise.all(items.map((item) => removeBytes(item).catch(() => {})))
-  res.json({ ok: true, affected: items.length })
-}))
+    const items = await db.delete(mediaTable).where(inArray(mediaTable.id, ids)).returning()
+    // Best effort: the rows are gone either way, and a storage object that
+    // outlives its row costs pennies, where a failed delete blocking the whole
+    // batch would leave the library inconsistent.
+    await Promise.all(items.map((item) => removeBytes(item).catch(() => {})))
+    res.json({ ok: true, affected: items.length })
+  }),
+)
 
 /** One attachment, so the editor's Size dropdown knows what exists. */
-router.get('/:id', asyncHandler(async (req, res) => {
-  const media = await Media.findById(req.params.id).lean()
-  if (!media) throw new HttpError(404, 'Media item not found')
-  res.json(media)
-}))
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const media = await findMedia(req.params.id)
+    if (!media) throw new HttpError(404, 'Media item not found')
+    res.json(withMongoId(media))
+  }),
+)
 
-router.put('/:id', asyncHandler(async (req, res) => {
-  const patch = {}
-  for (const key of ['title', 'altText', 'caption', 'description']) {
-    if (key in (req.body || {})) patch[key] = str(req.body[key], key === 'description' ? 2000 : 500)
-  }
-  if (!Object.keys(patch).length) throw new HttpError(400, 'Nothing to update')
-  const media = await Media.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true })
-  if (!media) throw new HttpError(404, 'Media item not found')
-  res.json(media)
-}))
+router.put(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const patch = {}
+    for (const key of ['title', 'altText', 'caption', 'description']) {
+      if (key in (req.body || {}))
+        patch[key] = str(req.body[key], key === 'description' ? 2000 : 500)
+    }
+    if (!Object.keys(patch).length) throw new HttpError(400, 'Nothing to update')
+    const [media] = isUuid(req.params.id)
+      ? await db.update(mediaTable).set(patch).where(eq(mediaTable.id, req.params.id)).returning()
+      : []
+    if (!media) throw new HttpError(404, 'Media item not found')
+    res.json(withMongoId(media))
+  }),
+)
 
-router.delete('/:id', asyncHandler(async (req, res) => {
-  const media = await Media.findByIdAndDelete(req.params.id)
-  if (!media) throw new HttpError(404, 'Media item not found')
-  await removeBytes(media).catch(() => {})
-  res.json({ ok: true })
-}))
+router.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const [media] = isUuid(req.params.id)
+      ? await db.delete(mediaTable).where(eq(mediaTable.id, req.params.id)).returning()
+      : []
+    if (!media) throw new HttpError(404, 'Media item not found')
+    await removeBytes(media).catch(() => {})
+    res.json({ ok: true })
+  }),
+)
 
 export default router

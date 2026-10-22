@@ -1,6 +1,24 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../middleware/error.js'
-import Course from '../models/Course.js'
+import {
+  and,
+  arrayOverlaps,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  gt,
+  gte,
+  ilike,
+  inArray,
+  lte,
+  or,
+  sql,
+} from 'drizzle-orm'
+import { db, withMongoId } from '../db/index.js'
+import { courses } from '../db/schema/index.js'
+import { findCourse } from '../db/repos/courses.js'
 import { stripVideoRefs } from '../services/bunny.js'
 
 const router = Router()
@@ -12,16 +30,19 @@ const list = (value) =>
     .filter(Boolean)
 
 const SORTS = {
-  popularity: { popularity: -1 },
-  newest: { newestRank: -1 },
-  rating: { rating: -1 },
-  'price-asc': { amount: 1 },
-  'price-desc': { amount: -1 },
+  popularity: [desc(courses.popularity)],
+  newest: [desc(courses.newestRank)],
+  rating: [desc(courses.rating)],
+  'price-asc': [asc(courses.amount)],
+  'price-desc': [desc(courses.amount)],
 }
+
+const visible = and(eq(courses.status, 'Published'), eq(courses.visibility, 'Public'))
 
 /**
  * Mirrors the original js/explore.js filtering exactly, including its quirk
- * that "paid" is pre-selected when the URL carries no facet at all.
+ * that "paid" is pre-selected when the URL carries no facet at all. Returns a
+ * SQL condition.
  */
 export function buildCourseQuery(params) {
   const { price, type, topic, lang, rating, duration, q, category, tag } = params
@@ -31,75 +52,95 @@ export function buildCourseQuery(params) {
    * some courses cannot be watched after payment is worse than a smaller one,
    * and until this filter existed the status field was decorative.
    */
-  const filter = { status: 'Published', visibility: 'Public' }
+  const clauses = [visible]
   // `category` and `tag` count as facets too, or arriving at /courses?tag=x
   // would silently add the legacy "paid only" default on top of the tag.
   const hasFacet = Boolean(price || type || topic || lang || category || tag)
 
   const prices = list(price)
-  if (prices.length) filter.price = { $in: prices }
-  else if (!hasFacet) filter.price = 'paid'
+  if (prices.length) clauses.push(inArray(courses.price, prices))
+  else if (!hasFacet) clauses.push(eq(courses.price, 'paid'))
 
   const types = list(type)
-  if (types.length) filter.type = { $in: types }
+  if (types.length) clauses.push(inArray(courses.type, types))
 
   const topics = list(topic)
-  if (topics.length) filter.topic = { $in: topics }
+  if (topics.length) clauses.push(inArray(courses.topic, topics))
 
+  // Array columns match when they share any value — Mongo's `{ $in }` on an array.
   const langs = list(lang)
-  if (langs.length) filter.languages = { $in: langs }
+  if (langs.length) clauses.push(arrayOverlaps(courses.languages, langs))
 
   const categories = list(category)
-  if (categories.length) filter.categories = { $in: categories }
+  if (categories.length) clauses.push(arrayOverlaps(courses.categories, categories))
 
   const tags = list(tag)
-  if (tags.length) filter.tags = { $in: tags }
+  if (tags.length) clauses.push(arrayOverlaps(courses.tags, tags))
 
   const ratings = list(rating)
     .map(Number)
     .filter((n) => !Number.isNaN(n))
-  if (ratings.length) filter.rating = { $gte: Math.max(...ratings) }
+  if (ratings.length) clauses.push(gte(courses.rating, Math.max(...ratings)))
 
   const durations = list(duration)
   if (durations.length) {
     const ranges = durations
       .map((d) => {
-        if (d === 'short') return { hours: { $lte: 5 } }
-        if (d === 'mid') return { hours: { $gt: 5, $lte: 12 } }
-        if (d === 'long') return { hours: { $gt: 12 } }
+        if (d === 'short') return lte(courses.hours, 5)
+        if (d === 'mid') return and(gt(courses.hours, 5), lte(courses.hours, 12))
+        if (d === 'long') return gt(courses.hours, 12)
         return null
       })
       .filter(Boolean)
-    if (ranges.length) filter.$or = ranges
+    if (ranges.length) clauses.push(or(...ranges))
   }
 
   if (q && q.trim()) {
     // the old client searched title + topic + languages as one string
-    const rx = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-    const search = [{ title: rx }, { topic: rx }, { languages: rx }]
-    filter.$and = [...(filter.$and || []), { $or: search }]
+    const pattern = `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+    clauses.push(
+      or(
+        ilike(courses.title, pattern),
+        ilike(courses.topic, pattern),
+        sql`array_to_string(${courses.languages}, ' ') ilike ${pattern}`,
+      ),
+    )
   }
 
-  return filter
+  return and(...clauses)
 }
+
+/** Catalogue cards: everything except the heavy page-only copy and rules. */
+const {
+  overview: _o,
+  journey: _j,
+  faqs: _f,
+  whoShouldEnroll: _w,
+  dripSchedule: _d,
+  automationRules: _a,
+  ...cardColumns
+} = getTableColumns(courses)
 
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const filter = buildCourseQuery(req.query)
+    const where = buildCourseQuery(req.query)
     const sort = SORTS[req.query.sort] || SORTS.popularity
     const limit = Math.min(Number(req.query.limit) || 9, 100)
     const skip = Number(req.query.skip) || 0
 
-    const projection =
-      '-sections -overview -journey -faqs -whoShouldEnroll -pricingPlans -dripSchedule -automationRules'
-
-    const [items, total] = await Promise.all([
-      Course.find(filter).select(projection).sort(sort).skip(skip).limit(limit).lean(),
-      Course.countDocuments(filter),
+    const [items, [{ total }]] = await Promise.all([
+      db
+        .select(cardColumns)
+        .from(courses)
+        .where(where)
+        .orderBy(...sort, asc(courses.id))
+        .limit(limit)
+        .offset(skip),
+      db.select({ total: count() }).from(courses).where(where),
     ])
 
-    res.json({ items, total })
+    res.json({ items: withMongoId(items), total })
   }),
 )
 
@@ -107,12 +148,19 @@ router.get(
 router.get(
   '/facets',
   asyncHandler(async (_req, res) => {
-    const visible = { status: 'Published', visibility: 'Public' }
-    const [topics, languages] = await Promise.all([
-      Course.distinct('topic', visible),
-      Course.distinct('languages', visible),
+    const [topicRows, languageRows] = await Promise.all([
+      db.selectDistinct({ v: courses.topic }).from(courses).where(visible),
+      db
+        .selectDistinct({ v: sql`unnest(${courses.languages})` })
+        .from(courses)
+        .where(visible),
     ])
-    res.json({ topics: topics.filter(Boolean).sort(), languages: languages.filter(Boolean).sort() })
+    const values = (rows) =>
+      rows
+        .map((r) => r.v)
+        .filter(Boolean)
+        .sort()
+    res.json({ topics: values(topicRows), languages: values(languageRows) })
   }),
 )
 
@@ -123,11 +171,9 @@ router.get(
     // fully reachable, and buyable, to anyone holding its slug. Students already
     // enrolled in a drafted course keep access through /api/enrollments, which
     // is a different route with a different check.
-    const course = await Course.findOne({
-      slug: req.params.slug,
-      status: 'Published',
-      visibility: 'Public',
-    }).lean()
+    const course = await findCourse(
+      and(eq(courses.slug, String(req.params.slug).toLowerCase()), visible),
+    )
     if (!course) throw new HttpError(404, 'Course not found')
     // Public route: the curriculum is a selling point, the video ids are not.
     res.json(stripVideoRefs(course))

@@ -5,7 +5,10 @@ import { asyncHandler } from '../middleware/error.js'
 import { captureMessage } from '../config/observability.js'
 import { isWebhookConfigured, verifyWebhookSignature } from '../services/razorpay.js'
 import { fulfilGatewayPayment } from '../services/fulfilment.js'
-import { Course } from '../models/index.js'
+import { eq } from 'drizzle-orm'
+import { db } from '../db/index.js'
+import { courses, lessons } from '../db/schema/index.js'
+import { updateLesson } from '../db/repos/courses.js'
 import { getVideo, isBunnyManagementConfigured, mapBunnyStatus } from '../services/bunnyApi.js'
 import { cfg } from '../services/runtimeConfig.js'
 
@@ -160,16 +163,14 @@ router.post(
       return res.json({ ok: true })
     }
 
-    const course = await Course.findOne({ 'sections.lessons.bunnyVideoId': VideoGuid })
-    if (!course) return res.json({ ok: true }) // video no longer attached to anything
-
-    let target
-    for (const section of course.sections) {
-      for (const l of section.lessons) {
-        if (l.bunnyVideoId === VideoGuid) target = l
-      }
-    }
-    if (!target) return res.json({ ok: true })
+    const [hit] = await db
+      .select({ lesson: lessons, course: { id: courses.id, slug: courses.slug } })
+      .from(lessons)
+      .innerJoin(courses, eq(courses.id, lessons.courseId))
+      .where(eq(lessons.bunnyVideoId, VideoGuid))
+      .limit(1)
+    if (!hit) return res.json({ ok: true }) // video no longer attached to anything
+    const { lesson: target, course } = hit
 
     /**
      * The webhook's Status enum differs from the video object's — so when the
@@ -195,14 +196,14 @@ router.post(
     }
 
     if (next !== target.videoStatus) {
-      target.videoStatus = next
+      const patch = { videoStatus: next }
       if (next === 'ready') {
-        if (lengthSeconds != null) target.videoDurationSeconds = lengthSeconds
+        if (lengthSeconds != null) patch.videoDurationSeconds = lengthSeconds
         if ((!target.duration || target.duration === '00:00') && lengthSeconds) {
           const h = Math.floor(lengthSeconds / 3600)
           const m = Math.floor((lengthSeconds % 3600) / 60)
           const s = String(Math.round(lengthSeconds % 60)).padStart(2, '0')
-          target.duration = h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
+          patch.duration = h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
         }
       }
       if (next === 'failed') {
@@ -210,11 +211,11 @@ router.post(
         // this is the only signal anyone gets before a student hits play.
         captureMessage('Bunny video encoding failed', {
           videoId: VideoGuid,
-          courseId: String(course._id),
+          courseId: String(course.id),
           lesson: target.name,
         })
       }
-      await course.save()
+      await updateLesson(target.id, patch)
       console.log(`[bunny] ${VideoGuid} → ${next} (${course.slug} / ${target.name})`)
     }
 

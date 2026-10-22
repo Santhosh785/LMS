@@ -1,6 +1,19 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
-import { Lead, User } from '../../models/index.js'
+import { eq } from 'drizzle-orm'
+import {
+  addNote,
+  countInbox,
+  getInboxDoc,
+  getInboxRow,
+  inboxWhere,
+  listInbox,
+  resolveOwner,
+  statusCounts,
+  updateInbox,
+} from '../../db/repos/crm.js'
+import { db } from '../../db/index.js'
+import { leads } from '../../db/schema/index.js'
 import { sendCsv } from '../../utils/csv.js'
 
 const router = Router()
@@ -16,25 +29,8 @@ const router = Router()
 
 const STATUSES = ['New', 'Contacted', 'Qualified', 'Lost', 'Converted']
 
-const buildFilter = (query) => {
-  const filter = {}
-  if (query.status) filter.status = query.status
-  if (query.source) filter.source = query.source
-  if (query.owner === 'unassigned') filter.owner = { $exists: false }
-  else if (query.owner) filter.owner = query.owner
-
-  const q = query.q?.trim()
-  if (q) {
-    const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-    filter.$or = [{ name: rx }, { email: rx }, { phone: rx }]
-  }
-  if (query.from || query.to) {
-    filter.createdAt = {}
-    if (query.from) filter.createdAt.$gte = new Date(query.from)
-    if (query.to) filter.createdAt.$lte = new Date(`${query.to}T23:59:59.999Z`)
-  }
-  return filter
-}
+const buildFilter = (query) =>
+  inboxWhere('lead', query, ['name', 'email', 'phone'], { source: query.source })
 
 router.get(
   '/',
@@ -44,25 +40,23 @@ router.get(
     const skip = Number(req.query.skip) || 0
 
     const [items, total, counts, sources] = await Promise.all([
-      Lead.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate('owner', 'name email')
-        .lean(),
-      Lead.countDocuments(filter),
+      listInbox('lead', { where: filter, limit, offset: skip }),
+      countInbox('lead', filter),
       // Board counts ignore the status filter, or selecting one would zero the
       // others and the tab row would stop being a summary.
-      Lead.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
-      Lead.distinct('source'),
+      statusCounts('lead'),
+      db.selectDistinct({ source: leads.source }).from(leads),
     ])
 
     res.json({
       items,
       total,
       statuses: STATUSES,
-      counts: Object.fromEntries(counts.map((c) => [c._id || 'New', c.count])),
-      sources: sources.filter(Boolean).sort(),
+      counts: Object.fromEntries(counts.map((c) => [c.status || 'New', c.n])),
+      sources: sources
+        .map((r) => r.source)
+        .filter(Boolean)
+        .sort(),
     })
   }),
 )
@@ -70,10 +64,7 @@ router.get(
 router.get(
   '/export',
   asyncHandler(async (req, res) => {
-    const rows = await Lead.find(buildFilter(req.query))
-      .sort({ createdAt: -1 })
-      .populate('owner', 'name')
-      .lean()
+    const rows = await listInbox('lead', { where: buildFilter(req.query) })
 
     sendCsv(res, 'leads.csv', rows, [
       { key: 'createdAt', label: 'Received', get: (r) => r.createdAt?.toISOString() },
@@ -96,7 +87,7 @@ router.get(
 router.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const lead = await Lead.findById(req.params.id).populate('owner', 'name email').lean()
+    const lead = await getInboxDoc('lead', req.params.id)
     if (!lead) throw new HttpError(404, 'Lead not found')
     res.json(lead)
   }),
@@ -105,32 +96,24 @@ router.get(
 router.put(
   '/:id',
   asyncHandler(async (req, res) => {
-    const lead = await Lead.findById(req.params.id)
+    const lead = await getInboxRow('lead', req.params.id)
     if (!lead) throw new HttpError(404, 'Lead not found')
 
     const { status, owner, nextFollowUpAt } = req.body
+    const patch = {}
     if (status !== undefined) {
       if (!STATUSES.includes(status)) throw new HttpError(400, 'Unknown status')
       // Stamped once, on the first move to Converted, so re-saving the record
       // later does not keep moving the conversion date forward.
-      if (status === 'Converted' && !lead.convertedAt) lead.convertedAt = new Date()
-      lead.status = status
+      if (status === 'Converted' && !lead.convertedAt) patch.convertedAt = new Date()
+      patch.status = status
     }
-    if (owner !== undefined) {
-      if (owner) {
-        const assignee = await User.findById(owner).select('_id')
-        if (!assignee) throw new HttpError(400, 'That owner does not exist')
-        lead.owner = assignee._id
-      } else {
-        lead.owner = undefined
-      }
-    }
+    if (owner !== undefined) patch.owner = await resolveOwner(owner)
     if (nextFollowUpAt !== undefined) {
-      lead.nextFollowUpAt = nextFollowUpAt ? new Date(nextFollowUpAt) : undefined
+      patch.nextFollowUpAt = nextFollowUpAt ? new Date(nextFollowUpAt) : null
     }
 
-    await lead.save()
-    res.json(await Lead.findById(lead._id).populate('owner', 'name email').lean())
+    res.json(await updateInbox('lead', lead.id, patch))
   }),
 )
 
@@ -140,13 +123,11 @@ router.post(
     const body = req.body?.body?.trim()
     if (!body) throw new HttpError(400, 'Write something first')
 
-    const lead = await Lead.findByIdAndUpdate(
-      req.params.id,
-      { $push: { notes: { body, author: req.user._id, authorName: req.user.name } } },
-      { new: true },
-    )
-      .populate('owner', 'name email')
-      .lean()
+    const lead = await addNote('lead', req.params.id, {
+      body,
+      author: req.user.id,
+      authorName: req.user.name,
+    })
     if (!lead) throw new HttpError(404, 'Lead not found')
     res.json(lead)
   }),
@@ -155,8 +136,9 @@ router.post(
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const lead = await Lead.findByIdAndDelete(req.params.id)
+    const lead = await getInboxRow('lead', req.params.id)
     if (!lead) throw new HttpError(404, 'Lead not found')
+    await db.delete(leads).where(eq(leads.id, lead.id))
     res.json({ ok: true })
   }),
 )

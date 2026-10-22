@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Course } from '../src/models/index.js'
+import { findCourseById } from '../src/db/repos/courses.js'
 import { agent, paidCourse, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -42,25 +42,25 @@ describe('price and amount stay consistent', () => {
     const as = await adminAgent()
     const course = await paidCourse()
 
-    await as('put', `/api/admin/courses/${course._id}/pricing`).send({ amount: 0 }).expect(200)
-    expect((await Course.findById(course._id)).price).toBe('free')
+    await as('put', `/api/admin/courses/${course.id}/pricing`).send({ amount: 0 }).expect(200)
+    expect((await findCourseById(course.id)).price).toBe('free')
   })
 
   it('flips to paid when an amount is put back on', async () => {
     const as = await adminAgent()
     const course = await paidCourse({ price: 'free', amount: 0 })
 
-    await as('put', `/api/admin/courses/${course._id}/pricing`).send({ amount: 499 }).expect(200)
-    expect((await Course.findById(course._id)).price).toBe('paid')
+    await as('put', `/api/admin/courses/${course.id}/pricing`).send({ amount: 499 }).expect(200)
+    expect((await findCourseById(course.id)).price).toBe('paid')
   })
 
   it('zeroes the amount when the flag alone is set to free', async () => {
     const as = await adminAgent()
     const course = await paidCourse({ amount: 2499 })
 
-    await as('put', `/api/admin/courses/${course._id}/pricing`).send({ price: 'free' }).expect(200)
+    await as('put', `/api/admin/courses/${course.id}/pricing`).send({ price: 'free' }).expect(200)
 
-    const stored = await Course.findById(course._id)
+    const stored = await findCourseById(course.id)
     expect(stored.price).toBe('free')
     expect(stored.amount).toBe(0)
   })
@@ -69,22 +69,22 @@ describe('price and amount stay consistent', () => {
     const as = await adminAgent()
     const course = await paidCourse()
 
-    await as('put', `/api/admin/courses/${course._id}/pricing`)
+    await as('put', `/api/admin/courses/${course.id}/pricing`)
       .send({ price: 'free', amount: 999 })
       .expect(200)
 
-    expect((await Course.findById(course._id)).price).toBe('paid')
+    expect((await findCourseById(course.id)).price).toBe('paid')
   })
 
   it('leaves pricing alone when a save touches neither field', async () => {
     const as = await adminAgent()
     const course = await paidCourse({ amount: 2499 })
 
-    await as('put', `/api/admin/courses/${course._id}/settings`)
+    await as('put', `/api/admin/courses/${course.id}/settings`)
       .send({ title: 'Renamed' })
       .expect(200)
 
-    const stored = await Course.findById(course._id)
+    const stored = await findCourseById(course.id)
     expect(stored.price).toBe('paid')
     expect(stored.amount).toBe(2499)
   })

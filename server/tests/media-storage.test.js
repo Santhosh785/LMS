@@ -4,7 +4,10 @@ import os from 'node:os'
 import path from 'node:path'
 import sharp from 'sharp'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { Media, Setting } from '../src/models/index.js'
+import { media as mediaTable, settings } from '../src/db/schema/index.js'
+import { db } from '../src/db/index.js'
+import { updateSettings } from '../src/db/repos/settings.js'
+import { countRows, findRowById, updateRow } from './helpers/content.js'
 import { seal } from '../src/utils/secretBox.js'
 import { invalidateRuntimeConfig, refreshRuntimeConfig } from '../src/services/runtimeConfig.js'
 import { agent, signUpAdmin } from './helpers/factories.js'
@@ -34,18 +37,14 @@ function fileInServer(relative) {
 
 /** Points the runtime config at a storage zone, the way the admin screen does. */
 async function configureBunny() {
-  const doc = await Setting.getSingleton()
-  await Setting.updateOne(
-    { _id: doc._id },
-    {
-      $set: {
-        'media.bunnyStorageZone': 'gs-media',
-        'media.bunnyStorageRegion': 'sg',
-        'media.bunnyStorageHost': 'cdn.example.net',
-        'media.bunnyStoragePasswordEnc': seal('zone-password'),
-      },
+  await updateSettings({
+    media: {
+      bunnyStorageZone: 'gs-media',
+      bunnyStorageRegion: 'sg',
+      bunnyStorageHost: 'cdn.example.net',
+      bunnyStoragePasswordEnc: seal('zone-password'),
     },
-  )
+  })
   invalidateRuntimeConfig()
   await refreshRuntimeConfig()
 }
@@ -56,7 +55,12 @@ function stubStorage({ status = 201 } = {}) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url, opts = {}) => {
-      calls.push({ url: String(url), method: opts.method || 'GET', headers: opts.headers, body: opts.body })
+      calls.push({
+        url: String(url),
+        method: opts.method || 'GET',
+        headers: opts.headers,
+        body: opts.body,
+      })
       return {
         ok: status < 400,
         status,
@@ -73,7 +77,9 @@ const upload = (cookie, name = 'photo.png', bytes = PNG) =>
 
 /** A real image of a given size, so the resizer has something to work from. */
 const image = (width, height) =>
-  sharp({ create: { width, height, channels: 3, background: '#135855' } }).png().toBuffer()
+  sharp({ create: { width, height, channels: 3, background: '#135855' } })
+    .png()
+    .toBuffer()
 
 /**
  * The suite writes real files, because that is the behaviour under test — but
@@ -104,7 +110,7 @@ afterAll(() => {
  */
 afterEach(async () => {
   vi.unstubAllGlobals()
-  await Setting.deleteMany({})
+  await db.delete(settings)
   invalidateRuntimeConfig()
   await refreshRuntimeConfig()
 })
@@ -143,7 +149,9 @@ describe('with a storage zone configured', () => {
     expect(res.body.storage).toBe('bunny')
     // Date-partitioned, uuid-named — never the caller's filename.
     expect(res.body.path).toMatch(/^blog\/\d{4}\/\d{2}\/[0-9a-f-]{36}\.png$/)
-    expect(res.body.url).toBe(`https://cdn.example.net/${res.body.path.split('/').map(encodeURIComponent).join('/')}`)
+    expect(res.body.url).toBe(
+      `https://cdn.example.net/${res.body.path.split('/').map(encodeURIComponent).join('/')}`,
+    )
 
     const put = calls.find((call) => call.method === 'PUT')
     expect(put.url).toBe(`https://sg.storage.bunnycdn.com/gs-media/${res.body.path}`)
@@ -151,7 +159,9 @@ describe('with a storage zone configured', () => {
     expect(put.headers['content-type']).toBe('image/png')
     // Bunny rejects a body that does not match, so a truncated upload fails
     // loudly instead of storing a corrupt image.
-    expect(put.headers.Checksum).toBe(crypto.createHash('sha256').update(PNG).digest('hex').toUpperCase())
+    expect(put.headers.Checksum).toBe(
+      crypto.createHash('sha256').update(PNG).digest('hex').toUpperCase(),
+    )
   })
 
   it('leaves nothing behind in the staging directory', async () => {
@@ -175,7 +185,7 @@ describe('with a storage zone configured', () => {
 
     const del = calls.find((call) => call.method === 'DELETE')
     expect(del.url).toBe(`https://sg.storage.bunnycdn.com/gs-media/${created.body.path}`)
-    expect(await Media.countDocuments()).toBe(0)
+    expect(await countRows(mediaTable)).toBe(0)
   })
 
   /**
@@ -191,7 +201,7 @@ describe('with a storage zone configured', () => {
     const res = await upload(cookie)
 
     expect(res.status).toBe(502)
-    expect(await Media.countDocuments()).toBe(0)
+    expect(await countRows(mediaTable)).toBe(0)
     const staged = fs.existsSync(stagingDir) ? fs.readdirSync(stagingDir) : []
     expect(staged).toEqual([])
   })
@@ -227,7 +237,7 @@ describe('migrating an install that already has local files', () => {
     expect(calls.some((call) => call.method === 'PUT')).toBe(true)
     expect(fs.existsSync(onDisk)).toBe(false)
 
-    const moved = await Media.findById(before.body._id).lean()
+    const moved = await findRowById(mediaTable, before.body._id)
     expect(moved.storage).toBe('bunny')
     expect(moved.url).toMatch(/^https:\/\/cdn\.example\.net\/blog\//)
   })
@@ -252,7 +262,7 @@ describe('migrating an install that already has local files', () => {
 })
 
 describe('derivative sizes', () => {
-  it('renders WordPress\'s set from a large upload and records the dimensions', async () => {
+  it("renders WordPress's set from a large upload and records the dimensions", async () => {
     const { cookie } = await signUpAdmin()
 
     const res = await upload(cookie, 'banner.png', await image(1200, 630)).expect(201)
@@ -318,14 +328,14 @@ describe('derivative sizes', () => {
     const res = await upload(cookie, 'banner.png', await image(1200, 630)).expect(201)
 
     // Back to how a pre-existing row looks: original only.
-    await Media.updateOne({ _id: res.body._id }, { $set: { sizes: [], width: 0, height: 0 } })
+    await updateRow(mediaTable, 'id', res.body._id, { sizes: [], width: 0, height: 0 })
     const before = await agent().get('/api/admin/media').set('Cookie', cookie).expect(200)
     expect(before.body.storage.withoutSizes).toBe(1)
 
     const run = await agent().post('/api/admin/media/regenerate').set('Cookie', cookie).expect(200)
 
     expect(run.body).toMatchObject({ rebuilt: 1, remaining: 0, failures: [] })
-    const after = await Media.findById(res.body._id).lean()
+    const after = await findRowById(mediaTable, res.body._id)
     expect(after.width).toBe(1200)
     expect(after.sizes).toHaveLength(4)
   })

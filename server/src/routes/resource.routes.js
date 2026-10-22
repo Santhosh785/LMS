@@ -2,7 +2,10 @@ import { Router } from 'express'
 import { asyncHandler, HttpError } from '../middleware/error.js'
 import { body } from 'express-validator'
 import { validate } from '../middleware/validate.js'
-import { ClaudeSkill, EmailContact, Playbook } from '../models/index.js'
+import { and, asc, count, eq, isNotNull, sql } from 'drizzle-orm'
+import { db, withMongoId } from '../db/index.js'
+import { claudeSkills, emailContacts, playbooks } from '../db/schema/index.js'
+import { pickColumns } from '../db/repos/content.js'
 
 const router = Router()
 
@@ -13,7 +16,7 @@ const router = Router()
  * be reached by guessing its slug.
  */
 
-const PUBLISHED = { status: 'Published' }
+const published = (table) => eq(table.status, 'Published')
 
 /**
  * The filter row's labels, from the drop's markup. They are not the card
@@ -37,60 +40,92 @@ const SKILL_CARD = 'title slug cardTitle summary category badge icon order'
 router.get(
   '/playbooks',
   asyncHandler(async (req, res) => {
-    const filter = { ...PUBLISHED }
-    if (req.query.tag) filter.tag = req.query.tag
+    const where = and(
+      published(playbooks),
+      req.query.tag ? eq(playbooks.tag, String(req.query.tag)) : undefined,
+    )
 
     const [items, tags] = await Promise.all([
-      Playbook.find(filter).select(PLAYBOOK_CARD).sort({ order: 1, title: 1 }).lean(),
-      Playbook.distinct('tag', PUBLISHED),
+      db
+        .select(pickColumns(playbooks, PLAYBOOK_CARD))
+        .from(playbooks)
+        .where(where)
+        .orderBy(asc(playbooks.order), asc(playbooks.title)),
+      db
+        .selectDistinct({ tag: playbooks.tag })
+        .from(playbooks)
+        .where(and(published(playbooks), isNotNull(playbooks.tag))),
     ])
-    res.json({ items, tags: tags.filter(Boolean).sort() })
+    res.json({
+      items: withMongoId(items),
+      tags: tags
+        .map((t) => t.tag)
+        .filter(Boolean)
+        .sort(),
+    })
   }),
 )
 
 router.get(
   '/playbooks/:slug',
   asyncHandler(async (req, res) => {
-    const playbook = await Playbook.findOne({ slug: req.params.slug, ...PUBLISHED }).lean()
-    if (!playbook) throw new HttpError(404, 'Playbook not found')
+    const [row] = await db
+      .select()
+      .from(playbooks)
+      .where(and(eq(playbooks.slug, String(req.params.slug).toLowerCase()), published(playbooks)))
+    if (!row) throw new HttpError(404, 'Playbook not found')
+    const playbook = withMongoId(row)
 
     // The sidebar cross-links to a skill; resolve it so a renamed or
     // unpublished skill degrades to no link rather than a dead one.
     let relatedSkill = null
     if (playbook.relatedSkill?.slug) {
-      relatedSkill = await ClaudeSkill.findOne({
-        slug: playbook.relatedSkill.slug,
-        ...PUBLISHED,
-      })
-        .select('title slug')
-        .lean()
+      const [skill] = await db
+        .select(pickColumns(claudeSkills, 'title slug'))
+        .from(claudeSkills)
+        .where(and(eq(claudeSkills.slug, playbook.relatedSkill.slug), published(claudeSkills)))
+      relatedSkill = skill ? withMongoId(skill) : null
     }
-    res.json({ ...playbook, relatedSkill: relatedSkill ? { ...playbook.relatedSkill, ...relatedSkill } : null })
+    res.json({
+      ...playbook,
+      relatedSkill: relatedSkill ? { ...playbook.relatedSkill, ...relatedSkill } : null,
+    })
   }),
 )
 
 router.get(
   '/skills',
   asyncHandler(async (req, res) => {
-    const filter = { ...PUBLISHED }
-    if (req.query.category) filter.category = req.query.category
+    const where = and(
+      published(claudeSkills),
+      req.query.category ? eq(claudeSkills.category, String(req.query.category)) : undefined,
+    )
 
     const [items, categories] = await Promise.all([
-      ClaudeSkill.find(filter).select(SKILL_CARD).sort({ order: 1, title: 1 }).lean(),
+      db
+        .select(pickColumns(claudeSkills, SKILL_CARD))
+        .from(claudeSkills)
+        .where(where)
+        .orderBy(asc(claudeSkills.order), asc(claudeSkills.title)),
       // The filter row is built from what exists, so an empty category cannot
       // render a tab that matches nothing.
-      ClaudeSkill.aggregate([
-        { $match: PUBLISHED },
-        { $group: { _id: '$category', count: { $sum: 1 } } },
-        { $sort: { _id: 1 } },
-      ]),
+      db
+        .select({ category: claudeSkills.category, count: count() })
+        .from(claudeSkills)
+        .where(published(claudeSkills))
+        .groupBy(claudeSkills.category)
+        .orderBy(asc(claudeSkills.category)),
     ])
 
     res.json({
-      items,
+      items: withMongoId(items),
       categories: categories
-        .filter((c) => c._id)
-        .map((c) => ({ value: c._id, label: SKILL_FILTER_LABELS[c._id] || c._id, count: c.count })),
+        .filter((c) => c.category)
+        .map((c) => ({
+          value: c.category,
+          label: SKILL_FILTER_LABELS[c.category] || c.category,
+          count: c.count,
+        })),
     })
   }),
 )
@@ -98,9 +133,14 @@ router.get(
 router.get(
   '/skills/:slug',
   asyncHandler(async (req, res) => {
-    const skill = await ClaudeSkill.findOne({ slug: req.params.slug, ...PUBLISHED }).lean()
+    const [skill] = await db
+      .select()
+      .from(claudeSkills)
+      .where(
+        and(eq(claudeSkills.slug, String(req.params.slug).toLowerCase()), published(claudeSkills)),
+      )
     if (!skill) throw new HttpError(404, 'Skill not found')
-    res.json(skill)
+    res.json(withMongoId(skill))
   }),
 )
 
@@ -113,18 +153,23 @@ router.get(
  *
  * Note for whoever wires the sending side: the Email admin module is behind
  * FEATURE_EMAIL, so these addresses are captured but not browsable in the UI
- * until that flag is on. They are in the `emailcontacts` collection meanwhile.
+ * until that flag is on. They are in the `email_contacts` table meanwhile.
  */
 router.post(
   '/notify',
   body('email').isEmail().withMessage('Enter a valid email').normalizeEmail(),
   validate,
   asyncHandler(async (req, res) => {
-    await EmailContact.findOneAndUpdate(
-      { email: req.body.email },
-      { $set: { status: 'Subscribed' }, $setOnInsert: { joinedAt: new Date() } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    )
+    // email has no unique constraint (a contact list may legitimately hold
+    // imports with duplicates), so the upsert is an update-then-insert.
+    const updated = await db
+      .update(emailContacts)
+      .set({ status: 'Subscribed' })
+      .where(sql`${emailContacts.email} = ${req.body.email}`)
+      .returning({ id: emailContacts.id })
+    if (!updated.length) {
+      await db.insert(emailContacts).values({ email: req.body.email, status: 'Subscribed' })
+    }
     res.status(201).json({ ok: true })
   }),
 )

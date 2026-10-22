@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { Course, Enrollment } from '../src/models/index.js'
+import { enrollments } from '../src/db/schema/index.js'
+import { createCourse } from '../src/db/repos/courses.js'
+import { insertRow } from './helpers/commerce.js'
 import { agent, firstLessonId, paidCourse, quizLessonId, signUp } from './helpers/factories.js'
 
 /**
@@ -36,9 +38,9 @@ describe('playback authorization', () => {
   it('refuses an expired enrollment, with no URL', async () => {
     const course = await paidCourse()
     const { cookie, user } = await signUp()
-    await Enrollment.create({
-      userId: user._id,
-      courseId: course._id,
+    await insertRow(enrollments, {
+      userId: user.id,
+      courseId: course.id,
       expiresAt: new Date(Date.now() - 1000),
       source: 'paid',
     })
@@ -52,7 +54,7 @@ describe('playback authorization', () => {
 
   it('refuses a lesson id that belongs to a different course', async () => {
     const course = await paidCourse()
-    const other = await Course.create({
+    const other = await createCourse({
       title: 'Other',
       slug: 'other-course',
       price: 'paid',
@@ -60,7 +62,7 @@ describe('playback authorization', () => {
       sections: [{ name: 'M1', lessons: [{ name: 'Foreign', bunnyVideoId: 'foreign-guid' }] }],
     })
     const { cookie, user } = await signUp()
-    await Enrollment.create({ userId: user._id, courseId: course._id, source: 'paid' })
+    await insertRow(enrollments, { userId: user.id, courseId: course.id, source: 'paid' })
 
     const res = await playback(course.slug, String(other.sections[0].lessons[0]._id), cookie)
 
@@ -72,7 +74,7 @@ describe('playback authorization', () => {
   it('gives an enrolled user a signed, expiring URL', async () => {
     const course = await paidCourse()
     const { cookie, user } = await signUp()
-    await Enrollment.create({ userId: user._id, courseId: course._id, source: 'paid' })
+    await insertRow(enrollments, { userId: user.id, courseId: course.id, source: 'paid' })
 
     const res = await playback(course.slug, firstLessonId(course), cookie)
 
@@ -88,7 +90,7 @@ describe('playback authorization', () => {
   it('never puts BUNNY_SECURITY_KEY in a response', async () => {
     const course = await paidCourse()
     const { cookie, user } = await signUp()
-    await Enrollment.create({ userId: user._id, courseId: course._id, source: 'paid' })
+    await insertRow(enrollments, { userId: user.id, courseId: course.id, source: 'paid' })
 
     const playbackRes = await playback(course.slug, firstLessonId(course), cookie)
     const playerRes = await agent()
@@ -104,7 +106,7 @@ describe('playback authorization', () => {
   it('keeps signed URLs and video ids out of the curriculum payload', async () => {
     const course = await paidCourse()
     const { cookie, user } = await signUp()
-    await Enrollment.create({ userId: user._id, courseId: course._id, source: 'paid' })
+    await insertRow(enrollments, { userId: user.id, courseId: course.id, source: 'paid' })
 
     const res = await agent().get(`/api/enrollments/course/${course.slug}`).set('Cookie', cookie)
 
@@ -125,7 +127,7 @@ describe('playback authorization', () => {
   it('refuses a non-video lesson rather than signing nothing', async () => {
     const course = await paidCourse()
     const { cookie, user } = await signUp()
-    await Enrollment.create({ userId: user._id, courseId: course._id, source: 'paid' })
+    await insertRow(enrollments, { userId: user.id, courseId: course.id, source: 'paid' })
 
     const res = await playback(course.slug, quizLessonId(course), cookie)
 

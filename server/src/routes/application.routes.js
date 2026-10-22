@@ -2,7 +2,8 @@ import { Router } from 'express'
 import { body } from 'express-validator'
 import { validate } from '../middleware/validate.js'
 import { asyncHandler, HttpError } from '../middleware/error.js'
-import { FlagshipApplication, FitCallBooking } from '../models/index.js'
+import { db } from '../db/index.js'
+import { fitCallBookings, flagshipApplications } from '../db/schema/index.js'
 
 const router = Router()
 
@@ -24,7 +25,11 @@ const WORD_LIMITS = {
   scholarshipCase: 200,
 }
 
-const countWords = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length
+const countWords = (s) =>
+  String(s || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
 
 /** Experience levels the drop treats as "beginner" for its conditional blocks. */
 const BEGINNER_LEVELS = ['exploring', 'complete-beginner']
@@ -100,49 +105,52 @@ router.post(
      */
     const isBeginner = BEGINNER_LEVELS.includes(b.experienceLevel)
 
-    const application = await FlagshipApplication.create({
-      fullName: b.fullName,
-      email: b.email,
-      phone: b.phone,
-      linkedin: b.linkedin,
-      city: b.city,
-      state: b.state,
+    const [application] = await db
+      .insert(flagshipApplications)
+      .values({
+        fullName: b.fullName,
+        email: b.email,
+        phone: b.phone,
+        linkedin: b.linkedin,
+        city: b.city,
+        state: b.state,
 
-      trackPreference: b.trackPreference,
-      batchPreference: b.batchPreference,
-      mentoringLanguage: b.mentoringLanguage,
-      currentStatus: b.currentStatus,
-      employer: b.employer,
+        trackPreference: b.trackPreference,
+        batchPreference: b.batchPreference,
+        mentoringLanguage: b.mentoringLanguage,
+        currentStatus: b.currentStatus,
+        employer: b.employer,
 
-      weeklyHours: b.weeklyHours,
-      liveAvailability,
-      hasSetup: b.hasSetup,
-      masterclassCity: b.masterclassCity,
-      scheduleBlockers: b.scheduleBlockers,
+        weeklyHours: b.weeklyHours,
+        liveAvailability,
+        hasSetup: b.hasSetup,
+        masterclassCity: b.masterclassCity,
+        scheduleBlockers: b.scheduleBlockers,
 
-      experienceLevel: b.experienceLevel,
-      channels: Array.isArray(b.channels) ? b.channels : [],
-      monthlySpend: isBeginner ? undefined : b.monthlySpend,
-      toolsUsed: isBeginner ? undefined : b.toolsUsed,
-      portfolioUrl: isBeginner ? undefined : b.portfolioUrl,
-      starterCourses: isBeginner ? b.starterCourses : undefined,
+        experienceLevel: b.experienceLevel,
+        channels: Array.isArray(b.channels) ? b.channels : [],
+        monthlySpend: isBeginner ? undefined : b.monthlySpend,
+        toolsUsed: isBeginner ? undefined : b.toolsUsed,
+        portfolioUrl: isBeginner ? undefined : b.portfolioUrl,
+        starterCourses: isBeginner ? b.starterCourses : undefined,
 
-      referralSource: b.referralSource,
-      referralDetail: b.referralDetail,
-      whyFlagship: b.whyFlagship,
-      twelveWeekOutcome: b.twelveWeekOutcome,
-      shipStory: b.shipStory,
-      curriculumHook: b.curriculumHook,
+        referralSource: b.referralSource,
+        referralDetail: b.referralDetail,
+        whyFlagship: b.whyFlagship,
+        twelveWeekOutcome: b.twelveWeekOutcome,
+        shipStory: b.shipStory,
+        curriculumHook: b.curriculumHook,
 
-      paymentPlan: b.paymentPlan,
-      scholarshipCase: isScholarship ? b.scholarshipCase : undefined,
+        paymentPlan: b.paymentPlan,
+        scholarshipCase: isScholarship ? b.scholarshipCase : undefined,
 
-      consentWhatsapp: true,
-      consentAccurate: true,
-      page: b.page,
-    })
+        consentWhatsapp: true,
+        consentAccurate: true,
+        page: b.page,
+      })
+      .returning({ id: flagshipApplications.id })
 
-    res.status(201).json({ ok: true, id: application._id })
+    res.status(201).json({ ok: true, id: application.id })
   }),
 )
 
@@ -167,27 +175,30 @@ router.post(
       throw new HttpError(400, 'Pick at least one slot that works for you')
     }
 
-    const booking = await FitCallBooking.create({
-      fullName: b.fullName,
-      email: b.email,
-      phone: b.phone,
-      timezone: b.timezone || 'IST',
-      preferredWeek: b.preferredWeek,
-      preferredSlots,
-      callLanguage: b.callLanguage,
-      scheduleNotes: b.scheduleNotes,
-      currentStatus: b.currentStatus,
-      weeklyHours: b.weeklyHours,
-      submittedFullApplication: b.submittedFullApplication || 'no',
-      whyCallNow: b.whyCallNow,
-      biggestBlocker: b.biggestBlocker,
-      callQuestions: b.callQuestions,
-      referralSource: b.referralSource,
-      consent: true,
-      page: b.page,
-    })
+    const [booking] = await db
+      .insert(fitCallBookings)
+      .values({
+        fullName: b.fullName,
+        email: b.email,
+        phone: b.phone,
+        timezone: b.timezone || 'IST',
+        preferredWeek: b.preferredWeek,
+        preferredSlots,
+        callLanguage: b.callLanguage,
+        scheduleNotes: b.scheduleNotes,
+        currentStatus: b.currentStatus,
+        weeklyHours: b.weeklyHours,
+        submittedFullApplication: b.submittedFullApplication || 'no',
+        whyCallNow: b.whyCallNow,
+        biggestBlocker: b.biggestBlocker,
+        callQuestions: b.callQuestions,
+        referralSource: b.referralSource,
+        consent: true,
+        page: b.page,
+      })
+      .returning({ id: fitCallBookings.id })
 
-    res.status(201).json({ ok: true, id: booking._id })
+    res.status(201).json({ ok: true, id: booking.id })
   }),
 )
 

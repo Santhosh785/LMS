@@ -1,6 +1,10 @@
 import request from 'supertest'
+import { eq } from 'drizzle-orm'
 import app from '../../src/index.js'
-import { Course, User } from '../../src/models/index.js'
+import { db } from '../../src/db/index.js'
+import { users } from '../../src/db/schema/index.js'
+import { createCourse } from '../../src/db/repos/courses.js'
+import { findUserByEmail } from '../../src/db/repos/users.js'
 
 /**
  * Fixtures for the money-path tests.
@@ -14,7 +18,14 @@ export const agent = () => request(app)
 
 export const PASSWORD = 'test-password-1234'
 
-/** Registers a user and returns the auth cookie plus the document. */
+/** Every cookie a response set, as one Cookie header value. */
+export const cookiesFrom = (res) =>
+  (res.headers['set-cookie'] || []).map((c) => c.split(';')[0]).join('; ')
+
+/**
+ * Registers a user through the real endpoint (so through Supabase Auth) and
+ * returns the session cookies plus the profile row.
+ */
 export async function signUp({ name = 'Test Student', email, role = 'student' } = {}) {
   const address =
     email || `student-${Date.now()}-${Math.round(performance.now() * 1000)}@example.in`
@@ -23,11 +34,11 @@ export async function signUp({ name = 'Test Student', email, role = 'student' } 
     .send({ name, email: address, password: PASSWORD })
     .expect(201)
 
-  if (role !== 'student') await User.updateOne({ email: address }, { $set: { role } })
+  if (role !== 'student') await db.update(users).set({ role }).where(eq(users.email, address))
 
   return {
-    cookie: res.headers['set-cookie'][0].split(';')[0],
-    user: await User.findOne({ email: address }),
+    cookie: cookiesFrom(res),
+    user: await findUserByEmail(address),
     email: address,
   }
 }
@@ -37,7 +48,7 @@ export const signUpAdmin = () =>
 
 /** A published, paid course with one video lesson and a 12-month plan. */
 export async function paidCourse(overrides = {}) {
-  return Course.create({
+  return createCourse({
     title: 'SEO Mastery',
     slug: 'seo-mastery',
     price: 'paid',
@@ -62,7 +73,7 @@ export async function paidCourse(overrides = {}) {
 }
 
 export async function freeCourse(overrides = {}) {
-  return Course.create({
+  return createCourse({
     title: 'Free Starter',
     slug: 'free-starter',
     price: 'free',

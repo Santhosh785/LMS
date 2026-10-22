@@ -1,7 +1,9 @@
 import crypto from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { env } from '../src/config/env.js'
-import { Course, Enrollment } from '../src/models/index.js'
+import { enrollments } from '../src/db/schema/index.js'
+import { findCourseById, updateLesson } from '../src/db/repos/courses.js'
+import { insertRow } from './helpers/commerce.js'
 import { agent, firstLessonId, paidCourse, signUp, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -21,13 +23,17 @@ const bareCourse = () =>
 
 /**
  * fetch stub for video.bunnycdn.com. Routes on method+path, records calls so
- * tests can assert what left the building.
+ * tests can assert what left the building. Every other host goes to the real
+ * fetch — sign-in now calls Supabase Auth over HTTP, and stubbing that too
+ * would fail every request that needs a session.
  */
+const realFetch = globalThis.fetch
 function stubBunny({ createGuid = 'new-guid-123', video = { status: 4, length: 754 } } = {}) {
   const calls = []
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url, opts = {}) => {
+      if (!String(url).includes('bunnycdn.com')) return realFetch(url, opts)
       const method = opts.method || 'GET'
       calls.push({ url: String(url), method, headers: opts.headers })
       const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => '' })
@@ -41,7 +47,7 @@ function stubBunny({ createGuid = 'new-guid-123', video = { status: 4, length: 7
 
 afterEach(() => vi.unstubAllGlobals())
 
-const videoPath = (course, lessonId) => `/api/admin/courses/${course._id}/lessons/${lessonId}/video`
+const videoPath = (course, lessonId) => `/api/admin/courses/${course.id}/lessons/${lessonId}/video`
 
 describe('minting an upload', () => {
   it('refuses everyone below admin', async () => {
@@ -84,7 +90,7 @@ describe('minting an upload', () => {
     expect(calls[0].url).toContain('/library/999999/videos')
     expect(calls[0].headers.AccessKey).toBe('test-bunny-api-key')
 
-    const saved = await Course.findById(course._id)
+    const saved = await findCourseById(course.id)
     expect(saved.sections[0].lessons[0].bunnyVideoId).toBe('new-guid-123')
     expect(saved.sections[0].lessons[0].videoStatus).toBe('uploading')
   })
@@ -98,7 +104,7 @@ describe('minting an upload', () => {
     const res = await agent().post(videoPath(course, lessonId)).set('Cookie', cookie)
     expect(res.status).toBe(201)
 
-    const saved = await Course.findById(course._id)
+    const saved = await findCourseById(course.id)
     expect(saved.sections[0].lessons[0].bunnyVideoId).toBe('replacement-guid')
 
     // The delete is fire-and-forget after the new GUID commits.
@@ -131,10 +137,7 @@ describe('encoding status', () => {
     stubBunny({ video: { status: 4, length: 754 } })
     const course = await paidCourse()
     const lessonId = firstLessonId(course)
-    await Course.updateOne(
-      { _id: course._id },
-      { $set: { 'sections.0.lessons.0.videoStatus': 'processing' } },
-    )
+    await updateLesson(firstLessonId(course), { videoStatus: 'processing' })
     const { cookie } = await signUpAdmin()
 
     const res = await agent().get(videoPath(course, lessonId)).set('Cookie', cookie)
@@ -143,7 +146,7 @@ describe('encoding status', () => {
     expect(res.body.videoStatus).toBe('ready')
     expect(res.body.durationSeconds).toBe(754)
 
-    const saved = await Course.findById(course._id)
+    const saved = await findCourseById(course.id)
     expect(saved.sections[0].lessons[0].videoStatus).toBe('ready')
     expect(saved.sections[0].lessons[0].videoDurationSeconds).toBe(754)
     expect(saved.sections[0].lessons[0].duration).toBe('12:34')
@@ -151,34 +154,28 @@ describe('encoding status', () => {
 
   it('the webhook needs the exact token', async () => {
     const course = await paidCourse()
-    await Course.updateOne(
-      { _id: course._id },
-      { $set: { 'sections.0.lessons.0.videoStatus': 'processing' } },
-    )
+    await updateLesson(firstLessonId(course), { videoStatus: 'processing' })
 
     const res = await agent()
       .post('/api/webhooks/bunny?token=wrong-token')
       .send({ VideoLibraryId: 999999, VideoGuid: 'video-guid-one', Status: 3 })
 
     expect(res.status).toBe(401)
-    const saved = await Course.findById(course._id)
+    const saved = await findCourseById(course.id)
     expect(saved.sections[0].lessons[0].videoStatus).toBe('processing')
   })
 
   it('a valid webhook re-reads the authoritative status and marks ready', async () => {
     stubBunny({ video: { status: 4, length: 90 } })
     const course = await paidCourse()
-    await Course.updateOne(
-      { _id: course._id },
-      { $set: { 'sections.0.lessons.0.videoStatus': 'processing' } },
-    )
+    await updateLesson(firstLessonId(course), { videoStatus: 'processing' })
 
     const res = await agent()
       .post('/api/webhooks/bunny?token=test-bunny-webhook-token')
       .send({ VideoLibraryId: 999999, VideoGuid: 'video-guid-one', Status: 3 })
 
     expect(res.status).toBe(200)
-    const saved = await Course.findById(course._id)
+    const saved = await findCourseById(course.id)
     expect(saved.sections[0].lessons[0].videoStatus).toBe('ready')
     expect(saved.sections[0].lessons[0].videoDurationSeconds).toBe(90)
   })
@@ -196,18 +193,17 @@ describe('playback while not ready', () => {
   const playback = (slug, lessonId, cookie) =>
     agent().get(`/api/enrollments/course/${slug}/playback/${lessonId}`).set('Cookie', cookie)
 
-  const enrolledOn = async (patch) => {
+  /** Enrols a learner on a paid course whose first lesson carries `lessonPatch`. */
+  const enrolledOn = async (lessonPatch) => {
     const course = await paidCourse()
-    await Course.updateOne({ _id: course._id }, { $set: patch })
+    if (Object.keys(lessonPatch).length) await updateLesson(firstLessonId(course), lessonPatch)
     const { cookie, user } = await signUp()
-    await Enrollment.create({ userId: user._id, courseId: course._id, source: 'paid' })
+    await insertRow(enrollments, { userId: user.id, courseId: course.id, source: 'paid' })
     return { course, cookie }
   }
 
   it('a processing video signs nothing', async () => {
-    const { course, cookie } = await enrolledOn({
-      'sections.0.lessons.0.videoStatus': 'processing',
-    })
+    const { course, cookie } = await enrolledOn({ videoStatus: 'processing' })
     const res = await playback(course.slug, firstLessonId(course), cookie)
     expect(res.status).toBe(409)
     expect(res.body.details.code).toBe('VIDEO_PROCESSING')
@@ -215,7 +211,7 @@ describe('playback while not ready', () => {
   })
 
   it('a failed video signs nothing', async () => {
-    const { course, cookie } = await enrolledOn({ 'sections.0.lessons.0.videoStatus': 'failed' })
+    const { course, cookie } = await enrolledOn({ videoStatus: 'failed' })
     const res = await playback(course.slug, firstLessonId(course), cookie)
     expect(res.status).toBe(409)
     expect(res.body.details.code).toBe('VIDEO_FAILED')
@@ -245,8 +241,9 @@ describe('removing a video', () => {
 
     expect(res.status).toBe(200)
     expect(calls.some((c) => c.method === 'DELETE' && c.url.includes('video-guid-one'))).toBe(true)
-    const saved = await Course.findById(course._id)
-    expect(saved.sections[0].lessons[0].bunnyVideoId).toBeUndefined()
-    expect(saved.sections[0].lessons[0].videoStatus).toBeUndefined()
+    const saved = await findCourseById(course.id)
+    // Cleared columns read back as null (Mongo removed the key instead).
+    expect(saved.sections[0].lessons[0].bunnyVideoId).toBeNull()
+    expect(saved.sections[0].lessons[0].videoStatus).toBeNull()
   })
 })

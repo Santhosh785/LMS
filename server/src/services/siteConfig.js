@@ -1,4 +1,4 @@
-import { Setting } from '../models/index.js'
+import { getSettings } from '../db/repos/settings.js'
 import { publicTermGroups } from './taxonomy.js'
 import { cfg } from './runtimeConfig.js'
 
@@ -61,7 +61,7 @@ function publicSettings(setting) {
 }
 
 async function build() {
-  const [setting, taxonomy] = await Promise.all([Setting.getSingleton(), publicTermGroups()])
+  const [setting, taxonomy] = await Promise.all([getSettings(), publicTermGroups()])
   return { features: cfg.features, ...publicSettings(setting), taxonomy }
 }
 

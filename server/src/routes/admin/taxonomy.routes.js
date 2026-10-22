@@ -1,6 +1,9 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
-import Term, { TAXONOMIES } from '../../models/Term.js'
+import { and, asc, count, eq, ilike } from 'drizzle-orm'
+import { db, withMongoId } from '../../db/index.js'
+import { coerce, isUuid } from '../../db/coerce.js'
+import { terms, TAXONOMIES } from '../../db/schema/index.js'
 import {
   assertValidParent,
   countTermUsage,
@@ -60,8 +63,16 @@ const WRITABLE = [
   'seo',
 ]
 
-const pick = (body) =>
-  Object.fromEntries(Object.entries(body || {}).filter(([k]) => WRITABLE.includes(k)))
+const pick = (body) => coerce(terms, body, { allow: WRITABLE })
+
+async function findTerm(id) {
+  if (!isUuid(String(id))) return null
+  const [row] = await db
+    .select()
+    .from(terms)
+    .where(eq(terms.id, String(id)))
+  return row || null
+}
 
 /** Every write here changes what the public site renders. */
 const touched = (res, payload) => {
@@ -72,8 +83,11 @@ const touched = (res, payload) => {
 router.get(
   '/taxonomies',
   asyncHandler(async (_req, res) => {
-    const counts = await Term.aggregate([{ $group: { _id: '$taxonomy', count: { $sum: 1 } } }])
-    const byName = Object.fromEntries(counts.map((c) => [c._id, c.count]))
+    const counts = await db
+      .select({ taxonomy: terms.taxonomy, count: count() })
+      .from(terms)
+      .groupBy(terms.taxonomy)
+    const byName = Object.fromEntries(counts.map((c) => [c.taxonomy, c.count]))
     res.json({
       items: TAXONOMIES.map((name) => ({
         name,
@@ -87,16 +101,21 @@ router.get(
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const filter = {}
+    const clauses = []
     if (req.query.taxonomy) {
       if (!TAXONOMIES.includes(req.query.taxonomy)) throw new HttpError(400, 'Unknown taxonomy')
-      filter.taxonomy = req.query.taxonomy
+      clauses.push(eq(terms.taxonomy, req.query.taxonomy))
     }
-    if (req.query.status) filter.status = req.query.status
+    if (req.query.status) clauses.push(eq(terms.status, String(req.query.status)))
     const q = req.query.q?.trim()
-    if (q) filter.name = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+    if (q) clauses.push(ilike(terms.name, `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`))
 
-    const items = await Term.find(filter).sort({ taxonomy: 1, order: 1, name: 1 }).lean()
+    const rows = await db
+      .select()
+      .from(terms)
+      .where(clauses.length ? and(...clauses) : undefined)
+      .orderBy(asc(terms.taxonomy), asc(terms.order), asc(terms.name))
+    const items = withMongoId(rows)
     res.json({ items, total: items.length, usage: await usageMap(items) })
   }),
 )
@@ -104,7 +123,7 @@ router.get(
 router.get(
   '/:id/usage',
   asyncHandler(async (req, res) => {
-    const term = await Term.findById(req.params.id).lean()
+    const term = await findTerm(req.params.id)
     if (!term) throw new HttpError(404, 'Term not found')
     res.json(await countTermUsage(term))
   }),
@@ -121,21 +140,26 @@ router.post(
     await assertValidParent(null, body.parent)
 
     const slug = await uniqueSlug(taxonomy, req.body.slug || body.name)
-    const created = await Term.create({ ...body, taxonomy, slug })
+    const [created] = await db
+      .insert(terms)
+      .values({ ...body, name: body.name.trim(), taxonomy, slug })
+      .returning()
     invalidateSiteConfig()
-    res.status(201).json(created)
+    res.status(201).json(withMongoId(created))
   }),
 )
 
 router.put(
   '/:id',
   asyncHandler(async (req, res) => {
-    const term = await Term.findById(req.params.id)
+    const term = await findTerm(req.params.id)
     if (!term) throw new HttpError(404, 'Term not found')
 
     const body = pick(req.body)
-    if ('name' in body && !body.name?.trim()) throw new HttpError(400, 'Name is required')
-    if ('parent' in body) await assertValidParent(term._id, body.parent)
+    if ('name' in req.body && !String(req.body.name ?? '').trim()) {
+      throw new HttpError(400, 'Name is required')
+    }
+    if ('parent' in body) await assertValidParent(term.id, body.parent)
 
     const previousName = term.name
 
@@ -151,17 +175,18 @@ router.put(
 
     // The slug only changes when asked for explicitly, and the old one is kept
     // so inbound links and shared URLs keep resolving.
+    const patch = { ...body }
     if (req.body.slug && req.body.slug !== term.slug) {
-      const next = await uniqueSlug(term.taxonomy, req.body.slug, term._id)
-      term.formerSlugs = [...new Set([...(term.formerSlugs || []), term.slug])]
-      term.slug = next
+      patch.slug = await uniqueSlug(term.taxonomy, req.body.slug, term.id)
+      patch.formerSlugs = [...new Set([...(term.formerSlugs || []), term.slug])]
     }
+    if (body.name) patch.name = body.name.trim()
 
-    Object.assign(term, body)
-    if (body.name) term.name = body.name.trim()
-    await term.save()
+    const [updated] = Object.keys(patch).length
+      ? await db.update(terms).set(patch).where(eq(terms.id, term.id)).returning()
+      : [term]
 
-    return touched(res, { term, reassigned: moved })
+    return touched(res, { term: withMongoId(updated), reassigned: moved })
   }),
 )
 
@@ -170,11 +195,15 @@ router.post(
   asyncHandler(async (req, res) => {
     const items = Array.isArray(req.body?.items) ? req.body.items : []
     if (!items.length) throw new HttpError(400, 'Nothing to reorder')
-    await Term.bulkWrite(
-      items.map(({ id, order }) => ({
-        updateOne: { filter: { _id: id }, update: { $set: { order: Number(order) || 0 } } },
-      })),
-    )
+    await db.transaction(async (tx) => {
+      for (const { id, order } of items) {
+        if (!isUuid(String(id))) continue
+        await tx
+          .update(terms)
+          .set({ order: Number(order) || 0 })
+          .where(eq(terms.id, String(id)))
+      }
+    })
     return touched(res, { ok: true, count: items.length })
   }),
 )
@@ -198,14 +227,14 @@ router.post(
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const term = await Term.findById(req.params.id)
+    const term = await findTerm(req.params.id)
     if (!term) throw new HttpError(404, 'Term not found')
 
     const usage = await countTermUsage(term)
     if (usage.total > 0) {
       const { replaceWith, force } = req.query
       if (replaceWith) {
-        const target = await Term.findById(replaceWith).lean()
+        const target = await findTerm(replaceWith)
         if (!target || target.taxonomy !== term.taxonomy) {
           throw new HttpError(400, 'Replacement term not found in this taxonomy')
         }
@@ -220,8 +249,13 @@ router.delete(
       }
     }
 
-    await Term.updateMany({ parent: term._id }, { $set: { parent: term.parent || null } })
-    await term.deleteOne()
+    await db.transaction(async (tx) => {
+      await tx
+        .update(terms)
+        .set({ parent: term.parent || null })
+        .where(eq(terms.parent, term.id))
+      await tx.delete(terms).where(eq(terms.id, term.id))
+    })
     return touched(res, { ok: true, reassigned: usage.total })
   }),
 )

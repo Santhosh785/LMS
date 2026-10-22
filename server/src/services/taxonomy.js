@@ -1,12 +1,18 @@
 import { HttpError } from '../middleware/error.js'
-import Term, { VISIBLE_TERM } from '../models/Term.js'
-import { Course, BlogPost, Workshop, Program } from '../models/index.js'
+import { and, arrayContains, asc, count, eq, ne, sql } from 'drizzle-orm'
+import { db, inParallel, withMongoId } from '../db/index.js'
+import { isUuid } from '../db/coerce.js'
+import { blogPosts, courses, programs, terms, workshops } from '../db/schema/index.js'
+
+/** What the public may see. Was `VISIBLE_TERM` on the Mongoose model. */
+export const VISIBLE_TERM = { status: 'Published', visibility: 'Public' }
+const visibleTerm = and(eq(terms.status, 'Published'), eq(terms.visibility, 'Public'))
 
 /**
  * Term registry operations: usage counting, renaming, merging and safe delete.
  *
  * Content documents store a term's canonical *name* rather than its id (see the
- * header of models/Term.js for why), so renaming or merging a term is a write
+ * header of db/schema/content.js `terms` for why), so renaming or merging a term is a write
  * to the registry plus a reassignment across every collection that references
  * it. That reassignment is what this module owns — nothing else is allowed to
  * rewrite a term reference, so there is exactly one place where the two halves
@@ -19,27 +25,32 @@ import { Course, BlogPost, Workshop, Program } from '../models/index.js'
  * `array: true` means the field holds many names and has to be updated with a
  * positional/pull operator rather than a plain $set.
  */
+const ref = (table, name, field, array) => ({ table, name, field, array })
 const TERM_REFERENCES = {
-  topic: [{ model: Course, field: 'topic', array: false }],
+  topic: [ref(courses, 'Course', 'topic', false)],
   language: [
-    { model: Course, field: 'languages', array: true },
-    { model: Workshop, field: 'language', array: false },
+    ref(courses, 'Course', 'languages', true),
+    ref(workshops, 'Workshop', 'language', false),
   ],
-  'blog-category': [{ model: BlogPost, field: 'category', array: false }],
-  'workshop-city': [{ model: Workshop, field: 'venue', array: false }],
+  'blog-category': [ref(blogPosts, 'BlogPost', 'category', false)],
+  'workshop-city': [ref(workshops, 'Workshop', 'venue', false)],
   category: [
-    { model: Course, field: 'categories', array: true },
-    { model: BlogPost, field: 'categories', array: true },
-    { model: Workshop, field: 'categories', array: true },
-    { model: Program, field: 'categories', array: true },
+    ref(courses, 'Course', 'categories', true),
+    ref(blogPosts, 'BlogPost', 'categories', true),
+    ref(workshops, 'Workshop', 'categories', true),
+    ref(programs, 'Program', 'categories', true),
   ],
   tag: [
-    { model: Course, field: 'tags', array: true },
-    { model: BlogPost, field: 'tags', array: true },
-    { model: Workshop, field: 'tags', array: true },
-    { model: Program, field: 'tags', array: true },
+    ref(courses, 'Course', 'tags', true),
+    ref(blogPosts, 'BlogPost', 'tags', true),
+    ref(workshops, 'Workshop', 'tags', true),
+    ref(programs, 'Program', 'tags', true),
   ],
 }
+
+/** Rows whose `ref.field` mentions `name` — membership for arrays, equality otherwise. */
+const mentions = (r, name) =>
+  r.array ? arrayContains(r.table[r.field], [name]) : eq(r.table[r.field], name)
 
 const MAX_DEPTH = 3
 
@@ -57,11 +68,16 @@ export async function uniqueSlug(taxonomy, desired, excludeId = null) {
   const base = slugify(desired) || 'term'
   for (let n = 1; n < 50; n += 1) {
     const candidate = n === 1 ? base : `${base}-${n}`
-    const clash = await Term.findOne({
-      taxonomy,
-      slug: candidate,
-      ...(excludeId ? { _id: { $ne: excludeId } } : {}),
-    }).lean()
+    const [clash] = await db
+      .select({ id: terms.id })
+      .from(terms)
+      .where(
+        and(
+          eq(terms.taxonomy, taxonomy),
+          eq(terms.slug, candidate),
+          ...(isUuid(excludeId) ? [ne(terms.id, excludeId)] : []),
+        ),
+      )
     if (!clash) return candidate
   }
   throw new HttpError(409, 'Could not derive a unique slug')
@@ -71,11 +87,10 @@ export async function uniqueSlug(taxonomy, desired, excludeId = null) {
 export async function countTermUsage(term) {
   const refs = TERM_REFERENCES[term.taxonomy] || []
   const counts = await Promise.all(
-    refs.map(async (ref) => ({
-      collection: ref.model.modelName,
-      field: ref.field,
-      count: await ref.model.countDocuments({ [ref.field]: term.name }),
-    })),
+    refs.map(async (r) => {
+      const [{ n }] = await db.select({ n: count() }).from(r.table).where(mentions(r, term.name))
+      return { collection: r.name, field: r.field, count: n }
+    }),
   )
   return { total: counts.reduce((sum, c) => sum + c.count, 0), byCollection: counts }
 }
@@ -95,42 +110,48 @@ export async function usageMap(terms) {
  * value out, the scalar variants unset the field. Returns the number of
  * documents touched.
  */
-export async function reassignReferences(taxonomy, fromName, toName) {
+export async function reassignReferences(taxonomy, fromName, toName, { tx = db } = {}) {
   if (fromName === toName) return 0
   const refs = TERM_REFERENCES[taxonomy] || []
   let touched = 0
 
-  for (const ref of refs) {
-    if (ref.array) {
-      if (toName === null) {
-        const res = await ref.model.updateMany(
-          { [ref.field]: fromName },
-          { $pull: { [ref.field]: fromName } },
-        )
-        touched += res.modifiedCount || 0
-      } else {
-        // Two steps rather than one $set on the positional operator: a document
-        // may already carry the target name, and a blind rename would leave a
-        // duplicate in the array.
-        const renamed = await ref.model.updateMany(
-          { [ref.field]: fromName, $nor: [{ [ref.field]: toName }] },
-          { $set: { [`${ref.field}.$[el]`]: toName } },
-          { arrayFilters: [{ el: fromName }] },
-        )
-        const deduped = await ref.model.updateMany(
-          { [ref.field]: fromName },
-          { $pull: { [ref.field]: fromName } },
-        )
-        touched += (renamed.modifiedCount || 0) + (deduped.modifiedCount || 0)
-      }
+  for (const r of refs) {
+    const column = r.table[r.field]
+    let rows
+    if (r.array) {
+      // array_remove then append-if-absent, rather than array_replace: a row may
+      // already carry the target name, and a blind rename would leave a
+      // duplicate in the array.
+      const next =
+        toName === null
+          ? sql`array_remove(${column}, ${fromName})`
+          : sql`case when ${column} @> array[${toName}]::text[]
+                  then array_remove(${column}, ${fromName})
+                  else array_replace(${column}, ${fromName}, ${toName}) end`
+      rows = await tx
+        .update(r.table)
+        .set({ [r.field]: next })
+        .where(mentions(r, fromName))
+        .returning({ id: r.table.id })
     } else {
-      const update =
-        toName === null ? { $unset: { [ref.field]: '' } } : { $set: { [ref.field]: toName } }
-      const res = await ref.model.updateMany({ [ref.field]: fromName }, update)
-      touched += res.modifiedCount || 0
+      rows = await tx
+        .update(r.table)
+        .set({ [r.field]: toName })
+        .where(mentions(r, fromName))
+        .returning({ id: r.table.id })
     }
+    touched += rows.length
   }
   return touched
+}
+
+const findTerm = async (id, tx = db) => {
+  if (!isUuid(String(id))) return null
+  const [row] = await tx
+    .select()
+    .from(terms)
+    .where(eq(terms.id, String(id)))
+  return row || null
 }
 
 /** Refuses a parent that would make the tree cyclic or too deep. */
@@ -141,7 +162,7 @@ export async function assertValidParent(termId, parentId) {
   }
 
   let depth = 1
-  let cursor = await Term.findById(parentId).lean()
+  let cursor = await findTerm(parentId)
   if (!cursor) throw new HttpError(400, 'Parent term not found')
 
   while (cursor?.parent) {
@@ -152,7 +173,7 @@ export async function assertValidParent(termId, parentId) {
     if (depth > MAX_DEPTH) {
       throw new HttpError(400, `Categories can nest at most ${MAX_DEPTH} levels deep`)
     }
-    cursor = await Term.findById(cursor.parent).lean()
+    cursor = await findTerm(cursor.parent)
   }
 }
 
@@ -164,26 +185,36 @@ export async function mergeTerms(sourceId, targetId) {
   if (String(sourceId) === String(targetId)) {
     throw new HttpError(400, 'Pick two different terms to merge')
   }
-  const [source, target] = await Promise.all([Term.findById(sourceId), Term.findById(targetId)])
-  if (!source) throw new HttpError(404, 'Term to merge from not found')
-  if (!target) throw new HttpError(404, 'Term to merge into not found')
-  if (source.taxonomy !== target.taxonomy) {
-    throw new HttpError(400, 'Terms from different taxonomies cannot be merged')
-  }
+  return db.transaction(async (tx) => {
+    const [source, target] = await inParallel(tx, [
+      () => findTerm(sourceId, tx),
+      () => findTerm(targetId, tx),
+    ])
+    if (!source) throw new HttpError(404, 'Term to merge from not found')
+    if (!target) throw new HttpError(404, 'Term to merge into not found')
+    if (source.taxonomy !== target.taxonomy) {
+      throw new HttpError(400, 'Terms from different taxonomies cannot be merged')
+    }
 
-  const moved = await reassignReferences(source.taxonomy, source.name, target.name)
+    const moved = await reassignReferences(source.taxonomy, source.name, target.name, { tx })
 
-  // Children follow their parent rather than being orphaned.
-  await Term.updateMany({ parent: source._id }, { $set: { parent: target._id } })
+    // Children follow their parent rather than being orphaned.
+    await tx.update(terms).set({ parent: target.id }).where(eq(terms.parent, source.id))
 
-  const inherited = [source.slug, ...(source.formerSlugs || [])]
-  target.formerSlugs = [...new Set([...(target.formerSlugs || []), ...inherited])].filter(
-    (s) => s !== target.slug,
-  )
-  await target.save()
-  await source.deleteOne()
+    const inherited = [source.slug, ...(source.formerSlugs || [])]
+    const formerSlugs = [...new Set([...(target.formerSlugs || []), ...inherited])].filter(
+      (s) => s !== target.slug,
+    )
+    // Source goes first: its slug is about to live on in the target's formerSlugs.
+    await tx.delete(terms).where(eq(terms.id, source.id))
+    const [updated] = await tx
+      .update(terms)
+      .set({ formerSlugs })
+      .where(eq(terms.id, target.id))
+      .returning()
 
-  return { moved, target }
+    return { moved, target: withMongoId(updated) }
+  })
 }
 
 /**
@@ -194,21 +225,20 @@ export async function mergeTerms(sourceId, targetId) {
  * timestamps.
  */
 export async function publicTermGroups() {
-  const terms = await Term.find(VISIBLE_TERM)
-    .sort({ order: 1, name: 1 })
-    .select(
-      'taxonomy name shortLabel slug parent icon color thumbClass showInMenu showInFilters showOnCards featured showAsRail linkTo description',
-    )
-    .lean()
+  const rows = await db
+    .select()
+    .from(terms)
+    .where(visibleTerm)
+    .orderBy(asc(terms.order), asc(terms.name))
 
   const groups = {}
-  for (const t of terms) {
+  for (const t of rows) {
     ;(groups[t.taxonomy] ||= []).push({
       name: t.name,
       shortLabel: t.shortLabel || '',
       slug: t.slug,
       parent: t.parent ? String(t.parent) : null,
-      id: String(t._id),
+      id: String(t.id),
       icon: t.icon,
       color: t.color,
       thumbClass: t.thumbClass,
