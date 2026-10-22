@@ -628,6 +628,12 @@ log('media, blog, taxonomy, resources, programs, settings…')
  * a post with no status/visibility was treated as public by the old blog, so it
  * is written as Published/Public rather than silently becoming a Draft.
  */
+// Media first: blog posts reference it (image_media_id has a foreign key).
+await insert(
+  T.media,
+  D.media.map((d) => row(T.media, d, { id: ids.get(hex(d._id)) })),
+)
+
 let blogDefaulted = 0
 await insert(
   T.blogPosts,
@@ -650,7 +656,6 @@ if (blogDefaulted) {
 }
 
 for (const [key, table] of [
-  ['media', T.media],
   ['blogComments', T.blogComments],
   ['terms', T.terms],
   ['playbooks', T.playbooks],
