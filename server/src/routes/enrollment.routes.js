@@ -1,12 +1,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { asyncHandler, HttpError } from '../middleware/error.js'
-import { and, count, eq } from 'drizzle-orm'
-import { db } from '../db/index.js'
-import { isUuid } from '../db/coerce.js'
-import { enrollmentCompletedLessons, enrollments } from '../db/schema/index.js'
-import { findCourseById, findCourseBySlug } from '../db/repos/courses.js'
-import { enrollmentDocs, findEnrollment } from '../db/repos/enrollments.js'
+import { Enrollment, Course } from '../models/index.js'
 import { grantAccess, isExpired } from '../services/access.js'
 import {
   effectiveVideoStatus,
@@ -24,10 +19,10 @@ const countLessons = (course) =>
 
 /** Shared by the player state and the playback endpoint. */
 async function requireActiveEnrollment(userId, slug) {
-  const course = await findCourseBySlug(slug)
+  const course = await Course.findOne({ slug }).lean()
   if (!course) throw new HttpError(404, 'Course not found')
 
-  const enrollment = await findEnrollment(userId, course.id)
+  const enrollment = await Enrollment.findOne({ userId, courseId: course._id }).lean()
   if (!enrollment) {
     throw new HttpError(403, 'You are not enrolled in this course', { code: 'NOT_ENROLLED' })
   }
@@ -55,9 +50,9 @@ async function requireActiveEnrollment(userId, slug) {
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const course = req.body.slug
-      ? await findCourseBySlug(req.body.slug)
-      : await findCourseById(req.body.courseId)
+    const course = await Course.findOne(
+      req.body.slug ? { slug: req.body.slug } : { _id: req.body.courseId },
+    ).lean()
     if (!course) throw new HttpError(404, 'Course not found')
 
     if (course.price !== 'free') {
@@ -69,11 +64,11 @@ router.post(
       })
     }
 
-    const { enrollment, created } = await grantAccess(req.user.id, course.id, {
+    const { enrollment, created } = await grantAccess(req.user._id, course._id, {
       expiresAt: null,
       source: 'free',
     })
-    res.status(created ? 201 : 200).json(await enrollmentDocs(enrollment))
+    res.status(created ? 201 : 200).json(enrollment)
   }),
 )
 
@@ -81,7 +76,7 @@ router.post(
 router.get(
   '/course/:slug',
   asyncHandler(async (req, res) => {
-    const { course, enrollment } = await requireActiveEnrollment(req.user.id, req.params.slug)
+    const { course, enrollment } = await requireActiveEnrollment(req.user._id, req.params.slug)
     res.json({ course: stripVideoRefs(course), enrollment })
   }),
 )
@@ -97,7 +92,7 @@ router.get(
 router.get(
   '/course/:slug/playback/:lessonId',
   asyncHandler(async (req, res) => {
-    const { course } = await requireActiveEnrollment(req.user.id, req.params.slug)
+    const { course } = await requireActiveEnrollment(req.user._id, req.params.slug)
 
     const found = findLesson(course, req.params.lessonId)
     // 403 rather than 404: a lesson id from another course is an access failure,
@@ -150,66 +145,38 @@ router.get(
 router.patch(
   '/:id/progress',
   asyncHandler(async (req, res) => {
-    if (!isUuid(req.params.id)) throw new HttpError(404, 'Enrollment not found')
-    const [own] = await db
-      .select()
-      .from(enrollments)
-      .where(and(eq(enrollments.id, req.params.id), eq(enrollments.userId, req.user.id)))
-    if (!own) throw new HttpError(404, 'Enrollment not found')
+    const enrollment = await Enrollment.findOne({ _id: req.params.id, userId: req.user._id })
+    if (!enrollment) throw new HttpError(404, 'Enrollment not found')
 
-    const course = await findCourseById(own.courseId)
+    const course = await Course.findById(enrollment.courseId).lean()
     const { lessonId, sectionId, completed } = req.body
 
-    // Completion rows carry a real FK, so an id that is not one of this
-    // course's lessons is refused rather than recorded — Mongo would have
-    // stored it and counted it toward progress.
-    if (lessonId && !findLesson(course, lessonId)) {
-      throw new HttpError(400, 'That lesson is not part of this course')
-    }
-    if (sectionId && !(course.sections || []).some((s) => String(s._id) === String(sectionId))) {
-      throw new HttpError(400, 'That section is not part of this course')
-    }
-
-    const saved = await db.transaction(async (tx) => {
-      const patch = { lastAccessedAt: new Date() }
-      if (lessonId) {
-        if (completed === false) {
-          await tx
-            .delete(enrollmentCompletedLessons)
-            .where(
-              and(
-                eq(enrollmentCompletedLessons.enrollmentId, own.id),
-                eq(enrollmentCompletedLessons.lessonId, lessonId),
-              ),
-            )
-        } else {
-          await tx
-            .insert(enrollmentCompletedLessons)
-            .values({ enrollmentId: own.id, lessonId })
-            .onConflictDoNothing()
-        }
-        patch.currentLessonId = lessonId
+    if (lessonId) {
+      const has = enrollment.completedLessonIds.some((id) => String(id) === String(lessonId))
+      if (completed !== false && !has) enrollment.completedLessonIds.push(lessonId)
+      if (completed === false && has) {
+        enrollment.completedLessonIds = enrollment.completedLessonIds.filter(
+          (id) => String(id) !== String(lessonId),
+        )
       }
-      if (sectionId) patch.currentSectionId = sectionId
+      enrollment.currentLessonId = lessonId
+    }
+    if (sectionId) enrollment.currentSectionId = sectionId
 
-      const [{ done }] = await tx
-        .select({ done: count() })
-        .from(enrollmentCompletedLessons)
-        .where(eq(enrollmentCompletedLessons.enrollmentId, own.id))
-      const total = countLessons(course)
-      patch.progressPct = total ? Math.round((done / total) * 100) : 0
-      patch.status =
-        patch.progressPct >= 100 ? 'Completed' : patch.progressPct > 0 ? 'Active' : 'Not started'
+    const total = countLessons(course)
+    enrollment.progressPct = total
+      ? Math.round((enrollment.completedLessonIds.length / total) * 100)
+      : 0
+    enrollment.status =
+      enrollment.progressPct >= 100
+        ? 'Completed'
+        : enrollment.progressPct > 0
+          ? 'Active'
+          : 'Not started'
+    enrollment.lastAccessedAt = new Date()
+    await enrollment.save()
 
-      const [row] = await tx
-        .update(enrollments)
-        .set(patch)
-        .where(eq(enrollments.id, own.id))
-        .returning()
-      return enrollmentDocs(row, { tx })
-    })
-
-    res.json(saved)
+    res.json(enrollment)
   }),
 )
 

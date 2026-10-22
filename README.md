@@ -1,6 +1,6 @@
-# Growth Scholar
+# Growth Scholar — MERN
 
-An Express · React · Node app on Supabase (Postgres + Auth) — a rebuild of the original static
+A MERN (MongoDB · Express · React · Node) rebuild of the original static
 Growth Scholar site. Every page from the static build is here, backed by real
 data, a real REST API, and real authentication instead of hardcoded markup.
 
@@ -15,21 +15,16 @@ visual reference.
 # 1. install everything (root, server, client)
 npm run install:all
 
-# 2. point the server at a Supabase project (there is no local database).
-#    Fill SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_PROJECT_REF,
-#    DATABASE_URL (pooler :6543) and DIRECT_DATABASE_URL (:5432) — see the
-#    comments in the file. Schema changes: `npm --prefix server run db:generate`,
-#    copy the new drizzle/*.sql into supabase/migrations/, then `supabase db push`.
-cp server/.env.example server/.env
+# 2. point the server at your MongoDB
+cp server/.env.example server/.env      # defaults to mongodb://127.0.0.1:27017/growth-scholar
 
 # 3. load the catalogue content (13 courses, workshops, blog posts, channels…)
 #    Idempotent, deletes nothing, safe to re-run.
 npm run seed
 
 # 4. add the demo accounts and sample activity (development only — this one
-#    replaces the demo accounts and their enrollments, payments and
-#    certificates, and refuses to run with NODE_ENV=production). Needs
-#    SEED_PASSWORD in server/.env.
+#    WIPES accounts, enrollments, payments and certificates first, and refuses
+#    to run with NODE_ENV=production). Needs SEED_PASSWORD in server/.env.
 npm --prefix server run seed:demo
 
 # 5. run both apps
@@ -41,23 +36,6 @@ npm run dev
 
 Vite proxies `/api` to the Express server, so there is nothing to configure on
 the client side.
-
-### Tests
-
-`npm run test:server` runs against the Supabase project named by
-`TEST_SUPABASE_PROJECT_REF` — it must equal `SUPABASE_PROJECT_REF`, and the suite
-refuses to run otherwise, because it wipes every table and auth identity between
-tests. Never point it at production. Concurrent runs are serialised by an
-advisory lock; use `npm --prefix server run db:lock -- <cmd>` for any other ad-hoc
-command that writes to the shared dev project.
-
-### Migrating data from MongoDB
-
-`npm --prefix server run etl` copies a MongoDB database (`MONGO_URI`) into the
-Postgres at `DIRECT_DATABASE_URL`, keeps passwords working (bcrypt hashes are
-imported into Supabase Auth), and prints a verification report — it exits
-non-zero on any mismatch. Read the header of `server/scripts/migrate-mongo-to-pg.js`
-before running it against production.
 
 ### Seeded accounts
 
@@ -102,12 +80,11 @@ growth-scholar-mern/
 ├── server/
 │   └── src/
 │       ├── index.js              express app, route mounting
-│       ├── config/               env + database connection check
-│       ├── db/                   Drizzle schema, client, and repos that
-│       │                         assemble rows into the API's document shape
+│       ├── config/               env + mongo connection
+│       ├── models/               28 mongoose models
 │       ├── routes/               public, student, community
 │       │   └── admin/            the guarded /api/admin tree
-│       ├── middleware/           auth (Supabase session cookies), errors, validation
+│       ├── middleware/           auth (JWT cookie), errors, validation
 │       ├── seed/                 seed.js + data/ transcribed from the static HTML
 │       └── utils/                csv helpers, generic CRUD router
 └── client/
@@ -308,11 +285,10 @@ merely present but wrong fails in the worst place, mid-checkout or on a password
 reset nobody receives.
 
 These **stay in `.env`** and cannot move, because they are needed before the
-database is reachable or are what makes it trustworthy: the `SUPABASE_*` and
-`DATABASE_URL`/`DIRECT_DATABASE_URL` values, `CONFIG_SECRET` (and `JWT_SECRET`,
-still the fallback key for secrets stored before `CONFIG_SECRET` was set),
-`PORT`, `NODE_ENV`, `TRUST_PROXY`, `CLIENT_ORIGIN`/`PUBLIC_URL`, `SENTRY_DSN`,
-`RELEASE` and `SEED_PASSWORD` (CLI only).
+database is reachable or are what makes it trustworthy: `MONGO_URI`,
+`JWT_SECRET`, `CONFIG_SECRET`, `PORT`, `NODE_ENV`, `TRUST_PROXY`,
+`CLIENT_ORIGIN`/`PUBLIC_URL`, `SENTRY_DSN`, `RELEASE`, `JWT_EXPIRES_IN` and
+`SEED_PASSWORD` (CLI only).
 
 ### Feature flags
 
@@ -336,7 +312,7 @@ browser reads them once from `GET /api/config` (`context/FeatureContext.jsx`).
 - **Catalog filtering** keeps the original URL contract exactly, including the
   quirk that "Paid" is pre-selected when the URL carries no facet at all, the
   9-per-page "View more" step, and the removable chip row. The filtering itself
-  moved to the database.
+  moved to MongoDB.
 - **Mentor popup** still fires 60 seconds in, opens instantly with `?mentor`,
   and stays dismissed for the rest of the session via
   `sessionStorage['gs_mentor_popup']`. Submissions now create a `Lead`.

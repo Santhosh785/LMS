@@ -1,6 +1,5 @@
-import { and, eq, inArray, not, sql } from 'drizzle-orm'
-import { db } from '../db/index.js'
-import { blogPosts, courses, programs, terms, workshops } from '../db/schema/index.js'
+import { BlogPost, Course, Program, Workshop } from '../models/index.js'
+import Term from '../models/Term.js'
 import { slugify, uniqueSlug } from '../services/taxonomy.js'
 import { log } from './guard.js'
 
@@ -90,33 +89,23 @@ const PRESETS = {
 /** Tags the seed members of a freshly created rail. Never touches an existing tag. */
 async function applyMembers(entry) {
   if (!entry.members) return
-  const { courses: courseSlugs = [], programs: programSlugs = [] } = entry.members
-  // Append-if-absent: the $addToSet the Mongo version used.
-  const addTag = (table, slugs) =>
-    db
-      .update(table)
-      .set({ tags: sql`array_append(${table.tags}, ${entry.name})` })
-      .where(
-        and(inArray(table.slug, slugs), not(sql`${table.tags} @> array[${entry.name}]::text[]`)),
-      )
-  if (courseSlugs.length) await addTag(courses, courseSlugs)
-  if (programSlugs.length) await addTag(programs, programSlugs)
+  const { courses = [], programs = [] } = entry.members
+  if (courses.length) {
+    await Course.updateMany({ slug: { $in: courses } }, { $addToSet: { tags: entry.name } })
+  }
+  if (programs.length) {
+    await Program.updateMany({ slug: { $in: programs } }, { $addToSet: { tags: entry.name } })
+  }
 }
 
 /** Distinct values actually present in the content, so nothing is orphaned. */
 async function observedValues() {
-  // Sorted, as Mongo's distinct returned them, so a re-run appends in a stable order.
-  const distinct = async (query) =>
-    (await db.execute(query)).rows
-      .map((r) => r.v)
-      .filter((v) => v != null)
-      .sort()
   const [topics, courseLangs, blogCategories, workshopLangs, venues] = await Promise.all([
-    distinct(sql`select distinct ${courses.topic} as v from ${courses}`),
-    distinct(sql`select distinct unnest(${courses.languages}) as v from ${courses}`),
-    distinct(sql`select distinct ${blogPosts.category} as v from ${blogPosts}`),
-    distinct(sql`select distinct ${workshops.language} as v from ${workshops}`),
-    distinct(sql`select distinct ${workshops.venue} as v from ${workshops}`),
+    Course.distinct('topic'),
+    Course.distinct('languages'),
+    BlogPost.distinct('category'),
+    Workshop.distinct('language'),
+    Workshop.distinct('venue'),
   ])
   return {
     topic: topics,
@@ -145,15 +134,12 @@ export async function seedTaxonomy() {
     for (const [index, entry] of wanted.entries()) {
       // Match on slug rather than name so a term the operator has renamed is
       // recognised as already-seeded instead of being recreated.
-      const [existing] = await db
-        .select({ id: terms.id })
-        .from(terms)
-        .where(and(eq(terms.taxonomy, taxonomy), eq(terms.slug, slugify(entry.name))))
+      const existing = await Term.findOne({ taxonomy, slug: slugify(entry.name) })
       if (existing) {
         skipped += 1
         continue
       }
-      await db.insert(terms).values({
+      await Term.create({
         taxonomy,
         name: entry.name,
         slug: await uniqueSlug(taxonomy, entry.name),

@@ -4,10 +4,7 @@ import { crudRouter } from '../../utils/crudRouter.js'
 import { validate } from '../../middleware/validate.js'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
 import { sendCsv } from '../../utils/csv.js'
-import { count, desc, eq, sql } from 'drizzle-orm'
-import { db } from '../../db/index.js'
-import { transactions } from '../../db/schema/index.js'
-import { txnDoc, txnValues } from '../../db/repos/transactions.js'
+import { Transaction } from '../../models/index.js'
 import {
   approveTransaction,
   refundTransaction,
@@ -27,18 +24,14 @@ const router = Router()
 router.get(
   '/queue',
   asyncHandler(async (_req, res) => {
-    const [rows, [{ pendingCount }]] = await Promise.all([
-      db
-        .select()
-        .from(transactions)
-        .orderBy(sql`(${transactions.status} = 'PENDING') desc`, desc(transactions.date))
-        .limit(200),
-      db
-        .select({ pendingCount: count() })
-        .from(transactions)
-        .where(eq(transactions.status, 'PENDING')),
+    const items = await Transaction.aggregate([
+      { $addFields: { _pendingFirst: { $cond: [{ $eq: ['$status', 'PENDING'] }, 0, 1] } } },
+      { $sort: { _pendingFirst: 1, date: -1 } },
+      { $limit: 200 },
+      { $project: { _pendingFirst: 0 } },
     ])
-    res.json({ items: rows.map(txnDoc), pendingCount })
+    const pendingCount = await Transaction.countDocuments({ status: 'PENDING' })
+    res.json({ items, pendingCount })
   }),
 )
 
@@ -52,7 +45,7 @@ router.get(
 router.post(
   '/:id/approve',
   asyncHandler(async (req, res) => {
-    const result = await approveTransaction(req.params.id, { reviewedBy: req.user.id })
+    const result = await approveTransaction(req.params.id, { reviewedBy: req.user._id })
     if (!result.ok) throw new HttpError(404, 'Transaction not found')
 
     if (result.alreadyProcessed) {
@@ -98,7 +91,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = await rejectTransaction(req.params.id, {
       reason: req.body.reason,
-      reviewedBy: req.user.id,
+      reviewedBy: req.user._id,
     })
     if (!result.ok) throw new HttpError(404, 'Transaction not found')
     res.json({
@@ -114,7 +107,7 @@ router.post(
 router.get(
   '/export',
   asyncHandler(async (_req, res) => {
-    const rows = await db.select().from(transactions).orderBy(desc(transactions.date))
+    const rows = await Transaction.find().sort({ date: -1 }).lean()
     sendCsv(res, 'transactions.csv', rows, [
       { key: 'date', label: 'Date', get: (r) => r.date?.toISOString().slice(0, 10) },
       { key: 'customerName', label: 'Customer' },
@@ -154,7 +147,7 @@ router.post(
     const result = await refundTransaction(req.params.id, {
       amount: req.body.amount,
       reason: req.body.reason,
-      reviewedBy: req.user.id,
+      reviewedBy: req.user._id,
     })
 
     if (!result.ok) {
@@ -176,13 +169,10 @@ router.post(
 
 router.use(
   '/',
-  crudRouter(transactions, {
-    name: 'Transaction',
+  crudRouter(Transaction, {
     searchFields: ['customerName', 'contact', 'product', 'invoiceNo'],
     sort: { date: -1 },
     dateField: 'date',
-    hydrate: async (rows) => rows.map(txnDoc),
-    toValues: txnValues,
   }),
 )
 

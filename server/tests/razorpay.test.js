@@ -1,8 +1,6 @@
 import crypto from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { courses, customers, enrollments, transactions, users } from '../src/db/schema/index.js'
-import { findTransactionById, insertTransaction, txnDoc } from '../src/db/repos/transactions.js'
-import { countRows, findRow, insertRow } from './helpers/commerce.js'
+import { Course, Customer, Enrollment, Transaction, User } from '../src/models/index.js'
 import { agent, paidCourse, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -56,8 +54,8 @@ const deliver = (body, signature) =>
 
 /** A PENDING gateway transaction, as the order endpoint would have created it. */
 async function pendingOrder(course, overrides = {}) {
-  const customer = await insertRow(customers, { name: 'Anjali R', email: 'anjali@example.in' })
-  return insertTransaction({
+  const customer = await Customer.create({ name: 'Anjali R', email: 'anjali@example.in' })
+  return Transaction.create({
     customerId: customer._id,
     customerName: 'Anjali R',
     contact: 'anjali@example.in',
@@ -84,8 +82,8 @@ describe('razorpay webhook', () => {
     const res = await deliver(capturedEvent('pay_EVIL'), sign(capturedEvent()))
 
     expect(res.status).toBe(400)
-    expect((await findTransactionById(txn._id)).status).toBe('PENDING')
-    expect(await countRows(enrollments)).toBe(0)
+    expect((await Transaction.findById(txn._id)).status).toBe('PENDING')
+    expect(await Enrollment.countDocuments()).toBe(0)
   })
 
   it('rejects a signature made with the wrong secret', async () => {
@@ -96,7 +94,7 @@ describe('razorpay webhook', () => {
     const res = await deliver(body, sign(body, 'not-the-secret'))
 
     expect(res.status).toBe(400)
-    expect(await countRows(enrollments)).toBe(0)
+    expect(await Enrollment.countDocuments()).toBe(0)
   })
 
   it('rejects a delivery with no signature at all', async () => {
@@ -106,7 +104,7 @@ describe('razorpay webhook', () => {
     const res = await deliver(capturedEvent(), '')
 
     expect(res.status).toBe(400)
-    expect(await countRows(enrollments)).toBe(0)
+    expect(await Enrollment.countDocuments()).toBe(0)
   })
 
   it('grants access on a verified delivery, with the purchased expiry', async () => {
@@ -117,15 +115,15 @@ describe('razorpay webhook', () => {
     const res = await deliver(body, sign(body))
 
     expect(res.status).toBe(200)
-    const updated = await findTransactionById(txn._id)
+    const updated = await Transaction.findById(txn._id)
     expect(updated.status).toBe('SUCCESS')
     expect(updated.razorpayPaymentId).toBe('pay_TEST999')
     expect(updated.invoiceNo).toMatch(/^GS-\d{4}-\d{4}$/)
 
-    const buyer = await findRow(users, { email: 'anjali@example.in' })
+    const buyer = await User.findOne({ email: 'anjali@example.in' })
     expect(buyer).toBeTruthy()
 
-    const enrollment = await findRow(enrollments, { userId: buyer.id })
+    const enrollment = await Enrollment.findOne({ userId: buyer._id })
     expect(enrollment.source).toBe('paid')
     const months =
       (enrollment.expiresAt.getFullYear() - new Date().getFullYear()) * 12 +
@@ -143,8 +141,8 @@ describe('razorpay webhook', () => {
 
     // 200, or Razorpay retries forever.
     expect(second.status).toBe(200)
-    expect(await countRows(enrollments)).toBe(1)
-    expect((await findRow(courses, { id: course.id })).enrolledCount).toBe(1)
+    expect(await Enrollment.countDocuments()).toBe(1)
+    expect((await Course.findById(course._id)).enrolledCount).toBe(1)
   })
 
   it('does not mint a second invoice number on redelivery', async () => {
@@ -153,10 +151,10 @@ describe('razorpay webhook', () => {
     const body = capturedEvent()
 
     await deliver(body, sign(body))
-    const first = (await findTransactionById(txn._id)).invoiceNo
+    const first = (await Transaction.findById(txn._id)).invoiceNo
     await deliver(body, sign(body))
 
-    expect((await findTransactionById(txn._id)).invoiceNo).toBe(first)
+    expect((await Transaction.findById(txn._id)).invoiceNo).toBe(first)
   })
 
   it('grants nothing for a payment against an unknown order', async () => {
@@ -167,7 +165,7 @@ describe('razorpay webhook', () => {
 
     // Acknowledged so Razorpay stops retrying, but nothing is granted.
     expect(res.status).toBe(200)
-    expect(await countRows(enrollments)).toBe(0)
+    expect(await Enrollment.countDocuments()).toBe(0)
   })
 
   it('leaves a PENDING transaction alone on payment.failed, so a retry can claim it', async () => {
@@ -182,7 +180,7 @@ describe('razorpay webhook', () => {
 
     await deliver(body, sign(body))
 
-    expect((await findTransactionById(txn._id)).status).toBe('PENDING')
+    expect((await Transaction.findById(txn._id)).status).toBe('PENDING')
   })
 })
 
@@ -207,8 +205,8 @@ describe('order creation', () => {
     expect(res.status).toBe(201)
     // Razorpay works in paise: ₹2,499 must reach it as 249900, not 100.
     expect(orderSpy.mock.calls[0][0].amount).toBe(249900)
-    expect(await findRow(transactions, { amount: 1 })).toBeNull()
-    expect((await findRow(transactions, { razorpayOrderId: ORDER_ID })).amount).toBe(2499)
+    expect(await Transaction.findOne({ amount: 1 })).toBeNull()
+    expect((await Transaction.findOne({ razorpayOrderId: ORDER_ID })).amount).toBe(2499)
   })
 
   it('charges the tier the buyer chose, not the cheapest one', async () => {
@@ -223,7 +221,7 @@ describe('order creation', () => {
     })
 
     expect(orderSpy.mock.calls[0][0].amount).toBe(499900)
-    expect(txnDoc(await findRow(transactions)).planAccess).toBe('Lifetime')
+    expect((await Transaction.findOne({})).planAccess).toBe('Lifetime')
   })
 
   it('rejects a plan that does not exist rather than falling back to a price', async () => {
@@ -238,7 +236,7 @@ describe('order creation', () => {
     })
 
     expect(res.status).toBe(400)
-    expect(await countRows(transactions)).toBe(0)
+    expect(await Transaction.countDocuments()).toBe(0)
   })
 
   it('grants no access at order time', async () => {
@@ -250,8 +248,8 @@ describe('order creation', () => {
       phone: '9876543210',
     })
 
-    expect(await countRows(enrollments)).toBe(0)
-    expect(await countRows(users)).toBe(0)
+    expect(await Enrollment.countDocuments()).toBe(0)
+    expect(await User.countDocuments()).toBe(0)
   })
 })
 
@@ -267,8 +265,8 @@ describe('refunds', () => {
     const txn = await pendingOrder(course)
     const body = capturedEvent()
     await deliver(body, sign(body))
-    const buyer = await findRow(users, { email: 'anjali@example.in' })
-    return { course, txn: await findTransactionById(txn._id), buyer }
+    const buyer = await User.findOne({ email: 'anjali@example.in' })
+    return { course, txn: await Transaction.findById(txn._id), buyer }
   }
 
   it('calls Razorpay before recording anything', async () => {
@@ -296,8 +294,8 @@ describe('refunds', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.full).toBe(true)
-    expect((await findTransactionById(txn._id)).status).toBe('REFUNDED')
-    expect(await countRows(enrollments, { userId: buyer.id, courseId: course.id })).toBe(0)
+    expect((await Transaction.findById(txn._id)).status).toBe('REFUNDED')
+    expect(await Enrollment.countDocuments({ userId: buyer._id, courseId: course._id })).toBe(0)
   })
 
   it('leaves access in place on a partial refund', async () => {
@@ -311,10 +309,10 @@ describe('refunds', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.full).toBe(false)
-    const updated = await findTransactionById(txn._id)
+    const updated = await Transaction.findById(txn._id)
     expect(updated.refundedAmount).toBe(500)
     expect(updated.status).toBe('SUCCESS')
-    expect(await countRows(enrollments, { userId: buyer.id })).toBe(1)
+    expect(await Enrollment.countDocuments({ userId: buyer._id })).toBe(1)
   })
 
   it('refuses to refund more than the remaining balance', async () => {
@@ -332,7 +330,7 @@ describe('refunds', () => {
 
   it('refuses to refund a manual UPI payment through the gateway', async () => {
     const course = await paidCourse()
-    const txn = await insertTransaction({
+    const txn = await Transaction.create({
       customerName: 'Cash Buyer',
       contact: 'cash@example.in',
       product: course.title,
@@ -353,6 +351,6 @@ describe('refunds', () => {
     expect(res.body.details.code).toBe('NOT_A_GATEWAY_PAYMENT')
     expect(refundSpy).not.toHaveBeenCalled()
     // The bug this replaced: recording a refund that moved no money.
-    expect((await findTransactionById(txn._id)).refundedAmount).toBe(0)
+    expect((await Transaction.findById(txn._id)).refundedAmount).toBe(0)
   })
 })

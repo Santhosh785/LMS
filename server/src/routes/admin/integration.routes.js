@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
-import { getSettings, updateSettings } from '../../db/repos/settings.js'
+import { Setting } from '../../models/index.js'
 import { cfg, invalidateRuntimeConfig, refreshRuntimeConfig } from '../../services/runtimeConfig.js'
 import { invalidateSiteConfig } from '../../services/siteConfig.js'
 import { mask, open, seal } from '../../utils/secretBox.js'
@@ -64,6 +64,21 @@ const PLAIN = {
 const BLOCKS = Object.keys(PLAIN)
 
 /**
+ * The projection that pulls the `select: false` secret fields back.
+ *
+ * These must be full paths (`+payments.razorpayKeySecretEnc`), not bare field
+ * names — Mongoose silently ignores a projection path it cannot resolve, so
+ * getting this wrong does not error, it just returns the document without its
+ * secrets. On the write path that is worse than a read bug: the handler would
+ * see no stored value, and "leave blank to keep the existing key" would quietly
+ * erase it instead.
+ */
+const withSecrets = () =>
+  Object.entries(SECRETS)
+    .flatMap(([block, fields]) => fields.map(([, stored]) => `+${block}.${stored}`))
+    .join(' ')
+
+/**
  * The effective value for a secret, which may come from the environment rather
  * than the database — an operator needs to see that Razorpay is already working
  * from `.env`, not an empty box implying it is unconfigured.
@@ -82,10 +97,8 @@ function secretState(effective, storedEnc) {
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
-    // Secrets asked for by name: getSettings strips every `*Enc` field unless
-    // told otherwise, so forgetting this cannot leak — it can only make every
-    // stored key look unset.
-    const full = await getSettings({ secrets: true })
+    const doc = await Setting.getSingleton()
+    const full = await Setting.findById(doc._id).select(withSecrets()).lean()
 
     const payments = full.payments || {}
     const mail = full.mail || {}
@@ -145,10 +158,9 @@ router.put(
     const { block } = req.params
     if (!BLOCKS.includes(block)) throw new HttpError(400, 'Unknown settings block')
 
-    // Read with secrets so "leave blank to keep the existing key" really keeps
-    // it: the patch below starts from what is stored, ciphertext included.
-    const doc = await getSettings({ secrets: true })
-    const patch = { ...(doc[block] || {}) }
+    const setting = await Setting.getSingleton()
+    const doc = await Setting.findById(setting._id).select(withSecrets())
+    const patch = doc[block] || {}
 
     for (const field of PLAIN[block]) {
       if (req.body[field] === undefined) continue
@@ -171,7 +183,9 @@ router.put(
       else if (String(value).trim() !== '') patch[stored] = seal(String(value).trim())
     }
 
-    await updateSettings({ [block]: patch })
+    doc[block] = patch
+    doc.markModified(block)
+    await doc.save()
 
     // Both caches serve this document: the public one carries branding and the
     // feature flags the browser reads, this one carries the credentials.

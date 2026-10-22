@@ -1,38 +1,19 @@
 import { Router } from 'express'
 import { asyncHandler } from '../../middleware/error.js'
-import { and, count, desc, eq, gte, lt, sql, sum } from 'drizzle-orm'
-import { db, withMongoId } from '../../db/index.js'
 import {
-  broadcasts,
-  courses,
-  customers,
-  enrollments,
-  funnelLeads,
-  leads,
-  transactions,
-  users,
-} from '../../db/schema/index.js'
-import { txnDoc } from '../../db/repos/transactions.js'
+  Course,
+  Customer,
+  Transaction,
+  Enrollment,
+  FunnelLead,
+  Broadcast,
+  Lead,
+  User,
+} from '../../models/index.js'
 
 const router = Router()
 
 const inr = (n) => Math.round(n || 0)
-
-const tally = async (table, where) => {
-  const [{ n }] = await db.select({ n: count() }).from(table).where(where)
-  return n
-}
-
-const paid = eq(transactions.status, 'SUCCESS')
-
-/** Sum of SUCCESS amounts matching `where` — Mongo's $group/$sum. */
-const revenue = async (where) => {
-  const [{ total }] = await db
-    .select({ total: sum(transactions.amount).mapWith(Number) })
-    .from(transactions)
-    .where(and(paid, where))
-  return total || 0
-}
 
 router.get(
   '/',
@@ -47,25 +28,26 @@ router.get(
       customerCount,
       enrollmentCount,
       leadCount,
-      totalRevenue,
-      monthRevenueTotal,
+      revenueAgg,
+      monthRevenueAgg,
       recentTransactions,
       recentBroadcasts,
     ] = await Promise.all([
-      tally(courses),
-      tally(courses, eq(courses.status, 'Published')),
-      tally(customers),
-      tally(enrollments),
-      tally(funnelLeads),
-      revenue(),
-      revenue(gte(transactions.date, monthStart)),
-      db.select().from(transactions).orderBy(desc(transactions.date)).limit(6),
-      db
-        .select()
-        .from(broadcasts)
-        .where(eq(broadcasts.status, 'sent'))
-        .orderBy(desc(broadcasts.sentAt))
-        .limit(4),
+      Course.countDocuments(),
+      Course.countDocuments({ status: 'Published' }),
+      Customer.countDocuments(),
+      Enrollment.countDocuments(),
+      FunnelLead.countDocuments(),
+      Transaction.aggregate([
+        { $match: { status: 'SUCCESS' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      Transaction.aggregate([
+        { $match: { status: 'SUCCESS', date: { $gte: monthStart } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      Transaction.find().sort({ date: -1 }).limit(6).lean(),
+      Broadcast.find({ status: 'sent' }).sort({ sentAt: -1 }).limit(4).lean(),
     ])
 
     /**
@@ -77,63 +59,63 @@ router.get(
      * read as measured. Leads and signups are real counts and are kept.
      */
     const [
-      breakdownRows,
+      breakdownAgg,
       monthPayments,
-      prevRevenueTotal,
+      prevMonthAgg,
       convertedLeads,
       signupsThisMonth,
       signupsPrevMonth,
       userCount,
     ] = await Promise.all([
-      db
-        .select({ cycle: transactions.cycle, total: sum(transactions.amount).mapWith(Number) })
-        .from(transactions)
-        .where(paid)
-        .groupBy(transactions.cycle),
-      tally(transactions, and(paid, gte(transactions.date, monthStart))),
-      revenue(and(gte(transactions.date, prevMonthStart), lt(transactions.date, monthStart))),
-      tally(leads, eq(leads.status, 'Converted')),
-      tally(users, gte(users.createdAt, monthStart)),
-      tally(users, and(gte(users.createdAt, prevMonthStart), lt(users.createdAt, monthStart))),
-      tally(users),
+      Transaction.aggregate([
+        { $match: { status: 'SUCCESS' } },
+        { $group: { _id: '$cycle', total: { $sum: '$amount' } } },
+      ]),
+      Transaction.countDocuments({ status: 'SUCCESS', date: { $gte: monthStart } }),
+      Transaction.aggregate([
+        { $match: { status: 'SUCCESS', date: { $gte: prevMonthStart, $lt: monthStart } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      Lead.countDocuments({ status: 'Converted' }),
+      User.countDocuments({ createdAt: { $gte: monthStart } }),
+      User.countDocuments({ createdAt: { $gte: prevMonthStart, $lt: monthStart } }),
+      User.countDocuments(),
     ])
 
-    const mentorLeads = await tally(leads)
-    const byCycle = Object.fromEntries(breakdownRows.map((r) => [r.cycle || 'ONETIME', r.total]))
-    const monthRevenue = inr(monthRevenueTotal)
-    const prevRevenue = inr(prevRevenueTotal)
+    const mentorLeads = await Lead.countDocuments()
+    const byCycle = Object.fromEntries(breakdownAgg.map((r) => [r._id || 'ONETIME', r.total]))
+    const monthRevenue = inr(monthRevenueAgg[0]?.total)
+    const prevRevenue = inr(prevMonthAgg[0]?.total)
 
     /** Percent change, or null when there is no prior figure to compare to. */
     const delta = (current, previous) =>
       previous > 0 ? Math.round(((current - previous) / previous) * 100) : null
 
-    // 12-month revenue series for the hand-drawn SVG chart on the dashboard.
-    // Months in UTC, as Mongo's $year/$month bucketed them.
-    const month = sql`date_trunc('month', ${transactions.date} at time zone 'UTC')`
-    const seriesRows = await db
-      .select({
-        y: sql`extract(year from ${month})`.mapWith(Number),
-        m: sql`extract(month from ${month})`.mapWith(Number),
-        total: sum(transactions.amount).mapWith(Number),
-      })
-      .from(transactions)
-      .where(paid)
-      .groupBy(month)
-      .orderBy(month)
-      .limit(12)
+    // 12-month revenue series for the hand-drawn SVG chart on the dashboard
+    const seriesAgg = await Transaction.aggregate([
+      { $match: { status: 'SUCCESS' } },
+      {
+        $group: {
+          _id: { y: { $year: '$date' }, m: { $month: '$date' } },
+          total: { $sum: '$amount' },
+        },
+      },
+      { $sort: { '_id.y': 1, '_id.m': 1 } },
+      { $limit: 12 },
+    ])
 
     res.json({
       kpis: {
-        revenue: inr(totalRevenue),
-        monthRevenue: inr(monthRevenueTotal),
+        revenue: inr(revenueAgg[0]?.total),
+        monthRevenue: inr(monthRevenueAgg[0]?.total),
         customers: customerCount,
         enrollments: enrollmentCount,
         courses: courseCount,
         published: publishedCount,
         leads: leadCount,
       },
-      series: seriesRows.map((s) => ({
-        label: `${String(s.m).padStart(2, '0')}/${s.y}`,
+      series: seriesAgg.map((s) => ({
+        label: `${String(s._id.m).padStart(2, '0')}/${s._id.y}`,
         value: inr(s.total),
       })),
       salesBreakdown: {
@@ -148,13 +130,12 @@ router.get(
       },
       overview: {
         leads: mentorLeads,
-        leadConversionPct:
-          mentorLeads > 0 ? Math.round((convertedLeads / mentorLeads) * 100) : null,
+        leadConversionPct: mentorLeads > 0 ? Math.round((convertedLeads / mentorLeads) * 100) : null,
         signups: userCount,
         signupsDeltaPct: delta(signupsThisMonth, signupsPrevMonth),
       },
-      recentTransactions: recentTransactions.map(txnDoc),
-      recentBroadcasts: withMongoId(recentBroadcasts),
+      recentTransactions,
+      recentBroadcasts,
     })
   }),
 )

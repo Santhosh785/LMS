@@ -8,29 +8,11 @@ import {
   passwordResetEmailLimiter,
 } from '../middleware/rateLimit.js'
 import { asyncHandler, HttpError } from '../middleware/error.js'
-import { clearSessionCookies, requireAuth, setSessionCookies } from '../middleware/auth.js'
-import {
-  createAccount,
-  EmailTakenError,
-  findUserByEmail,
-  updateProfile,
-} from '../db/repos/users.js'
-import { supabaseAdmin, supabaseForRequest } from '../services/supabaseAdmin.js'
+import { signToken, setAuthCookie, clearAuthCookie, requireAuth } from '../middleware/auth.js'
+import User from '../models/User.js'
 import { findUserByToken, sendPasswordEmail, setPassword } from '../services/passwordReset.js'
 
 const router = Router()
-
-/** Signs in at Supabase and returns the session, or null on bad credentials. */
-async function passwordSession(email, password) {
-  const { data, error } = await supabaseForRequest().auth.signInWithPassword({ email, password })
-  if (error || !data?.session) {
-    // 400 "Invalid login credentials" is the expected miss; anything else is
-    // Supabase being unreachable or rate-limiting, which is ours to see.
-    if (error && error.status !== 400) console.error('[auth] sign-in failed:', error.message)
-    return null
-  }
-  return data.session
-}
 
 const publicUser = (u) => ({
   id: u._id,
@@ -57,16 +39,18 @@ router.post(
   validate,
   asyncHandler(async (req, res) => {
     const { name, email, password, phone, preferredLanguage } = req.body
-    let user
-    try {
-      user = await createAccount({ name, email, password, phone, preferredLanguage })
-    } catch (err) {
-      if (err instanceof EmailTakenError) throw new HttpError(409, err.message)
-      throw err
+    if (await User.exists({ email })) {
+      throw new HttpError(409, 'An account with that email already exists')
     }
-    const session = await passwordSession(user.email, password)
-    if (!session) throw new HttpError(503, 'Account created, but sign-in failed — try logging in')
-    setSessionCookies(res, session)
+    const user = await User.create({
+      name,
+      email,
+      passwordHash: await User.hashPassword(password),
+      phone,
+      preferredLanguage,
+      role: 'student',
+    })
+    setAuthCookie(res, signToken(user))
     res.status(201).json({ user: publicUser(user) })
   }),
 )
@@ -78,20 +62,16 @@ router.post(
   body('password').notEmpty().withMessage('Password is required'),
   validate,
   asyncHandler(async (req, res) => {
-    const session = await passwordSession(req.body.email, req.body.password)
-    const user = session ? await findUserByEmail(req.body.email) : null
-    if (!session || !user) {
+    const user = await User.findOne({ email: req.body.email }).select('+passwordHash')
+    if (!user || !(await user.checkPassword(req.body.password))) {
       throw new HttpError(401, 'Email or password is incorrect')
     }
     // Checked after the password, so a wrong password on a suspended account
     // still answers "incorrect" rather than confirming the address exists.
     if (user.suspendedAt) {
-      await supabaseAdmin()
-        .auth.admin.signOut(session.access_token, 'local')
-        .catch(() => {})
       throw new HttpError(403, 'This account has been suspended. Contact support.')
     }
-    setSessionCookies(res, session)
+    setAuthCookie(res, signToken(user))
     res.json({ user: publicUser(user) })
   }),
 )
@@ -119,7 +99,7 @@ router.post(
   body('email').isEmail().withMessage('Enter a valid email').normalizeEmail(),
   validate,
   asyncHandler(async (req, res) => {
-    const user = await findUserByEmail(req.body.email)
+    const user = await User.findOne({ email: req.body.email })
     if (user) void sendPasswordEmail(user, { isNewAccount: false })
 
     res.json({ ok: true, message: 'If that email has an account, a reset link is on its way.' })
@@ -162,29 +142,18 @@ router.post(
     await setPassword(user, req.body.password)
 
     // Sign in immediately: the person just proved control of the mailbox and
-    // chose the password. The fresh session also replaces any that the new
-    // `passwordChangedAt` cutoff just invalidated, including this one.
-    const session = await passwordSession(user.email, req.body.password)
-    if (session) setSessionCookies(res, session)
-    else clearSessionCookies(res)
-    res.json({ ok: true, user: publicUser(await findUserByEmail(user.email)) })
+    // chose the password. The fresh cookie also replaces any session that the
+    // new `passwordChangedAt` cutoff just invalidated, including this one.
+    const fresh = await User.findById(user._id)
+    setAuthCookie(res, signToken(fresh))
+    res.json({ ok: true, user: publicUser(fresh) })
   }),
 )
 
-router.post(
-  '/logout',
-  asyncHandler(async (req, res) => {
-    // Revoke at Supabase too, so the refresh token in the cookie being cleared
-    // cannot be replayed from a copy taken earlier.
-    if (req.accessToken) {
-      await supabaseAdmin()
-        .auth.admin.signOut(req.accessToken, 'local')
-        .catch(() => {})
-    }
-    clearSessionCookies(res)
-    res.json({ ok: true })
-  }),
-)
+router.post('/logout', (_req, res) => {
+  clearAuthCookie(res)
+  res.json({ ok: true })
+})
 
 // Deliberately not guarded: the client calls this on every page load to decide
 // whether anyone is signed in, so "nobody" is a normal answer, not an error.
@@ -196,9 +165,16 @@ router.patch(
   '/me',
   requireAuth,
   asyncHandler(async (req, res) => {
-    // updateProfile only writes the self-editable fields; role and suspension
-    // are not among them, whatever the body says.
-    const user = await updateProfile(req.user.id, req.body)
+    const allowed = [
+      'name',
+      'phone',
+      'education',
+      'currentProfile',
+      'preferredLanguage',
+      'weeklyGoalHours',
+    ]
+    const patch = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)))
+    const user = await User.findByIdAndUpdate(req.user._id, patch, { new: true })
     res.json({ user: publicUser(user) })
   }),
 )

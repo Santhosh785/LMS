@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { courses, enrollments } from '../src/db/schema/index.js'
-import { countRows, findRow, insertRow } from './helpers/commerce.js'
+import { Course, Enrollment } from '../src/models/index.js'
 import { agent, freeCourse, paidCourse, signUp } from './helpers/factories.js'
 
 /**
@@ -31,9 +30,9 @@ describe('paywall', () => {
 
     await agent().post('/api/enrollments').set('Cookie', cookie).send({ slug: course.slug })
 
-    expect(await countRows(enrollments, { userId: user.id })).toBe(0)
+    expect(await Enrollment.countDocuments({ userId: user._id })).toBe(0)
     // The counter must not move either — a refused purchase is not an enrolment.
-    expect((await findRow(courses, { id: course.id })).enrolledCount).toBe(0)
+    expect((await Course.findById(course._id)).enrolledCount).toBe(0)
   })
 
   it('still enrols in a free course', async () => {
@@ -46,7 +45,7 @@ describe('paywall', () => {
       .send({ slug: course.slug })
 
     expect(res.status).toBe(201)
-    const enrollment = await findRow(enrollments, { userId: user.id })
+    const enrollment = await Enrollment.findOne({ userId: user._id })
     expect(enrollment).toBeTruthy()
     expect(enrollment.source).toBe('free')
     expect(enrollment.expiresAt).toBeNull()
@@ -59,7 +58,7 @@ describe('paywall', () => {
     await agent().post('/api/enrollments').set('Cookie', cookie).send({ slug: course.slug })
     await agent().post('/api/enrollments').set('Cookie', cookie).send({ slug: course.slug })
 
-    expect(await countRows(enrollments, { userId: user.id })).toBe(1)
+    expect(await Enrollment.countDocuments({ userId: user._id })).toBe(1)
   })
 
   it('requires authentication', async () => {
@@ -77,9 +76,9 @@ describe('enrollment expiry', () => {
   it('denies course access past expiresAt, distinguishably from not-enrolled', async () => {
     const course = await paidCourse()
     const { cookie, user } = await signUp()
-    await insertRow(enrollments, {
-      userId: user.id,
-      courseId: course.id,
+    await Enrollment.create({
+      userId: user._id,
+      courseId: course._id,
       expiresAt: new Date(Date.now() - 86_400_000),
       source: 'paid',
     })
@@ -104,9 +103,9 @@ describe('enrollment expiry', () => {
   it('treats a null expiresAt as lifetime access', async () => {
     const course = await paidCourse()
     const { cookie, user } = await signUp()
-    await insertRow(enrollments, {
-      userId: user.id,
-      courseId: course.id,
+    await Enrollment.create({
+      userId: user._id,
+      courseId: course._id,
       expiresAt: null,
       source: 'paid',
     })
@@ -118,9 +117,9 @@ describe('enrollment expiry', () => {
   it('still allows access a moment before expiry', async () => {
     const course = await paidCourse()
     const { cookie, user } = await signUp()
-    await insertRow(enrollments, {
-      userId: user.id,
-      courseId: course.id,
+    await Enrollment.create({
+      userId: user._id,
+      courseId: course._id,
       expiresAt: new Date(Date.now() + 60_000),
       source: 'paid',
     })

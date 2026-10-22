@@ -1,17 +1,7 @@
 import { Router } from 'express'
 import { crudRouter } from '../../utils/crudRouter.js'
-import { isUuid } from '../../db/coerce.js'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
-import { desc, eq } from 'drizzle-orm'
-import { db } from '../../db/index.js'
-import { courses, enrollments, users } from '../../db/schema/index.js'
-import {
-  createCourse,
-  findCourseById,
-  hydrateCourses,
-  updateCourse,
-  updateLesson,
-} from '../../db/repos/courses.js'
+import { Course, Enrollment } from '../../models/index.js'
 import { effectiveVideoStatus, findLesson } from '../../services/bunny.js'
 import {
   createVideo,
@@ -36,7 +26,7 @@ const formatDuration = (totalSeconds) => {
 }
 
 async function loadLesson(courseId, lessonId) {
-  const course = await findCourseById(courseId)
+  const course = await Course.findById(courseId)
   if (!course) throw new HttpError(404, 'Course not found')
   const found = findLesson(course, lessonId)
   if (!found) throw new HttpError(404, 'Lesson not found in this course')
@@ -71,11 +61,10 @@ router.post(
       })
     }
 
-    await updateLesson(lesson.id, {
-      bunnyVideoId: video.guid,
-      videoStatus: 'uploading',
-      videoDurationSeconds: null,
-    })
+    lesson.bunnyVideoId = video.guid
+    lesson.videoStatus = 'uploading'
+    lesson.videoDurationSeconds = undefined
+    await course.save()
 
     // Only after the new GUID is committed — losing the old video is
     // acceptable during a replace, losing the new one is not.
@@ -102,7 +91,7 @@ router.post(
 router.get(
   '/:id/lessons/:lessonId/video',
   asyncHandler(async (req, res) => {
-    const { lesson } = await loadLesson(req.params.id, req.params.lessonId)
+    const { course, lesson } = await loadLesson(req.params.id, req.params.lessonId)
 
     const stored = effectiveVideoStatus(lesson)
     const payload = {
@@ -130,24 +119,22 @@ router.get(
     const resolved =
       lesson.videoStatus === 'uploading' && Number(video.status) === 0 ? 'uploading' : next
 
-    let durationSeconds = lesson.videoDurationSeconds ?? null
     if (resolved !== lesson.videoStatus) {
-      const patch = { videoStatus: resolved }
+      lesson.videoStatus = resolved
       if (resolved === 'ready') {
-        patch.videoDurationSeconds = video.length || 0
-        durationSeconds = patch.videoDurationSeconds
+        lesson.videoDurationSeconds = video.length || 0
         // Auto-fill the display duration unless an admin already wrote one.
         if (!lesson.duration || lesson.duration === '00:00') {
-          patch.duration = formatDuration(video.length)
+          lesson.duration = formatDuration(video.length)
         }
       }
-      await updateLesson(lesson.id, patch)
+      await course.save()
     }
 
     res.json({
       videoId: lesson.bunnyVideoId,
       videoStatus: resolved,
-      durationSeconds,
+      durationSeconds: lesson.videoDurationSeconds ?? null,
       encodeProgress: video.encodeProgress ?? null,
     })
   }),
@@ -157,7 +144,7 @@ router.get(
 router.delete(
   '/:id/lessons/:lessonId/video',
   asyncHandler(async (req, res) => {
-    const { lesson } = await loadLesson(req.params.id, req.params.lessonId)
+    const { course, lesson } = await loadLesson(req.params.id, req.params.lessonId)
     if (!lesson.bunnyVideoId) return res.json({ ok: true })
 
     if (isBunnyManagementConfigured()) {
@@ -171,11 +158,10 @@ router.delete(
       }
     }
 
-    await updateLesson(lesson.id, {
-      bunnyVideoId: null,
-      videoStatus: null,
-      videoDurationSeconds: null,
-    })
+    lesson.bunnyVideoId = undefined
+    lesson.videoStatus = undefined
+    lesson.videoDurationSeconds = undefined
+    await course.save()
     res.json({ ok: true })
   }),
 )
@@ -239,10 +225,13 @@ for (const [tab, fields] of Object.entries(TAB_FIELDS)) {
     asyncHandler(async (req, res) => {
       let patch = Object.fromEntries(Object.entries(req.body).filter(([k]) => fields.includes(k)))
       if (fields.includes('price') || fields.includes('amount')) {
-        const existing = await findCourseById(req.params.id, { curriculum: false })
+        const existing = await Course.findById(req.params.id).select('price amount').lean()
         patch = reconcilePricing(patch, existing)
       }
-      const course = await updateCourse(req.params.id, patch, { allow: fields })
+      const course = await Course.findByIdAndUpdate(req.params.id, patch, {
+        new: true,
+        runValidators: true,
+      })
       if (!course) throw new HttpError(404, 'Course not found')
       res.json(course)
     }),
@@ -252,9 +241,11 @@ for (const [tab, fields] of Object.entries(TAB_FIELDS)) {
 router.post(
   '/:id/publish',
   asyncHandler(async (req, res) => {
-    const course = await updateCourse(req.params.id, {
-      status: req.body.status === 'Draft' ? 'Draft' : 'Published',
-    })
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      { status: req.body.status === 'Draft' ? 'Draft' : 'Published' },
+      { new: true },
+    )
     if (!course) throw new HttpError(404, 'Course not found')
     res.json(course)
   }),
@@ -264,18 +255,15 @@ router.post(
 router.get(
   '/:id/students',
   asyncHandler(async (req, res) => {
-    if (!isUuid(req.params.id)) return res.json({ items: [], total: 0 })
-    const rows = await db
-      .select({ e: enrollments, name: users.name, email: users.email })
-      .from(enrollments)
-      .leftJoin(users, eq(users.id, enrollments.userId))
-      .where(eq(enrollments.courseId, req.params.id))
-      .orderBy(desc(enrollments.lastAccessedAt))
+    const enrollments = await Enrollment.find({ courseId: req.params.id })
+      .populate('userId', 'name email')
+      .sort({ lastAccessedAt: -1 })
+      .lean()
 
-    const items = rows.map(({ e, name, email }) => ({
-      id: e.id,
-      name,
-      email,
+    const items = enrollments.map((e) => ({
+      id: e._id,
+      name: e.userId?.name,
+      email: e.userId?.email,
       progress: e.progressPct,
       lastActive: e.lastAccessedAt,
       status: e.status,
@@ -301,12 +289,9 @@ router.post(
 
 router.use(
   '/',
-  crudRouter(courses, {
-    name: 'Course',
+  crudRouter(Course, {
     searchFields: ['title', 'topic', 'slug'],
     sort: { createdAt: -1 },
-    hydrate: (rows) => hydrateCourses(rows),
-    repo: { create: (body) => createCourse(body), update: (id, body) => updateCourse(id, body) },
   }),
 )
 

@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
-import { db } from '../src/db/index.js'
-import { fitCallBookings, flagshipApplications } from '../src/db/schema/index.js'
+import { FitCallBooking, FlagshipApplication } from '../src/models/index.js'
 import { agent, signUpAdmin } from './helpers/factories.js'
-
-const savedApplication = async (id) =>
-  (await db.select().from(flagshipApplications).where(eq(flagshipApplications.id, id)))[0]
-const savedFitCall = async (id) =>
-  (await db.select().from(fitCallBookings).where(eq(fitCallBookings.id, id)))[0]
 
 /**
  * The Flagship intake: /programs/apply and /programs/fit-call.
@@ -70,7 +63,7 @@ describe('flagship application intake', () => {
     const res = await post(validApplication()).expect(201)
     expect(res.body.ok).toBe(true)
 
-    const saved = await savedApplication(res.body.id)
+    const saved = await FlagshipApplication.findById(res.body.id).lean()
     expect(saved).toMatchObject({
       email: 'dinesh@example.in',
       trackPreference: 'track-b',
@@ -115,7 +108,7 @@ describe('flagship application intake', () => {
         email: 'scholar@example.in',
       }),
     ).expect(201)
-    const saved = await savedApplication(res.body.id)
+    const saved = await FlagshipApplication.findById(res.body.id).lean()
     expect(saved.scholarshipCase).toMatch(/Funding this myself/)
   })
 
@@ -135,10 +128,10 @@ describe('flagship application intake', () => {
       }),
     ).expect(201)
 
-    const saved = await savedApplication(res.body.id)
-    expect(saved.monthlySpend).toBeNull()
-    expect(saved.toolsUsed).toBeNull()
-    expect(saved.portfolioUrl).toBeNull()
+    const saved = await FlagshipApplication.findById(res.body.id).lean()
+    expect(saved.monthlySpend).toBeUndefined()
+    expect(saved.toolsUsed).toBeUndefined()
+    expect(saved.portfolioUrl).toBeUndefined()
     // The beginner-only answer is the one that belongs, so it is kept.
     expect(saved.starterCourses).toBe('SEO Mastery')
   })
@@ -147,27 +140,21 @@ describe('flagship application intake', () => {
     const res = await post(
       validApplication({ paymentPlan: 'full', scholarshipCase: 'left over from before' }),
     ).expect(201)
-    const saved = await savedApplication(res.body.id)
-    expect(saved.scholarshipCase).toBeNull()
+    const saved = await FlagshipApplication.findById(res.body.id).lean()
+    expect(saved.scholarshipCase).toBeUndefined()
   })
 })
 
 describe('fit call intake', () => {
   it('accepts a request and stores it as Requested', async () => {
     const res = await agent().post('/api/fit-calls').send(validFitCall()).expect(201)
-    const saved = await savedFitCall(res.body.id)
+    const saved = await FitCallBooking.findById(res.body.id).lean()
     expect(saved).toMatchObject({ email: 'priya@example.in', status: 'Requested', consent: true })
   })
 
   it('requires consent and at least one slot', async () => {
-    await agent()
-      .post('/api/fit-calls')
-      .send(validFitCall({ consent: false }))
-      .expect(400)
-    await agent()
-      .post('/api/fit-calls')
-      .send(validFitCall({ preferredSlots: [] }))
-      .expect(400)
+    await agent().post('/api/fit-calls').send(validFitCall({ consent: false })).expect(400)
+    await agent().post('/api/fit-calls').send(validFitCall({ preferredSlots: [] })).expect(400)
   })
 })
 
@@ -233,10 +220,7 @@ describe('intake inboxes', () => {
   /** A reviewer needs to see the applicant already asked for a call. */
   it('cross-links an application to fit calls from the same email', async () => {
     await post(validApplication({ email: 'both@example.in' })).expect(201)
-    await agent()
-      .post('/api/fit-calls')
-      .send(validFitCall({ email: 'both@example.in' }))
-      .expect(201)
+    await agent().post('/api/fit-calls').send(validFitCall({ email: 'both@example.in' })).expect(201)
 
     const as = await adminAgent()
     const list = await as('get', '/api/admin/applications').expect(200)

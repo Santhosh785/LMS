@@ -1,7 +1,4 @@
-import { and, eq, gt, or, sql } from 'drizzle-orm'
-import { db } from '../db/index.js'
-import { isUuid } from '../db/coerce.js'
-import { blocks, comments, posts } from '../db/schema/index.js'
+import { Block, Comment, Post } from '../models/index.js'
 
 /**
  * Community moderation.
@@ -13,62 +10,50 @@ import { blocks, comments, posts } from '../db/schema/index.js'
  * tested.
  */
 
-export const canModerate = (user, doc) => {
-  if (!user) return false
-  // `authorId` may arrive populated ({ _id, name }) or as a bare id.
-  const authorId = doc.authorId?._id || doc.authorId?.id || doc.authorId
-  return user.role === 'admin' || String(authorId) === String(user.id || user._id)
-}
+export const canModerate = (user, doc) =>
+  Boolean(user) && (user.role === 'admin' || String(doc.authorId) === String(user._id))
 
 /**
  * Deletes a post and everything hanging off it.
  *
- * Comments go with the post — by the foreign key's ON DELETE CASCADE now, so
- * the orphaning bug task 18 fixed on channel deletion cannot come back through
- * a code path that forgets to clean up.
+ * Comments go with the post. Leaving them behind is the same orphaning bug task
+ * 18 fixes on channel deletion: rows nothing can reach, counted by nothing,
+ * cleaned up by nobody.
  */
 export async function deletePost(postId) {
-  if (!isUuid(String(postId))) return null
-  const [post] = await db
-    .delete(posts)
-    .where(eq(posts.id, String(postId)))
-    .returning()
-  return post || null
+  const post = await Post.findByIdAndDelete(postId)
+  if (!post) return null
+  await Comment.deleteMany({ postId: post._id })
+  return post
 }
 
-/** Deletes a comment and decrements its post's counter in the same transaction. */
+/** Deletes a comment and decrements its post's counter atomically. */
 export async function deleteComment(commentId) {
-  if (!isUuid(String(commentId))) return null
-  return db.transaction(async (tx) => {
-    const [comment] = await tx
-      .delete(comments)
-      .where(eq(comments.id, String(commentId)))
-      .returning()
-    if (!comment) return null
-    // Decremented in SQL and floored at zero: a counter that drifts negative
-    // renders as "-1 comments" forever, and there is no natural moment to
-    // repair it.
-    await tx
-      .update(posts)
-      .set({ commentCount: sql`${posts.commentCount} - 1` })
-      .where(and(eq(posts.id, comment.postId), gt(posts.commentCount, 0)))
-    return comment
-  })
+  const comment = await Comment.findByIdAndDelete(commentId)
+  if (!comment) return null
+  // $inc, and floored at zero: a counter that drifts negative renders as
+  // "-1 comments" forever, and there is no natural moment to repair it.
+  await Post.updateOne(
+    { _id: comment.postId, commentCount: { $gt: 0 } },
+    { $inc: { commentCount: -1 } },
+  )
+  return comment
 }
 
 /**
  * Every user id hidden from `userId` in either direction — people they blocked,
- * and people who blocked them. Returns an array suitable for `notInArray`.
+ * and people who blocked them. Returns an array suitable for `$nin`.
  */
 export async function hiddenAuthorIds(userId) {
   if (!userId) return []
-  const rows = await db
-    .select({ blockerId: blocks.blockerId, blockedId: blocks.blockedId })
-    .from(blocks)
-    .where(or(eq(blocks.blockerId, userId), eq(blocks.blockedId, userId)))
+  const blocks = await Block.find({
+    $or: [{ blockerId: userId }, { blockedId: userId }],
+  })
+    .select('blockerId blockedId')
+    .lean()
 
   const ids = new Set()
-  for (const b of rows) {
+  for (const b of blocks) {
     ids.add(String(b.blockerId) === String(userId) ? String(b.blockedId) : String(b.blockerId))
   }
   return [...ids]

@@ -16,22 +16,7 @@ const flag = (value) =>
 
 export const env = {
   port: Number(process.env.PORT || 5000),
-  // Read only by the one-shot ETL (scripts/migrate-mongo-to-pg.js) at cutover.
   mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/growth-scholar',
-
-  /**
-   * Supabase (Postgres + Auth). Express is the only database client: the
-   * browser never sees these. `databaseUrl` is the pooler (transaction mode)
-   * the app queries through; `directDatabaseUrl` bypasses the pooler for
-   * migrations and the ETL, which need session-level features.
-   */
-  supabase: {
-    url: (process.env.SUPABASE_URL || '').replace(/\/+$/, ''),
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-    projectRef: process.env.SUPABASE_PROJECT_REF || '',
-  },
-  databaseUrl: process.env.DATABASE_URL || '',
-  directDatabaseUrl: process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL || '',
   jwtSecret: process.env.JWT_SECRET || 'dev-only-insecure-secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',

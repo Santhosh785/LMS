@@ -24,7 +24,6 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
-    "drizzle-orm": "^0.45.4",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.9.0",

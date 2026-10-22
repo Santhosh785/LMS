@@ -1,24 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
-import { db } from '../src/db/index.js'
-import { settings } from '../src/db/schema/index.js'
-import { getSettings } from '../src/db/repos/settings.js'
+import { Setting } from '../src/models/index.js'
 import { cfg, refreshRuntimeConfig } from '../src/services/runtimeConfig.js'
 import { mask, open, seal } from '../src/utils/secretBox.js'
 import { agent, signUpAdmin } from './helpers/factories.js'
-
-/** Replaces one settings block wholesale, as `doc.payments = {…}; save()` did. */
-async function storeBlock(block, value) {
-  await getSettings()
-  await db
-    .update(settings)
-    .set({ [block]: value })
-    .where(eq(settings.key, 'site'))
-}
-
-/** The stored row exactly as written — ciphertext and all. */
-const rawSettings = async () =>
-  (await db.select().from(settings).where(eq(settings.key, 'site')))[0]
 
 /**
  * Admin-managed configuration (CFG-4 / CFG-5).
@@ -61,7 +45,7 @@ describe('secret box', () => {
 
 describe('config precedence', () => {
   it('falls back to the environment when nothing is stored', async () => {
-    await getSettings()
+    await Setting.getSingleton()
     await refreshRuntimeConfig()
     // The test environment sets these; see tests/setup.js.
     expect(cfg.razorpay.keyId).toBe('rzp_test_key')
@@ -69,7 +53,9 @@ describe('config precedence', () => {
   })
 
   it('prefers an admin-stored value over the environment', async () => {
-    await storeBlock('payments', { razorpayKeyId: 'rzp_live_from_admin', upiVpa: 'admin@okbank' })
+    const doc = await Setting.getSingleton()
+    doc.payments = { razorpayKeyId: 'rzp_live_from_admin', upiVpa: 'admin@okbank' }
+    await doc.save()
     await refreshRuntimeConfig()
 
     expect(cfg.razorpay.keyId).toBe('rzp_live_from_admin')
@@ -77,25 +63,33 @@ describe('config precedence', () => {
   })
 
   it('treats a blank stored value as "not set" rather than as an override', async () => {
-    await storeBlock('payments', { razorpayKeyId: '' })
+    const doc = await Setting.getSingleton()
+    doc.payments = { razorpayKeyId: '' }
+    await doc.save()
     await refreshRuntimeConfig()
 
     expect(cfg.razorpay.keyId).toBe('rzp_test_key')
   })
 
   it('decrypts a stored secret for the services that need it', async () => {
-    await storeBlock('payments', { razorpayKeySecretEnc: seal('live-secret-from-admin') })
+    const doc = await Setting.getSingleton()
+    doc.payments = { razorpayKeySecretEnc: seal('live-secret-from-admin') }
+    await doc.save()
     await refreshRuntimeConfig()
 
     expect(cfg.razorpay.keySecret).toBe('live-secret-from-admin')
   })
 
   it('reads a feature flag as tri-state', async () => {
-    await storeBlock('features', { gamification: true })
+    const doc = await Setting.getSingleton()
+
+    doc.features = { gamification: true }
+    await doc.save()
     await refreshRuntimeConfig()
     expect(cfg.features.gamification).toBe(true)
 
-    await storeBlock('features', { gamification: null })
+    doc.features = { gamification: null }
+    await doc.save()
     await refreshRuntimeConfig()
     // Back to whatever the environment says — off in tests.
     expect(cfg.features.gamification).toBe(false)
@@ -104,7 +98,9 @@ describe('config precedence', () => {
 
 describe('admin integrations API', () => {
   it('never returns a stored secret, only whether one is set and a hint', async () => {
-    await storeBlock('payments', { razorpayKeySecretEnc: seal('rzp_secret_abcd9999') })
+    const doc = await Setting.getSingleton()
+    doc.payments = { razorpayKeySecretEnc: seal('rzp_secret_abcd9999') }
+    await doc.save()
     await refreshRuntimeConfig()
 
     const as = await adminAgent()
@@ -116,7 +112,7 @@ describe('admin integrations API', () => {
   })
 
   it('reports a secret that is coming from the environment', async () => {
-    await getSettings()
+    await Setting.getSingleton()
     await refreshRuntimeConfig()
     const as = await adminAgent()
 
@@ -130,7 +126,9 @@ describe('admin integrations API', () => {
       .send({ razorpayKeySecret: 'plaintext-should-not-persist' })
       .expect(200)
 
-    const raw = await rawSettings()
+    const raw = await Setting.findOne({ key: 'site' })
+      .select('+payments.razorpayKeySecretEnc')
+      .lean()
     expect(raw.payments.razorpayKeySecretEnc).not.toContain('plaintext-should-not-persist')
     expect(open(raw.payments.razorpayKeySecretEnc)).toBe('plaintext-should-not-persist')
   })
@@ -191,8 +189,10 @@ describe('admin integrations API', () => {
 
 describe('production traps', () => {
   it('ignores a secret it cannot decrypt rather than serving garbage', async () => {
+    const doc = await Setting.getSingleton()
     // What a key encrypted under a different CONFIG_SECRET looks like.
-    await storeBlock('payments', { razorpayKeySecretEnc: 'v1:AAAA:BBBB:CCCC' })
+    doc.payments = { razorpayKeySecretEnc: 'v1:AAAA:BBBB:CCCC' }
+    await doc.save()
     await refreshRuntimeConfig()
 
     // Falls back to the environment; never returns the undecryptable bytes.
@@ -200,7 +200,9 @@ describe('production traps', () => {
   })
 
   it('reports an undecryptable secret as coming from the environment', async () => {
-    await storeBlock('payments', { razorpayKeySecretEnc: 'v1:AAAA:BBBB:CCCC' })
+    const doc = await Setting.getSingleton()
+    doc.payments = { razorpayKeySecretEnc: 'v1:AAAA:BBBB:CCCC' }
+    await doc.save()
     await refreshRuntimeConfig()
 
     const as = await adminAgent()

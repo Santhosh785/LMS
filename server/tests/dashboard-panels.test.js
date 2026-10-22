@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  certificates,
-  enrollments,
-  workshopRegistrations,
-  workshops,
-} from '../src/db/schema/index.js'
-import { insertTransaction } from '../src/db/repos/transactions.js'
-import { insertRow } from './helpers/commerce.js'
+  Certificate,
+  Enrollment,
+  Transaction,
+  Workshop,
+  WorkshopRegistration,
+} from '../src/models/index.js'
 import { agent, paidCourse, signUp, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -35,20 +34,20 @@ describe('student dashboard panels', () => {
 
   it('lists a registered future workshop as a deadline, and ignores past ones', async () => {
     const { cookie, user } = await signUp({ email: 'learner@example.in' })
-    const soon = await insertRow(workshops, {
+    const soon = await Workshop.create({
       title: 'SEO Live Workshop',
       slug: 'seo-live',
       startsAt: new Date(Date.now() + 3 * day),
       mode: 'online',
     })
-    const past = await insertRow(workshops, {
+    const past = await Workshop.create({
       title: 'Old Workshop',
       slug: 'old-workshop',
       startsAt: new Date(Date.now() - 3 * day),
       mode: 'online',
     })
-    await insertRow(workshopRegistrations, { workshopId: soon.id, userId: user.id })
-    await insertRow(workshopRegistrations, { workshopId: past.id, userId: user.id })
+    await WorkshopRegistration.create({ workshopId: soon._id, userId: user._id })
+    await WorkshopRegistration.create({ workshopId: past._id, userId: user._id })
 
     const res = await agent().get('/api/me/dashboard').set('Cookie', cookie).expect(200)
     expect(res.body.deadlines).toHaveLength(1)
@@ -57,14 +56,14 @@ describe('student dashboard panels', () => {
 
   it('builds recent activity from certificates, newest first', async () => {
     const { cookie, user } = await signUp({ email: 'grad@example.in' })
-    await insertRow(certificates, {
-      userId: user.id,
+    await Certificate.create({
+      userId: user._id,
       courseTitle: 'Copywriting Sprint',
       credentialId: 'GS-1',
       issuedAt: new Date(Date.now() - 2 * day),
     })
-    await insertRow(certificates, {
-      userId: user.id,
+    await Certificate.create({
+      userId: user._id,
       courseTitle: 'SEO Mastery',
       credentialId: 'GS-2',
       issuedAt: new Date(),
@@ -81,7 +80,7 @@ describe('student dashboard panels', () => {
     const enrolled = await paidCourse({ slug: 'seo-one', title: 'SEO One', topic: 'SEO' })
     const other = await paidCourse({ slug: 'seo-two', title: 'SEO Two', topic: 'SEO' })
     await paidCourse({ slug: 'ppc-one', title: 'PPC One', topic: 'PPC' })
-    await insertRow(enrollments, { userId: user.id, courseId: enrolled.id, progressPct: 40 })
+    await Enrollment.create({ userId: user._id, courseId: enrolled._id, progressPct: 40 })
 
     const res = await agent().get('/api/me/dashboard').set('Cookie', cookie).expect(200)
     const slugs = res.body.recommended.map((c) => c.slug)
@@ -93,7 +92,7 @@ describe('student dashboard panels', () => {
 
 describe('admin dashboard panels', () => {
   const sale = (over = {}) =>
-    insertTransaction({ product: 'SEO Mastery', amount: 1000, status: 'SUCCESS', ...over })
+    Transaction.create({ product: 'SEO Mastery', amount: 1000, status: 'SUCCESS', ...over })
 
   it('splits sales by billing cycle', async () => {
     await sale({ amount: 2000, cycle: 'ONETIME' })

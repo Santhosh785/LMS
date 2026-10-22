@@ -1,6 +1,4 @@
-import { and, eq, gt, sql } from 'drizzle-orm'
-import { db, withMongoId } from '../db/index.js'
-import { courses, enrollments } from '../db/schema/index.js'
+import { Course, Enrollment } from '../models/index.js'
 
 /**
  * Course access, in one place.
@@ -51,80 +49,62 @@ const laterExpiry = (a, b) => {
  * Returns `{ enrollment, created }` so callers can decide whether to send a
  * welcome email without re-querying.
  */
-export async function grantAccess(
-  userId,
-  courseId,
-  { expiresAt = null, source = 'manual' } = {},
-  { tx = db } = {},
-) {
+export async function grantAccess(userId, courseId, { expiresAt = null, source = 'manual' } = {}) {
   if (!ACCESS_SOURCES.includes(source)) {
     throw new Error(`grantAccess: unknown source "${source}"`)
   }
 
   const now = new Date()
 
-  // The insert is the concurrency guard: two simultaneous grants race on the
-  // unique (user_id, course_id) constraint and exactly one gets a row back.
-  const [inserted] = await tx
-    .insert(enrollments)
-    .values({
-      userId,
-      courseId,
-      status: 'Not started',
-      enrolledAt: now,
-      lastAccessedAt: now,
-      expiresAt,
-      source,
-    })
-    .onConflictDoNothing({ target: [enrollments.userId, enrollments.courseId] })
-    .returning()
+  // The upsert is the concurrency guard: two simultaneous grants race on the
+  // unique { userId, courseId } index and exactly one of them reports an insert.
+  const result = await Enrollment.updateOne(
+    { userId, courseId },
+    {
+      $setOnInsert: {
+        userId,
+        courseId,
+        status: 'Not started',
+        enrolledAt: now,
+        lastAccessedAt: now,
+        expiresAt,
+        source,
+      },
+    },
+    { upsert: true },
+  )
 
-  if (inserted) {
+  const created = result.upsertedCount > 0
+
+  if (created) {
     // Only the caller that actually inserted touches the counter.
-    await tx
-      .update(courses)
-      .set({ enrolledCount: sql`${courses.enrolledCount} + 1` })
-      .where(eq(courses.id, courseId))
-    return { enrollment: withMongoId(inserted), created: true }
+    await Course.updateOne({ _id: courseId }, { $inc: { enrolledCount: 1 } })
+    return { enrollment: await Enrollment.findOne({ userId, courseId }), created }
   }
 
   // Already enrolled: extend the window if this grant is worth more, and record
   // the most recent reason access was given.
-  const [existing] = await tx
-    .select()
-    .from(enrollments)
-    .where(and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId)))
+  const existing = await Enrollment.findOne({ userId, courseId })
   const merged = laterExpiry(existing.expiresAt ?? null, expiresAt)
-  const sameExpiry =
-    (merged === null && existing.expiresAt === null) ||
-    (merged !== null &&
-      existing.expiresAt !== null &&
-      new Date(merged).getTime() === new Date(existing.expiresAt).getTime())
-  if (!sameExpiry || existing.source !== source) {
-    const [updated] = await tx
-      .update(enrollments)
-      .set({ expiresAt: merged, source })
-      .where(eq(enrollments.id, existing.id))
-      .returning()
-    return { enrollment: withMongoId(updated), created: false }
+  if ((merged ?? null) !== (existing.expiresAt ?? null) || existing.source !== source) {
+    existing.expiresAt = merged
+    existing.source = source
+    await existing.save()
   }
-  return { enrollment: withMongoId(existing), created: false }
+  return { enrollment: existing, created: false }
 }
 
 /**
  * Revoke — used by the refund path in task 16. Removing the row rather than
  * flagging it keeps `GET /api/enrollments/course/:slug` a single lookup.
  */
-export async function revokeAccess(userId, courseId, { tx = db } = {}) {
-  const [removed] = await tx
-    .delete(enrollments)
-    .where(and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId)))
-    .returning({ id: enrollments.id })
+export async function revokeAccess(userId, courseId) {
+  const removed = await Enrollment.findOneAndDelete({ userId, courseId })
   if (removed) {
-    await tx
-      .update(courses)
-      .set({ enrolledCount: sql`${courses.enrolledCount} - 1` })
-      .where(and(eq(courses.id, courseId), gt(courses.enrolledCount, 0)))
+    await Course.updateOne(
+      { _id: courseId, enrolledCount: { $gt: 0 } },
+      { $inc: { enrolledCount: -1 } },
+    )
   }
   return Boolean(removed)
 }

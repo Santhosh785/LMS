@@ -1,10 +1,6 @@
 import crypto from 'node:crypto'
-import { and, eq, gt } from 'drizzle-orm'
 import { env } from '../config/env.js'
-import { db } from '../db/index.js'
-import { users } from '../db/schema/index.js'
-import { profile } from '../db/repos/users.js'
-import { supabaseAdmin } from './supabaseAdmin.js'
+import { User } from '../models/index.js'
 import { send } from '../mail/index.js'
 
 /**
@@ -20,11 +16,6 @@ import { send } from '../mail/index.js'
  * working link. SHA-256 rather than bcrypt is correct here — the input is
  * already 256 bits of entropy, so there is no dictionary to slow down, and the
  * hash is computed on every reset request.
- *
- * These are our tokens, not Supabase recovery links: a Supabase link is spent by
- * the first verify (which the reset page's "is this link still good?" check
- * would be), and the project has one OTP expiry where this needs two. Supabase
- * still owns the credential — the new password is set through its admin API.
  */
 
 /** Self-service reset. Short, because the person is at their keyboard now. */
@@ -55,51 +46,49 @@ export const resetUrlFor = (token) =>
 export async function issuePasswordToken(userId, { ttlMs = RESET_TTL_MS } = {}) {
   const token = crypto.randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + ttlMs)
-  await db
-    .update(users)
-    .set({ passwordResetTokenHash: hashToken(token), passwordResetExpiresAt: expiresAt })
-    .where(eq(users.id, userId))
+  await User.updateOne(
+    { _id: userId },
+    { $set: { passwordResetTokenHash: hashToken(token), passwordResetExpiresAt: expiresAt } },
+  )
   return { token, expiresAt, url: resetUrlFor(token), expiresInLabel: durationLabel(ttlMs) }
 }
 
 /** Resolves a raw token to its user, or null when unknown, expired or spent. */
 export async function findUserByToken(token) {
   if (!token || typeof token !== 'string') return null
-  const [row] = await db
-    .select()
-    .from(users)
-    .where(
-      and(
-        eq(users.passwordResetTokenHash, hashToken(token)),
-        gt(users.passwordResetExpiresAt, new Date()),
-      ),
-    )
-  return profile(row)
+  return User.findOne({
+    passwordResetTokenHash: hashToken(token),
+    passwordResetExpiresAt: { $gt: new Date() },
+  })
 }
 
 /**
  * Sets a new password and closes everything the old one opened: the token is
  * consumed, any other outstanding token dies with it, and `passwordChangedAt`
- * moves forward. `attachUser` compares that against the time each session
- * *signed in* (not when its current access token was minted), so a session an
- * attacker already holds is refused immediately — and stays refused even after
- * it uses its refresh token, because a refresh keeps the original sign-in time.
+ * moves forward — which `attachUser` reads to reject JWTs issued earlier, so a
+ * session an attacker already holds stops working.
  */
 export async function setPassword(user, plainPassword) {
-  const id = user.id || user._id
-  const { error } = await supabaseAdmin().auth.admin.updateUserById(id, {
-    password: plainPassword,
-  })
-  if (error) throw new Error(`Supabase password update failed: ${error.message}`)
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        passwordHash: await User.hashPassword(plainPassword),
+        passwordChangedAt: new Date(),
+      },
+      $unset: { passwordResetTokenHash: 1, passwordResetExpiresAt: 1 },
+    },
+  )
+}
 
-  await db
-    .update(users)
-    .set({
-      passwordChangedAt: new Date(),
-      passwordResetTokenHash: null,
-      passwordResetExpiresAt: null,
-    })
-    .where(eq(users.id, id))
+/**
+ * The password column cannot be empty — `passwordHash` is required — so an
+ * account created on someone's behalf gets a hash of 32 random bytes that are
+ * then discarded. Nobody, including us, knows a plaintext that matches it. The
+ * set-password email is the only way in.
+ */
+export async function unusablePasswordHash() {
+  return User.hashPassword(crypto.randomBytes(32).toString('hex'))
 }
 
 /**
@@ -110,7 +99,7 @@ export async function setPassword(user, plainPassword) {
  * auth.routes.js about account enumeration.
  */
 export async function sendPasswordEmail(user, { isNewAccount = false } = {}) {
-  const { url, expiresInLabel } = await issuePasswordToken(user.id || user._id, {
+  const { url, expiresInLabel } = await issuePasswordToken(user._id, {
     ttlMs: isNewAccount ? INVITE_TTL_MS : RESET_TTL_MS,
   })
   // With Resend unconfigured this logs the whole message, link included, so a

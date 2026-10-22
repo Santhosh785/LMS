@@ -3,16 +3,7 @@ import multer from 'multer'
 import { crudRouter } from '../../utils/crudRouter.js'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
 import { parseCsv } from '../../utils/csv.js'
-import { and, eq, inArray, sql } from 'drizzle-orm'
-import { db, withMongoId } from '../../db/index.js'
-import { isUuid } from '../../db/coerce.js'
-import { broadcasts, emailContactLists, emailContacts, emailLists } from '../../db/schema/index.js'
-import {
-  contactDocs,
-  createContact,
-  refreshListCounts,
-  updateContact,
-} from '../../db/repos/email.js'
+import { EmailList, EmailContact, Broadcast } from '../../models/index.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
@@ -28,55 +19,35 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 router.post(
   '/broadcasts/:id/send',
   asyncHandler(async (req, res) => {
-    const [broadcast] = isUuid(req.params.id)
-      ? await db.select().from(broadcasts).where(eq(broadcasts.id, req.params.id))
-      : []
+    const broadcast = await Broadcast.findById(req.params.id)
     if (!broadcast) throw new HttpError(404, 'Broadcast not found')
     if (broadcast.status === 'sent') throw new HttpError(409, 'Broadcast already sent')
 
     // No mail transport is wired up; sending records the send and its audience size.
-    const subscribed = eq(emailContacts.status, 'Subscribed')
-    const [{ recipients }] = broadcast.sendToListId
-      ? await db
-          .select({ recipients: sql`count(distinct ${emailContacts.id})::int` })
-          .from(emailContacts)
-          .innerJoin(emailContactLists, eq(emailContactLists.contactId, emailContacts.id))
-          .where(and(subscribed, eq(emailContactLists.listId, broadcast.sendToListId)))
-      : await db
-          .select({ recipients: sql`count(*)::int` })
-          .from(emailContacts)
-          .where(subscribed)
+    const recipients = await EmailContact.countDocuments({
+      status: 'Subscribed',
+      ...(broadcast.sendToListId ? { listIds: broadcast.sendToListId } : {}),
+    })
 
-    // Conditional on not-yet-sent, so a double-click cannot "send" twice.
-    const [sent] = await db
-      .update(broadcasts)
-      .set({
-        status: 'sent',
-        sentAt: new Date(),
-        stats: { delivered: recipients, opened: 0, clicked: 0 },
-      })
-      .where(and(eq(broadcasts.id, broadcast.id), sql`${broadcasts.status} <> 'sent'`))
-      .returning()
-    if (!sent) throw new HttpError(409, 'Broadcast already sent')
+    broadcast.status = 'sent'
+    broadcast.sentAt = new Date()
+    broadcast.stats = { delivered: recipients, opened: 0, clicked: 0 }
+    await broadcast.save()
 
-    res.json(withMongoId(sent))
+    res.json(broadcast)
   }),
 )
 
 router.use(
   '/broadcasts',
-  crudRouter(broadcasts, {
-    name: 'Broadcast',
+  crudRouter(Broadcast, {
     searchFields: ['subject', 'fromName', 'sendToListName'],
     sort: { createdAt: -1 },
   }),
 )
 
 /* --------------------------------- lists --------------------------------- */
-router.use(
-  '/lists',
-  crudRouter(emailLists, { name: 'List', searchFields: ['name'], sort: { updatedAt: -1 } }),
-)
+router.use('/lists', crudRouter(EmailList, { searchFields: ['name'], sort: { updatedAt: -1 } }))
 
 /* -------------------------------- contacts ------------------------------- */
 router.post(
@@ -87,17 +58,16 @@ router.post(
     const rows = parseCsv(req.file.buffer)
     if (!rows.length) throw new HttpError(400, 'The CSV had no rows')
 
-    const listIds = isUuid(req.body.listId) ? [req.body.listId] : []
+    const listIds = req.body.listId ? [req.body.listId] : []
 
     /**
      * Three queries regardless of row count.
      *
-     * This loop once ran a lookup per row and then a save or create — a
-     * thousand-row import was ~2,000 sequential round trips, minutes of a held
-     * HTTP request. Now: one IN to fetch what already exists, one multi-row
-     * INSERT for the new contacts, set-based writes for the rest, one count
-     * refresh — all in a transaction, so a failed import leaves nothing half
-     * applied.
+     * This loop used to run `EmailContact.findOne({ email })` per row and then a
+     * save or create — a thousand-row import was ~2,000 sequential round trips,
+     * which on Atlas is minutes of a held HTTP request. Now: one `$in` to fetch
+     * what already exists, one `bulkWrite` to apply everything, one count
+     * refresh.
      */
 
     // Deduplicate within the file itself. The same address twice in one CSV
@@ -125,50 +95,42 @@ router.post(
     })
 
     const emails = [...seen.keys()]
-    const { created, updated } = await db.transaction(async (tx) => {
-      const existing = emails.length
-        ? await tx
-            .select({ id: emailContacts.id, email: emailContacts.email })
-            .from(emailContacts)
-            .where(inArray(emailContacts.email, emails))
-        : []
-      const existingByEmail = new Map(existing.map((c) => [c.email, c]))
+    const existing = emails.length
+      ? await EmailContact.find({ email: { $in: emails } })
+          .select('email listIds')
+          .lean()
+      : []
+    const existingByEmail = new Map(existing.map((c) => [c.email, c]))
 
-      const fresh = [...seen.values()].filter(({ email }) => !existingByEmail.has(email))
-      const inserted = fresh.length
-        ? await tx
-            .insert(emailContacts)
-            .values(fresh.map(({ email, name }) => ({ email, name, joinedAt: new Date() })))
-            .returning({ id: emailContacts.id })
-        : []
-
-      // Names are only overwritten when the file supplies one.
-      for (const { email, name } of seen.values()) {
-        const prev = existingByEmail.get(email)
-        if (prev && name) {
-          await tx.update(emailContacts).set({ name }).where(eq(emailContacts.id, prev.id))
+    const ops = [...seen.values()].map(({ email, name }) => {
+      const prev = existingByEmail.get(email)
+      if (!prev) {
+        return {
+          insertOne: { document: { email, name, listIds, joinedAt: new Date() } },
         }
       }
-
-      // Membership is added, never replaced: re-importing into a second list
-      // keeps the first. ON CONFLICT makes an existing membership a no-op.
-      const memberIds = [...inserted.map((r) => r.id), ...existing.map((c) => c.id)]
-      if (listIds.length && memberIds.length) {
-        await tx
-          .insert(emailContactLists)
-          .values(
-            memberIds.flatMap((contactId) => listIds.map((listId) => ({ contactId, listId }))),
-          )
-          .onConflictDoNothing()
+      return {
+        updateOne: {
+          filter: { _id: prev._id },
+          update: {
+            // $addToSet, so re-importing into a second list adds to the
+            // membership instead of replacing it.
+            ...(listIds.length ? { $addToSet: { listIds: { $each: listIds } } } : {}),
+            ...(name ? { $set: { name } } : {}),
+          },
+        },
       }
-
-      await refreshListCounts({ tx })
-      return { created: inserted.length, updated: existing.length }
     })
 
+    // `ordered: false` so one bad row does not abandon the rest of the file.
+    if (ops.length) await EmailContact.bulkWrite(ops, { ordered: false })
+
+    await refreshListCounts()
+
+    const created = ops.filter((o) => o.insertOne).length
     res.status(201).json({
       created,
-      updated,
+      updated: ops.length - created,
       total: rows.length,
       skipped: rejected.length,
       // Capped: a thousand-row file of nonsense should not return a
@@ -180,14 +142,40 @@ router.post(
 
 router.use(
   '/contacts',
-  crudRouter(emailContacts, {
-    name: 'Contact',
+  crudRouter(EmailContact, {
     searchFields: ['name', 'email'],
     sort: { joinedAt: -1 },
+    populate: 'listIds',
     dateField: 'joinedAt',
-    hydrate: contactDocs,
-    repo: { create: createContact, update: updateContact },
   }),
 )
+
+/**
+ * Recomputes every list's contact count.
+ *
+ * Two queries regardless of how many lists exist. This used to run one
+ * `countDocuments` and one `save` per list — the same N+1 shape as the CSV
+ * import it is called from, so a large import paid for it twice.
+ */
+async function refreshListCounts() {
+  const [lists, counts] = await Promise.all([
+    EmailList.find().select('_id contactCount').lean(),
+    EmailContact.aggregate([
+      { $unwind: '$listIds' },
+      { $group: { _id: '$listIds', n: { $sum: 1 } } },
+    ]),
+  ])
+
+  const byList = new Map(counts.map((c) => [String(c._id), c.n]))
+  const ops = lists
+    .map((list) => ({ list, n: byList.get(String(list._id)) || 0 }))
+    // Only write what actually changed.
+    .filter(({ list, n }) => list.contactCount !== n)
+    .map(({ list, n }) => ({
+      updateOne: { filter: { _id: list._id }, update: { $set: { contactCount: n } } },
+    }))
+
+  if (ops.length) await EmailList.bulkWrite(ops, { ordered: false })
+}
 
 export default router

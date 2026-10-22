@@ -1,6 +1,4 @@
-import { inArray, ne, or } from 'drizzle-orm'
-import { db } from '../db/index.js'
-import { courses } from '../db/schema/index.js'
+import { Course } from '../models/index.js'
 import { isProduction, log } from './guard.js'
 
 /**
@@ -24,31 +22,26 @@ export async function seedSample() {
     )
   }
 
-  const drafts = await db
-    .select({ id: courses.id, slug: courses.slug, title: courses.title })
-    .from(courses)
-    .where(or(ne(courses.status, 'Published'), ne(courses.visibility, 'Public')))
+  const drafts = await Course.find({
+    $or: [{ status: { $ne: 'Published' } }, { visibility: { $ne: 'Public' } }],
+  })
+    .select('slug title')
+    .lean()
 
   if (drafts.length === 0) {
     log('sample: every course is already published — nothing to do')
     return { published: 0 }
   }
 
-  const published = await db
-    .update(courses)
-    .set({ status: 'Published', visibility: 'Public' })
-    .where(
-      inArray(
-        courses.id,
-        drafts.map((c) => c.id),
-      ),
-    )
-    .returning({ id: courses.id })
+  const res = await Course.updateMany(
+    { _id: { $in: drafts.map((c) => c._id) } },
+    { $set: { status: 'Published', visibility: 'Public' } },
+  )
 
-  log(`sample: published ${published.length} course(s) for preview`)
+  log(`sample: published ${res.modifiedCount} course(s) for preview`)
   for (const c of drafts.slice(0, 5)) log(`  • ${c.slug}`)
   if (drafts.length > 5) log(`  • …and ${drafts.length - 5} more`)
   log('sample: these courses have no video attached — preview only, not sellable')
 
-  return { published: published.length }
+  return { published: res.modifiedCount }
 }

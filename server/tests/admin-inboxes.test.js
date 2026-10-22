@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
-import { db, withMongoId } from '../src/db/index.js'
-import { enrollments, leads, workshopRegistrations, workshops } from '../src/db/schema/index.js'
-import { createAccount, findUserById } from '../src/db/repos/users.js'
+import { Enrollment, Lead, User, Workshop, WorkshopRegistration } from '../src/models/index.js'
 import { agent, PASSWORD, paidCourse, signUp, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -16,27 +13,6 @@ import { agent, PASSWORD, paidCourse, signUp, signUpAdmin } from './helpers/fact
  * operator must not be able to lock everyone out of the admin panel, and a
  * suspension has to bite on the next request rather than the next sign-in.
  */
-
-const findLead = async (id) => (await db.select().from(leads).where(eq(leads.id, id)))[0]
-const findWorkshop = async (id) =>
-  (await db.select().from(workshops).where(eq(workshops.id, id)))[0]
-const createWorkshop = async (values) =>
-  withMongoId((await db.insert(workshops).values(values).returning())[0])
-/** Registrations as the old documents took them: `guest: {}` or a userId. */
-const createRegistration = async ({ guest, ...values }) =>
-  withMongoId(
-    (
-      await db
-        .insert(workshopRegistrations)
-        .values({
-          ...values,
-          ...(guest
-            ? { guestName: guest.name, guestEmail: guest.email, guestPhone: guest.phone }
-            : {}),
-        })
-        .returning()
-    )[0],
-  )
 
 async function adminAgent() {
   const { cookie, user } = await signUpAdmin()
@@ -66,12 +42,12 @@ describe('leads inbox', () => {
     const { _id } = (await as('get', '/api/admin/leads')).body.items[0]
 
     await as('put', `/api/admin/leads/${_id}`).send({ status: 'Converted' }).expect(200)
-    const first = await findLead(_id)
+    const first = await Lead.findById(_id)
     expect(first.convertedAt).toBeTruthy()
 
     // Re-saving must not push the conversion date forward.
     await as('put', `/api/admin/leads/${_id}`).send({ status: 'Converted' }).expect(200)
-    expect((await findLead(_id)).convertedAt.getTime()).toBe(first.convertedAt.getTime())
+    expect((await Lead.findById(_id)).convertedAt.getTime()).toBe(first.convertedAt.getTime())
   })
 
   it('rejects an unknown status and an owner who does not exist', async () => {
@@ -106,14 +82,14 @@ describe('leads inbox', () => {
 
 describe('workshop registrations', () => {
   const makeWorkshop = () =>
-    createWorkshop({ title: 'SEO Live', slug: 'seo-live', capacity: 2, registeredCount: 1 })
+    Workshop.create({ title: 'SEO Live', slug: 'seo-live', capacity: 2, registeredCount: 1 })
 
   it('lists registrants, flattening accounts and guests alike', async () => {
     const workshop = await makeWorkshop()
     const { user } = await signUp({ name: 'Priya S' })
-    await createRegistration({ workshopId: workshop.id, userId: user.id })
-    await createRegistration({
-      workshopId: workshop.id,
+    await WorkshopRegistration.create({ workshopId: workshop._id, userId: user._id })
+    await WorkshopRegistration.create({
+      workshopId: workshop._id,
       guest: { name: 'Walk-in', email: 'walkin@example.in', phone: '900000000' },
     })
 
@@ -130,8 +106,8 @@ describe('workshop registrations', () => {
 
   it('marks attendance', async () => {
     const workshop = await makeWorkshop()
-    const reg = await createRegistration({
-      workshopId: workshop.id,
+    const reg = await WorkshopRegistration.create({
+      workshopId: workshop._id,
       guest: { email: 'a@example.in' },
     })
     const { as } = await adminAgent()
@@ -139,41 +115,37 @@ describe('workshop registrations', () => {
     await as('put', `/api/admin/workshops/registrations/${reg._id}`)
       .send({ attended: true })
       .expect(200)
-    const [saved] = await db
-      .select()
-      .from(workshopRegistrations)
-      .where(eq(workshopRegistrations.id, reg.id))
-    expect(saved.attended).toBe(true)
+    expect((await WorkshopRegistration.findById(reg._id)).attended).toBe(true)
   })
 
   it('frees the seat when a registration is removed', async () => {
     const workshop = await makeWorkshop()
-    const reg = await createRegistration({
-      workshopId: workshop.id,
+    const reg = await WorkshopRegistration.create({
+      workshopId: workshop._id,
       guest: { email: 'a@example.in' },
     })
     const { as } = await adminAgent()
 
     await as('delete', `/api/admin/workshops/registrations/${reg._id}`).expect(200)
-    expect((await findWorkshop(workshop.id)).registeredCount).toBe(0)
+    expect((await Workshop.findById(workshop._id)).registeredCount).toBe(0)
   })
 
   it('never drives the seat count below zero', async () => {
-    const workshop = await createWorkshop({ title: 'W', slug: 'w', registeredCount: 0 })
-    const reg = await createRegistration({
-      workshopId: workshop.id,
+    const workshop = await Workshop.create({ title: 'W', slug: 'w', registeredCount: 0 })
+    const reg = await WorkshopRegistration.create({
+      workshopId: workshop._id,
       guest: { email: 'a@example.in' },
     })
     const { as } = await adminAgent()
 
     await as('delete', `/api/admin/workshops/registrations/${reg._id}`).expect(200)
-    expect((await findWorkshop(workshop.id)).registeredCount).toBe(0)
+    expect((await Workshop.findById(workshop._id)).registeredCount).toBe(0)
   })
 
   it('summarises registered, attended and seats left per workshop', async () => {
     const workshop = await makeWorkshop()
-    await createRegistration({
-      workshopId: workshop.id,
+    await WorkshopRegistration.create({
+      workshopId: workshop._id,
       guest: { email: 'a@example.in' },
       attended: true,
     })
@@ -200,14 +172,15 @@ describe('user management', () => {
 
     await as('put', `/api/admin/users/${user._id}`).send({ role: 'student' }).expect(403)
     await as('post', `/api/admin/users/${user._id}/suspend`).expect(403)
-    expect((await findUserById(user.id)).role).toBe('admin')
+    expect((await User.findById(user._id)).role).toBe('admin')
   })
 
   it('refuses to strand the system with no admin even via a second account', async () => {
     const { as, user: me } = await adminAgent()
-    const other = await createAccount({
+    const other = await User.create({
       name: 'Second Admin',
       email: 'second@example.in',
+      passwordHash: 'x',
       role: 'admin',
     })
     // Suspending the other admin is fine while `me` is still active…
@@ -228,14 +201,14 @@ describe('user management', () => {
   it('will not delete an account with enrolments unless forced', async () => {
     const course = await paidCourse()
     const { user } = await signUp({ name: 'Priya S' })
-    await db.insert(enrollments).values({ userId: user.id, courseId: course.id })
+    await Enrollment.create({ userId: user._id, courseId: course._id })
     const { as } = await adminAgent()
 
     await as('delete', `/api/admin/users/${user._id}`).expect(409)
-    expect(await findUserById(user.id)).not.toBeNull()
+    expect(await User.findById(user._id)).not.toBeNull()
 
     await as('delete', `/api/admin/users/${user._id}?force=true`).expect(200)
-    expect(await findUserById(user.id)).toBeNull()
+    expect(await User.findById(user._id)).toBeNull()
   })
 })
 

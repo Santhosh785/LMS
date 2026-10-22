@@ -1,9 +1,7 @@
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/error.js'
-import { and, arrayContains, asc, desc, eq } from 'drizzle-orm'
-import { db } from '../db/index.js'
-import { courses as coursesTable, programs as programsTable, terms } from '../db/schema/index.js'
-import { pickColumns } from '../db/repos/content.js'
+import Term, { VISIBLE_TERM } from '../models/Term.js'
+import { Course, Program } from '../models/index.js'
 
 const router = Router()
 
@@ -30,38 +28,20 @@ const MAX_PER_RAIL = 6
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
-    const rails = await db
-      .select(pickColumns(terms, 'name slug linkTo description'))
-      .from(terms)
-      .where(
-        and(
-          eq(terms.status, 'Published'),
-          eq(terms.visibility, 'Public'),
-          eq(terms.showAsRail, true),
-        ),
-      )
-      .orderBy(asc(terms.order), asc(terms.name))
+    const rails = await Term.find({ ...VISIBLE_TERM, showAsRail: true })
+      .sort({ order: 1, name: 1 })
+      .select('name slug linkTo description')
+      .lean()
 
     const items = await Promise.all(
       rails.map(async (rail) => {
         const [courses, programs] = await Promise.all([
-          db
-            .select(pickColumns(coursesTable, COURSE_FIELDS))
-            .from(coursesTable)
-            .where(
-              and(
-                arrayContains(coursesTable.tags, [rail.name]),
-                eq(coursesTable.status, 'Published'),
-                eq(coursesTable.visibility, 'Public'),
-              ),
-            )
-            .orderBy(desc(coursesTable.popularity))
-            .limit(MAX_PER_RAIL),
-          db
-            .select(pickColumns(programsTable, PROGRAM_FIELDS))
-            .from(programsTable)
-            .where(arrayContains(programsTable.tags, [rail.name]))
-            .limit(MAX_PER_RAIL),
+          Course.find({ tags: rail.name, status: 'Published', visibility: 'Public' })
+            .select(COURSE_FIELDS)
+            .sort({ popularity: -1 })
+            .limit(MAX_PER_RAIL)
+            .lean(),
+          Program.find({ tags: rail.name }).select(PROGRAM_FIELDS).limit(MAX_PER_RAIL).lean(),
         ])
 
         return {

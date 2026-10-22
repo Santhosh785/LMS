@@ -21,36 +21,28 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.js\" \"tests/**/*.js\" \"*.js\"",
     "format:check": "prettier --check \"src/**/*.js\" \"tests/**/*.js\" \"*.js\"",
-    "seed:sample": "node src/seed/seed.js sample",
-    "etl": "node scripts/migrate-mongo-to-pg.js",
-    "db:generate": "drizzle-kit generate",
-    "db:lock": "node scripts/with-db-lock.js"
+    "seed:sample": "node src/seed/seed.js sample"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",
-    "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.45.4",
     "express": "^4.21.2",
     "express-rate-limit": "^8.6.2",
     "express-validator": "^7.2.1",
     "helmet": "^8.3.0",
-    "jose": "^6.2.13",
     "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "razorpay": "^2.9.8",
     "resend": "^6.18.1",
     "sharp": "^0.35.4"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.11",
-    "mongodb": "^7.7.0",
     "supertest": "^7.2.2",
     "vitest": "^4.1.10"
   }

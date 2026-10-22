@@ -3,12 +3,7 @@ import { body } from 'express-validator'
 import { validate } from '../middleware/validate.js'
 import { checkoutLimiter } from '../middleware/rateLimit.js'
 import { asyncHandler, HttpError } from '../middleware/error.js'
-import { and, eq, inArray } from 'drizzle-orm'
-import { db } from '../db/index.js'
-import { transactions } from '../db/schema/index.js'
-import { findCourseBySlug } from '../db/repos/courses.js'
-import { upsertCustomerByEmail } from '../db/repos/customers.js'
-import { insertTransaction, txnDoc } from '../db/repos/transactions.js'
+import { Course, Customer, Transaction } from '../models/index.js'
 import { send } from '../mail/index.js'
 import {
   isUpiConfigured,
@@ -46,7 +41,7 @@ const VERIFICATION_WINDOW = 'within 24 hours'
 router.get(
   '/:slug',
   asyncHandler(async (req, res) => {
-    const course = await findCourseBySlug(req.params.slug)
+    const course = await Course.findOne({ slug: req.params.slug }).lean()
     if (!course) throw new HttpError(404, 'Course not found')
     // Nothing that is not publicly on sale can be bought — task 13 drafts any
     // course whose lessons have no video, and taking money for one of those is
@@ -141,7 +136,7 @@ router.post(
     }
 
     const { slug, name, email, phone, plan: planName } = req.body
-    const course = await findCourseBySlug(slug)
+    const course = await Course.findOne({ slug }).lean()
     if (!course) throw new HttpError(404, 'Course not found')
     if (course.status !== 'Published' || course.visibility !== 'Public') {
       throw new HttpError(404, 'Course not found')
@@ -160,7 +155,14 @@ router.post(
       throw new HttpError(409, 'This course has no price set yet', { code: 'NO_PRICE' })
     }
 
-    const customer = await upsertCustomerByEmail(email, { name, product: course.title })
+    const customer = await Customer.findOneAndUpdate(
+      { email },
+      {
+        $set: { name, product: course.title },
+        $setOnInsert: { joinedAt: new Date(), status: 'Trial' },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    )
 
     const order = await razorpay().orders.create({
       amount: toPaise(plan.amount),
@@ -170,7 +172,7 @@ router.post(
       notes: { slug: course.slug, plan: plan.name || '', email },
     })
 
-    const transaction = await insertTransaction({
+    const transaction = await Transaction.create({
       date: new Date(),
       customerId: customer._id,
       customerName: name,
@@ -225,10 +227,7 @@ router.post(
 
     // Report what the webhook has already done, if it has arrived — it usually
     // beats the redirect, but not always, and either answer is honest.
-    const [row] = orderId
-      ? await db.select().from(transactions).where(eq(transactions.razorpayOrderId, orderId))
-      : []
-    const txn = txnDoc(row)
+    const txn = await Transaction.findOne({ razorpayOrderId: orderId }).lean()
     res.json({
       ok: true,
       status: txn?.status || 'PENDING',
@@ -260,7 +259,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const { slug, name, email, phone, utr, plan: planName } = req.body
 
-    const course = await findCourseBySlug(slug)
+    const course = await Course.findOne({ slug }).lean()
     if (!course) throw new HttpError(404, 'Course not found')
     // Nothing that is not publicly on sale can be bought — task 13 drafts any
     // course whose lessons have no video, and taking money for one of those is
@@ -282,24 +281,27 @@ router.post(
     }
 
     // Checked explicitly so the buyer gets a field-level message rather than the
-    // generic duplicate-key envelope. The partial unique index on transactions
-    // is still the real guard — this check races, that one does not.
-    const [clash] = await db
-      .select({ id: transactions.id })
-      .from(transactions)
-      .where(and(eq(transactions.utr, utr), inArray(transactions.status, ['PENDING', 'SUCCESS'])))
-      .limit(1)
+    // generic duplicate-key envelope. The partial unique index on Transaction is
+    // still the real guard — this check races, that one does not.
+    const clash = await Transaction.exists({ utr, status: { $in: ['PENDING', 'SUCCESS'] } })
     if (clash) {
       throw new HttpError(409, 'Validation failed', {
         utr: 'That reference has already been submitted. Check the number, or write to support if you paid twice.',
       })
     }
 
-    const customer = await upsertCustomerByEmail(email, { name, product: course.title })
+    const customer = await Customer.findOneAndUpdate(
+      { email },
+      {
+        $set: { name, product: course.title },
+        $setOnInsert: { joinedAt: new Date(), status: 'Trial' },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    )
 
     let transaction
     try {
-      transaction = await insertTransaction({
+      transaction = await Transaction.create({
         date: new Date(),
         customerId: customer._id,
         customerName: name,
@@ -319,7 +321,7 @@ router.post(
       })
     } catch (err) {
       // The index caught a duplicate the check above raced past.
-      if (err?.code === '23505' || err?.cause?.code === '23505') {
+      if (err?.code === 11000) {
         throw new HttpError(409, 'Validation failed', {
           utr: 'That reference has already been submitted.',
         })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { blogPosts, courses, programs, terms } from '../src/db/schema/index.js'
-import { findRowById, insertRow } from './helpers/content.js'
+import { BlogPost, Course, Program } from '../src/models/index.js'
+import Term from '../src/models/Term.js'
 import { agent, paidCourse, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -13,7 +13,7 @@ import { agent, paidCourse, signUpAdmin } from './helpers/factories.js'
  */
 
 const makeTerm = (over = {}) =>
-  insertRow(terms, { taxonomy: 'topic', name: 'SEO', slug: 'seo', ...over })
+  Term.create({ taxonomy: 'topic', name: 'SEO', slug: 'seo', ...over })
 
 async function adminAgent() {
   const { cookie } = await signUpAdmin()
@@ -56,7 +56,7 @@ describe('term registry', () => {
       .expect(200)
 
     expect(res.body.reassigned).toBe(1)
-    expect((await findRowById(courses, course._id)).topic).toBe('Search Marketing')
+    expect((await Course.findById(course._id)).topic).toBe('Search Marketing')
   })
 
   it('keeps the old slug resolving after a slug change', async () => {
@@ -65,7 +65,7 @@ describe('term registry', () => {
 
     await as('put', `/api/admin/taxonomy/${term._id}`).send({ slug: 'search' }).expect(200)
 
-    const stored = await findRowById(terms, term._id)
+    const stored = await Term.findById(term._id)
     expect(stored.slug).toBe('search')
     expect(stored.formerSlugs).toContain('seo')
   })
@@ -81,9 +81,9 @@ describe('term registry', () => {
       .expect(200)
 
     expect(res.body.moved).toBe(1)
-    expect((await findRowById(courses, course._id)).topic).toBe('Paid Media')
-    expect(await findRowById(terms, source._id)).toBeNull()
-    expect((await findRowById(terms, target._id)).formerSlugs).toContain('ppc')
+    expect((await Course.findById(course._id)).topic).toBe('Paid Media')
+    expect(await Term.findById(source._id)).toBeNull()
+    expect((await Term.findById(target._id)).formerSlugs).toContain('ppc')
   })
 
   it('refuses to delete a term still in use unless told what to do with it', async () => {
@@ -93,16 +93,16 @@ describe('term registry', () => {
     const replacement = await makeTerm({ name: 'Organic', slug: 'organic' })
 
     await as('delete', `/api/admin/taxonomy/${term._id}`).expect(409)
-    expect(await findRowById(terms, term._id)).not.toBeNull()
+    expect(await Term.findById(term._id)).not.toBeNull()
 
     await as('delete', `/api/admin/taxonomy/${term._id}?replaceWith=${replacement._id}`).expect(200)
-    expect((await findRowById(courses, course._id)).topic).toBe('Organic')
-    expect(await findRowById(terms, term._id)).toBeNull()
+    expect((await Course.findById(course._id)).topic).toBe('Organic')
+    expect(await Term.findById(term._id)).toBeNull()
   })
 
   it('strips the reference when a used term is force-deleted', async () => {
     const as = await adminAgent()
-    const post = await insertRow(blogPosts, {
+    const post = await BlogPost.create({
       title: 'A post',
       slug: 'a-post',
       category: 'Career',
@@ -111,7 +111,7 @@ describe('term registry', () => {
     const tag = await makeTerm({ taxonomy: 'tag', name: 'Career', slug: 'career' })
 
     await as('delete', `/api/admin/taxonomy/${tag._id}?force=true`).expect(200)
-    expect((await findRowById(blogPosts, post._id)).tags).toEqual([])
+    expect((await BlogPost.findById(post._id)).tags).toEqual([])
   })
 
   it('rejects a parent that would create a loop', async () => {
@@ -181,7 +181,7 @@ describe('catalogue filtering by the new facets', () => {
 describe('homepage showcase rails', () => {
   it('builds a rail from a tag and fills it with what carries the tag', async () => {
     await paidCourse({ tags: ['Most popular'] })
-    await insertRow(terms, {
+    await Term.create({
       taxonomy: 'tag',
       name: 'Most popular',
       slug: 'most-popular',
@@ -199,13 +199,8 @@ describe('homepage showcase rails', () => {
 
   it('omits a tag that is not flagged as a rail, and a rail with nothing in it', async () => {
     await paidCourse({ tags: ['Ordinary'] })
-    await insertRow(terms, {
-      taxonomy: 'tag',
-      name: 'Ordinary',
-      slug: 'ordinary',
-      showAsRail: false,
-    })
-    await insertRow(terms, { taxonomy: 'tag', name: 'Empty', slug: 'empty', showAsRail: true })
+    await Term.create({ taxonomy: 'tag', name: 'Ordinary', slug: 'ordinary', showAsRail: false })
+    await Term.create({ taxonomy: 'tag', name: 'Empty', slug: 'empty', showAsRail: true })
 
     const res = await agent().get('/api/showcase').expect(200)
     expect(res.body.rails).toHaveLength(0)
@@ -213,13 +208,13 @@ describe('homepage showcase rails', () => {
 
   it('lists a tagged program alongside courses, programs first', async () => {
     await paidCourse({ tags: ['Flagship program'] })
-    await insertRow(programs, {
+    await Program.create({
       title: 'Complete Growth Marketing',
       slug: 'complete-growth-marketing',
       weeks: 12,
       tags: ['Flagship program'],
     })
-    await insertRow(terms, {
+    await Term.create({
       taxonomy: 'tag',
       name: 'Flagship program',
       slug: 'flagship-program',
@@ -235,7 +230,7 @@ describe('homepage showcase rails', () => {
 
   it('falls back to the tag archive when no rail link is set', async () => {
     await paidCourse({ tags: ['Hot new releases'] })
-    await insertRow(terms, {
+    await Term.create({
       taxonomy: 'tag',
       name: 'Hot new releases',
       slug: 'hot-new-releases',
@@ -248,7 +243,7 @@ describe('homepage showcase rails', () => {
 
   it('keeps a draft course out of a rail', async () => {
     await paidCourse({ tags: ['Most popular'], status: 'Draft' })
-    await insertRow(terms, {
+    await Term.create({
       taxonomy: 'tag',
       name: 'Most popular',
       slug: 'most-popular',
@@ -262,7 +257,7 @@ describe('homepage showcase rails', () => {
   it('renaming a rail tag keeps its courses in the rail', async () => {
     const as = await adminAgent()
     await paidCourse({ tags: ['Most popular'] })
-    const term = await insertRow(terms, {
+    const term = await Term.create({
       taxonomy: 'tag',
       name: 'Most popular',
       slug: 'most-popular',
@@ -279,7 +274,7 @@ describe('homepage showcase rails', () => {
 
 describe('program page copy', () => {
   it('serves the editable section copy and button labels', async () => {
-    await insertRow(programs, {
+    await Program.create({
       title: 'Complete Growth Marketing',
       slug: 'complete-growth-marketing',
       sectionCopy: [{ key: 'outcomes', heading: 'What you leave with' }],
@@ -297,7 +292,7 @@ describe('program page copy', () => {
 
   it('saves page copy through the admin tab without touching pricing', async () => {
     const as = await adminAgent()
-    const program = await insertRow(programs, {
+    const program = await Program.create({
       title: 'Complete Growth Marketing',
       slug: 'complete-growth-marketing',
       pricing: { amount: 24999, note: 'Inclusive' },
@@ -312,7 +307,7 @@ describe('program page copy', () => {
       })
       .expect(200)
 
-    const stored = await findRowById(programs, program._id)
+    const stored = await Program.findById(program._id)
     expect(stored.sectionCopy[0].heading).toBe('Start shipping')
     expect(stored.pricing.amount).toBe(24999)
   })
@@ -324,7 +319,7 @@ describe('program page copy', () => {
 
 describe('course topics drive every surface that lists them', () => {
   const topic = (over = {}) =>
-    insertRow(terms, { taxonomy: 'topic', name: 'SEO', slug: 'seo', showInMenu: true, ...over })
+    Term.create({ taxonomy: 'topic', name: 'SEO', slug: 'seo', showInMenu: true, ...over })
 
   it('serves the short label the career banner uses', async () => {
     await topic({
@@ -360,7 +355,7 @@ describe('course topics drive every surface that lists them', () => {
       .send({ name: 'Organic Search', shortLabel: 'Organic' })
       .expect(200)
 
-    expect((await findRowById(courses, course._id)).topic).toBe('Organic Search')
+    expect((await Course.findById(course._id)).topic).toBe('Organic Search')
 
     const res = await agent().get('/api/config').expect(200)
     const names = res.body.taxonomy.topic.map((t) => t.name)
@@ -381,7 +376,7 @@ describe('course topics drive every surface that lists them', () => {
     await as('delete', `/api/admin/taxonomy/${term._id}`).expect(409)
     await as('delete', `/api/admin/taxonomy/${term._id}?replaceWith=${replacement._id}`).expect(200)
 
-    expect((await findRowById(courses, course._id)).topic).toBe('Organic')
+    expect((await Course.findById(course._id)).topic).toBe('Organic')
     const res = await agent().get('/api/config').expect(200)
     expect(res.body.taxonomy.topic.map((t) => t.name)).not.toContain('SEO')
   })

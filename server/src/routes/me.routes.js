@@ -2,75 +2,30 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { requireFeature } from '../middleware/features.js'
 import { asyncHandler } from '../middleware/error.js'
-import { and, asc, desc, eq, gte, inArray, notInArray } from 'drizzle-orm'
-import { db, withMongoId } from '../db/index.js'
 import {
-  badges as badgesTable,
-  bookings,
-  certificates,
-  courses,
-  enrollments,
-  leaderboardEntries,
-  liveClasses,
-  posts,
-  practiceAttempts,
-  practiceItems,
-  workshopRegistrations,
-  workshops,
-} from '../db/schema/index.js'
-import { hydrateCourses } from '../db/repos/courses.js'
-import { enrollmentDocs } from '../db/repos/enrollments.js'
+  Enrollment,
+  Certificate,
+  PracticeItem,
+  Badge,
+  LeaderboardEntry,
+  LiveClass,
+  Booking,
+  Course,
+  Post,
+  WorkshopRegistration,
+} from '../models/index.js'
 import { cfg } from '../services/runtimeConfig.js'
 
 const router = Router()
 router.use(requireAuth)
 
-const pick = (obj, keys) =>
-  obj ? Object.fromEntries(keys.filter((k) => k in obj).map((k) => [k, obj[k]])) : obj
-
-/**
- * The learner's enrollments, newest activity first, with `courseId` populated
- * to the listed course fields — the shape Mongoose's populate() produced and
- * the dashboard and "My courses" pages read.
- */
-async function enrollmentsWithCourses(userId, fields) {
-  const rows = await db
-    .select()
-    .from(enrollments)
-    .where(eq(enrollments.userId, userId))
-    .orderBy(desc(enrollments.lastAccessedAt))
-  const docs = await enrollmentDocs(rows)
-  const courseRows = rows.length
-    ? await db
-        .select()
-        .from(courses)
-        .where(
-          inArray(
-            courses.id,
-            rows.map((r) => r.courseId),
-          ),
-        )
-    : []
-  const needsCurriculum = fields.includes('sections')
-  const hydrated = needsCurriculum ? await hydrateCourses(courseRows) : withMongoId(courseRows)
-  const byId = new Map(hydrated.map((c) => [c.id, pick(c, ['_id', 'id', ...fields])]))
-  return docs.map((e) => ({ ...e, courseId: byId.get(e.courseId) || null }))
-}
-
 router.get(
   '/enrollments',
   asyncHandler(async (req, res) => {
-    const items = await enrollmentsWithCourses(req.user.id, [
-      'title',
-      'slug',
-      'thumbClass',
-      'hours',
-      'kind',
-      'type',
-      'mediaLabel',
-      'languages',
-      'rating',
-    ])
+    const items = await Enrollment.find({ userId: req.user._id })
+      .populate('courseId', 'title slug thumbClass hours kind type mediaLabel languages rating')
+      .sort({ lastAccessedAt: -1 })
+      .lean()
     res.json({ items })
   }),
 )
@@ -79,27 +34,16 @@ router.get(
 router.get(
   '/dashboard',
   asyncHandler(async (req, res) => {
-    const [mine, upcoming] = await Promise.all([
-      enrollmentsWithCourses(req.user.id, [
-        'title',
-        'slug',
-        'thumbClass',
-        'hours',
-        'kind',
-        'type',
-        'sections',
-        'mediaLabel',
-        'topic',
-      ]),
-      db
-        .select()
-        .from(liveClasses)
-        .where(gte(liveClasses.startsAt, new Date()))
-        .orderBy(asc(liveClasses.startsAt))
+    const [enrollments, upcoming] = await Promise.all([
+      Enrollment.find({ userId: req.user._id })
+        .populate('courseId', 'title slug thumbClass hours kind type sections mediaLabel topic')
+        .sort({ lastAccessedAt: -1 })
+        .lean(),
+      LiveClass.find({ startsAt: { $gte: new Date() } })
+        .sort({ startsAt: 1 })
         .limit(3)
-        .then(withMongoId),
+        .lean(),
     ])
-    const enrollments = mine
 
     const current =
       enrollments.find((e) => e.progressPct > 0 && e.progressPct < 100) || enrollments[0]
@@ -112,34 +56,17 @@ router.get(
      * behind it returns empty and the page omits it.
      */
     const now = new Date()
-    const [registrations, certs, myPosts] = await Promise.all([
+    const [registrations, certificates, posts] = await Promise.all([
       // "Deadlines & next steps" — sessions this learner actually signed up for.
-      db
-        .select({
-          title: workshops.title,
-          slug: workshops.slug,
-          startsAt: workshops.startsAt,
-          mode: workshops.mode,
-          venue: workshops.venue,
+      WorkshopRegistration.find({ userId: req.user._id })
+        .populate({
+          path: 'workshopId',
+          select: 'title slug startsAt mode venue',
+          match: { startsAt: { $gte: now } },
         })
-        .from(workshopRegistrations)
-        .innerJoin(workshops, eq(workshops.id, workshopRegistrations.workshopId))
-        .where(and(eq(workshopRegistrations.userId, req.user.id), gte(workshops.startsAt, now)))
-        .then((rows) => rows.map((workshopId) => ({ workshopId }))),
-      db
-        .select()
-        .from(certificates)
-        .where(eq(certificates.userId, req.user.id))
-        .orderBy(desc(certificates.issuedAt))
-        .limit(4),
-      // Posts are keyed by `authorId`. The Mongo query filtered on a `userId`
-      // field posts never had, so this section was always empty.
-      db
-        .select({ body: posts.body, createdAt: posts.createdAt })
-        .from(posts)
-        .where(eq(posts.authorId, req.user.id))
-        .orderBy(desc(posts.createdAt))
-        .limit(4),
+        .lean(),
+      Certificate.find({ userId: req.user._id }).sort({ issuedAt: -1 }).limit(4).lean(),
+      Post.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(4).select('body createdAt').lean(),
     ])
 
     const deadlines = [
@@ -148,10 +75,7 @@ router.get(
         .map((r) => ({
           kind: 'workshop',
           title: r.workshopId.title,
-          body:
-            r.workshopId.mode === 'offline'
-              ? r.workshopId.venue
-              : 'Live online · joining link by email',
+          body: r.workshopId.mode === 'offline' ? r.workshopId.venue : 'Live online · joining link by email',
           at: r.workshopId.startsAt,
           to: `/workshops/${r.workshopId.slug}`,
         })),
@@ -167,7 +91,7 @@ router.get(
       .slice(0, 4)
 
     const activity = [
-      ...certs.map((c) => ({
+      ...certificates.map((c) => ({
         icon: '🎓',
         text: `Certificate unlocked: ${c.courseTitle}`,
         at: c.issuedAt,
@@ -179,7 +103,7 @@ router.get(
           text: `Completed ${e.courseId?.title || 'a course'}`,
           at: e.lastAccessedAt,
         })),
-      ...myPosts.map((p) => ({
+      ...posts.map((p) => ({
         icon: '💬',
         text: `Posted in the community: “${p.body.slice(0, 60)}${p.body.length > 60 ? '…' : ''}”`,
         at: p.createdAt,
@@ -196,30 +120,16 @@ router.get(
     const enrolledIds = enrollments.map((e) => e.courseId?._id).filter(Boolean)
     const topics = [...new Set(enrollments.map((e) => e.courseId?.topic).filter(Boolean))]
     const recommended = topics.length
-      ? await db
-          .select({
-            id: courses.id,
-            title: courses.title,
-            slug: courses.slug,
-            topic: courses.topic,
-            summary: courses.summary,
-            thumbClass: courses.thumbClass,
-            mediaLabel: courses.mediaLabel,
-            amount: courses.amount,
-            price: courses.price,
-          })
-          .from(courses)
-          .where(
-            and(
-              inArray(courses.topic, topics),
-              ...(enrolledIds.length ? [notInArray(courses.id, enrolledIds)] : []),
-              eq(courses.status, 'Published'),
-              eq(courses.visibility, 'Public'),
-            ),
-          )
-          .orderBy(desc(courses.popularity))
+      ? await Course.find({
+          topic: { $in: topics },
+          _id: { $nin: enrolledIds },
+          status: 'Published',
+          visibility: 'Public',
+        })
+          .select('title slug topic summary thumbClass mediaLabel amount price')
+          .sort({ popularity: -1 })
           .limit(3)
-          .then(withMongoId)
+          .lean()
       : []
 
     // Seeds and the streak are only meaningful once something awards them.
@@ -255,12 +165,8 @@ router.get(
 router.get(
   '/certificates',
   asyncHandler(async (req, res) => {
-    const items = await db
-      .select()
-      .from(certificates)
-      .where(eq(certificates.userId, req.user.id))
-      .orderBy(desc(certificates.issuedAt))
-    res.json({ items: withMongoId(items) })
+    const items = await Certificate.find({ userId: req.user._id }).sort({ issuedAt: -1 }).lean()
+    res.json({ items })
   }),
 )
 
@@ -270,15 +176,9 @@ router.get(
   '/achievements',
   requireFeature('gamification'),
   asyncHandler(async (req, res) => {
-    const [badges, [rank]] = await Promise.all([
-      db.select().from(badgesTable).then(withMongoId),
-      db
-        .select()
-        .from(leaderboardEntries)
-        .where(
-          and(eq(leaderboardEntries.userId, req.user.id), eq(leaderboardEntries.period, 'week')),
-        )
-        .limit(1),
+    const [badges, rank] = await Promise.all([
+      Badge.find().lean(),
+      LeaderboardEntry.findOne({ userId: req.user._id, period: 'week' }).lean(),
     ])
     res.json({
       seeds: req.user.seeds,
@@ -292,20 +192,14 @@ router.get(
 router.get(
   '/practice',
   asyncHandler(async (req, res) => {
-    // Only this learner's attempts are read at all — other students' scores
-    // never leave the database, which the Mongo version had to strip by hand.
-    const [items, attempts] = await Promise.all([
-      db.select().from(practiceItems),
-      db.select().from(practiceAttempts).where(eq(practiceAttempts.userId, req.user.id)),
-    ])
+    const items = await PracticeItem.find().lean()
     res.json({
       items: items.map((item) => {
-        const attempt = attempts.find((a) => a.practiceItemId === item.id)
-        return withMongoId({
-          ...item,
-          status: attempt?.status || 'Not started',
-          score: attempt?.score ?? null,
-        })
+        const attempt = item.attempts?.find((a) => String(a.userId) === String(req.user._id))
+        // Destructured out on purpose: `attempts` holds every other student's
+        // scores, and the caller only gets their own, resolved above.
+        const { attempts: _attempts, ...rest } = item
+        return { ...rest, status: attempt?.status || 'Not started', score: attempt?.score ?? null }
       }),
     })
   }),
@@ -314,14 +208,8 @@ router.get(
 router.get(
   '/bookings',
   asyncHandler(async (req, res) => {
-    const rows = await db
-      .select({ booking: bookings, liveClass: liveClasses })
-      .from(bookings)
-      .leftJoin(liveClasses, eq(liveClasses.id, bookings.liveClassId))
-      .where(eq(bookings.userId, req.user.id))
-    res.json({
-      items: rows.map((r) => withMongoId({ ...r.booking, liveClassId: r.liveClass })),
-    })
+    const items = await Booking.find({ userId: req.user._id }).populate('liveClassId').lean()
+    res.json({ items })
   }),
 )
 
