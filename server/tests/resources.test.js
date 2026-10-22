@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ClaudeSkill, EmailContact, Playbook } from '../src/models/index.js'
+import { eq } from 'drizzle-orm'
+import { claudeSkills, emailContacts, playbooks } from '../src/db/schema/index.js'
+import { countRows, insertRow, updateRow } from './helpers/content.js'
 import { agent, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -16,7 +18,7 @@ async function adminAgent() {
 }
 
 const makePlaybook = (over = {}) =>
-  Playbook.create({
+  insertRow(playbooks, {
     title: 'The Intent-Map SEO Sprint',
     slug: 'intent-map-seo-sprint',
     cardTitle: 'Intent-map SEO sprint',
@@ -30,7 +32,7 @@ const makePlaybook = (over = {}) =>
   })
 
 const makeSkill = (over = {}) =>
-  ClaudeSkill.create({
+  insertRow(claudeSkills, {
     title: 'Intent Map From SERP Scrape',
     slug: 'intent-map-from-serp',
     category: 'seo',
@@ -72,10 +74,12 @@ describe('playbooks', () => {
     await makePlaybook()
     await makeSkill()
 
-    const withSkill = await agent().get('/api/resources/playbooks/intent-map-seo-sprint').expect(200)
+    const withSkill = await agent()
+      .get('/api/resources/playbooks/intent-map-seo-sprint')
+      .expect(200)
     expect(withSkill.body.relatedSkill.title).toBe('Intent Map From SERP Scrape')
 
-    await ClaudeSkill.updateOne({ slug: 'intent-map-from-serp' }, { status: 'Draft' })
+    await updateRow(claudeSkills, 'slug', 'intent-map-from-serp', { status: 'Draft' })
     const without = await agent().get('/api/resources/playbooks/intent-map-seo-sprint').expect(200)
     expect(without.body.relatedSkill).toBeNull()
   })
@@ -84,7 +88,12 @@ describe('playbooks', () => {
 describe('claude skills', () => {
   it('lists published skills and builds the filter row from what exists', async () => {
     await makeSkill()
-    await makeSkill({ slug: 'weekly-metrics', title: 'Weekly Metrics', category: 'analytics', badge: 'Analytics' })
+    await makeSkill({
+      slug: 'weekly-metrics',
+      title: 'Weekly Metrics',
+      category: 'analytics',
+      badge: 'Analytics',
+    })
     // Two skills share a category but badge differently — the filter must not split.
     await makeSkill({ slug: 'ai-traffic', title: 'AI Traffic', category: 'analytics', badge: 'AI' })
 
@@ -108,7 +117,7 @@ describe('playbook notify', () => {
   it('subscribes an email once, however many times it is submitted', async () => {
     await agent().post('/api/resources/notify').send({ email: 'reader@example.in' }).expect(201)
     await agent().post('/api/resources/notify').send({ email: 'reader@example.in' }).expect(201)
-    expect(await EmailContact.countDocuments({ email: 'reader@example.in' })).toBe(1)
+    expect(await countRows(emailContacts, eq(emailContacts.email, 'reader@example.in'))).toBe(1)
   })
 
   it('rejects an invalid address', async () => {

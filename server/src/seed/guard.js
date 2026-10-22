@@ -2,7 +2,7 @@
  * Safety rails shared by every seed entry point.
  *
  * The seeder used to delete 27 collections unconditionally, so a single
- * `npm run seed` with a production MONGO_URI in the shell wiped enrollments,
+ * `npm run seed` with a production database URL in the shell wiped enrollments,
  * transactions, customers and certificates. Everything here runs *before*
  * connectDb(), so a refused run never opens a connection, let alone deletes.
  */
@@ -23,7 +23,7 @@ export const isProduction = () => process.env.NODE_ENV === 'production'
 /**
  * A human-readable name for the target database with any credentials stripped,
  * so the refusal message can say what it was about to destroy without leaking
- * the password out of MONGO_URI into CI logs.
+ * the password out of DATABASE_URL into CI logs.
  */
 
 /**
@@ -51,7 +51,7 @@ export function assertDestructiveAllowed(flags, { command, destroys }) {
   error(`REFUSING to run "${command}" — NODE_ENV is "production".`)
   error(`Target: ${target}`)
   error('')
-  error('This command deletes every document in:')
+  error('This command deletes every row in:')
   error(`  ${destroys.join(', ')}`)
   error('')
   error('Nothing was deleted and no connection was opened.')

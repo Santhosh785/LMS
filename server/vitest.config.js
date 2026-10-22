@@ -6,14 +6,18 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/setup.js'],
     /**
-     * Sequential, single-fork. The tests share one MongoDB database and several
-     * assert on exact document counts; parallel files would see each other's
-     * rows and fail in ways that look like real bugs.
+     * Sequential, one worker. The tests share one Postgres database (the
+     * Supabase test project) and several assert on exact row counts; parallel
+     * files would see each other's rows and fail in ways that look like real
+     * bugs. Separate `vitest` processes are serialised by the advisory lock in
+     * tests/setup.js. (Vitest 4 dropped `poolOptions.forks.singleFork`, which
+     * this used to rely on — `maxWorkers` is its replacement.)
      */
     pool: 'forks',
-    poolOptions: { forks: { singleFork: true } },
+    maxWorkers: 1,
     fileParallelism: false,
-    testTimeout: 15_000,
+    // Remote database: every query is a network round trip.
+    testTimeout: 30_000,
     hookTimeout: 20_000,
   },
 })

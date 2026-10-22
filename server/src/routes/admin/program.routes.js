@@ -1,6 +1,9 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
-import { Program } from '../../models/index.js'
+import { eq } from 'drizzle-orm'
+import { db, withMongoId } from '../../db/index.js'
+import { coerce, isUuid } from '../../db/coerce.js'
+import { programs } from '../../db/schema/index.js'
 import { crudRouter } from '../../utils/crudRouter.js'
 import { slugify } from '../../services/taxonomy.js'
 
@@ -39,7 +42,7 @@ const TAB_FIELDS = {
     'admission',
     'mentors',
     'testimonials',
-    // 2026 redesign sections — see models/Program.js.
+    // 2026 redesign sections — see the programs table in db/schema/content.js.
     'trustBar',
     'why',
     'structure',
@@ -55,18 +58,25 @@ for (const [tab, fields] of Object.entries(TAB_FIELDS)) {
   router.put(
     `/:id/${tab}`,
     asyncHandler(async (req, res) => {
-      const patch = Object.fromEntries(Object.entries(req.body).filter(([k]) => fields.includes(k)))
+      if (!isUuid(req.params.id)) throw new HttpError(404, 'Program not found')
+      const patch = coerce(programs, req.body, { allow: fields })
       if (patch.slug) patch.slug = slugify(patch.slug)
-      const program = await Program.findByIdAndUpdate(req.params.id, patch, {
-        new: true,
-        runValidators: true,
-      })
+      const [program] = Object.keys(patch).length
+        ? await db.update(programs).set(patch).where(eq(programs.id, req.params.id)).returning()
+        : await db.select().from(programs).where(eq(programs.id, req.params.id))
       if (!program) throw new HttpError(404, 'Program not found')
-      res.json(program)
+      res.json(withMongoId(program))
     }),
   )
 }
 
-router.use('/', crudRouter(Program, { searchFields: ['title', 'slug'], sort: { createdAt: -1 } }))
+router.use(
+  '/',
+  crudRouter(programs, {
+    name: 'Program',
+    searchFields: ['title', 'slug'],
+    sort: { createdAt: -1 },
+  }),
+)
 
 export default router

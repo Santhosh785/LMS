@@ -1,7 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import mongoose from 'mongoose'
+import { sql } from 'drizzle-orm'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -10,6 +10,7 @@ import cookieParser from 'cookie-parser'
 
 import { env } from './config/env.js'
 import { connectDb } from './config/db.js'
+import { db } from './db/index.js'
 import { accessLogStream, captureMessage, initObservability } from './config/observability.js'
 import { attachUser } from './middleware/auth.js'
 import { errorHandler, notFound } from './middleware/error.js'
@@ -33,6 +34,7 @@ import liveRoutes from './routes/live.routes.js'
 import communityRoutes from './routes/community.routes.js'
 import adminRoutes from './routes/admin/index.js'
 import { mediaDir } from './routes/admin/media.routes.js'
+import { legacyRedirect } from './middleware/legacyRedirect.js'
 
 const app = express()
 
@@ -141,17 +143,12 @@ app.use(attachUser)
  * not usable, which is what makes an external monitor meaningful.
  */
 app.get('/api/health', async (_req, res) => {
-  // 1 = connected, 2 = connecting. Anything else is unusable.
-  const state = mongoose.connection.readyState
-  let dbOk = state === 1
-
-  if (dbOk) {
-    try {
-      // readyState can lag a network partition, so actually round-trip.
-      await mongoose.connection.db.admin().ping()
-    } catch {
-      dbOk = false
-    }
+  // A pool reports nothing useful about reachability, so actually round-trip.
+  let dbOk = true
+  try {
+    await db.execute(sql`select 1`)
+  } catch {
+    dbOk = false
   }
 
   res.status(dbOk ? 200 : 503).json({
@@ -183,6 +180,10 @@ app.use('/api/admin', adminRoutes)
 // The Media Library stores public images under a separate path, never inside
 // the client build, so deploys do not wipe an editor's uploaded images.
 app.use('/uploads/media', express.static(mediaDir, { fallthrough: false, maxAge: '7d' }))
+
+// Mongo-era bookmarks (/admin/courses/<ObjectId>) → their Postgres ids. Ahead of
+// the SPA so the browser is redirected before index.html is served.
+app.use(legacyRedirect)
 
 /* ------------------------------ the SPA ---------------------------------- */
 /**

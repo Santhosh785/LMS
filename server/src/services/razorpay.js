@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import Razorpay from 'razorpay'
-import { Counter } from '../models/index.js'
+import { db } from '../db/index.js'
+import { nextCounter } from '../db/repos/transactions.js'
 import { cfg } from './runtimeConfig.js'
 
 /**
@@ -88,7 +89,10 @@ export function verifyPaymentSignature({ orderId, paymentId, signature }) {
  * prices are all-inclusive. Watch the ₹20L threshold — crossing it makes
  * registration compulsory and changes what has to appear here.
  */
-export async function nextInvoiceNo(now = new Date()) {
-  const seq = await Counter.next('invoice')
+export async function nextInvoiceNo(now = new Date(), { tx } = {}) {
+  // Pass the fulfilment's transaction so the number rolls back with the sale.
+  const seq = tx
+    ? await nextCounter(tx, 'invoice')
+    : await db.transaction((t) => nextCounter(t, 'invoice'))
   return `${cfg.invoicePrefix}-${now.getFullYear()}-${String(seq).padStart(4, '0')}`
 }

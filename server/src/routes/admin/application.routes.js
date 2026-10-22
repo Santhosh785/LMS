@@ -1,6 +1,19 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
-import { FitCallBooking, FlagshipApplication, User } from '../../models/index.js'
+import { desc, eq } from 'drizzle-orm'
+import { db, withMongoId } from '../../db/index.js'
+import { fitCallBookings, flagshipApplications } from '../../db/schema/index.js'
+import {
+  addNote,
+  countInbox,
+  getInboxDoc,
+  getInboxRow,
+  inboxWhere,
+  listInbox,
+  resolveOwner,
+  statusCounts,
+  updateInbox,
+} from '../../db/repos/crm.js'
 import { sendCsv } from '../../utils/csv.js'
 
 const router = Router()
@@ -27,62 +40,40 @@ const TERMINAL = new Set(['Accepted', 'Waitlisted', 'Rejected'])
 
 const FIT_CALL_STATUSES = ['Requested', 'Scheduled', 'Completed', 'No-show', 'Cancelled']
 
-const searchFilter = (query, fields) => {
-  const filter = {}
-  if (query.status) filter.status = query.status
-  if (query.owner === 'unassigned') filter.owner = { $exists: false }
-  else if (query.owner) filter.owner = query.owner
+const APPLICATION_SEARCH = ['fullName', 'email', 'phone', 'city']
+const FIT_CALL_SEARCH = ['fullName', 'email', 'phone']
 
-  const q = query.q?.trim()
-  if (q) {
-    const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-    filter.$or = fields.map((f) => ({ [f]: rx }))
-  }
-  if (query.from || query.to) {
-    filter.createdAt = {}
-    if (query.from) filter.createdAt.$gte = new Date(query.from)
-    if (query.to) filter.createdAt.$lte = new Date(`${query.to}T23:59:59.999Z`)
-  }
-  return filter
-}
-
-/** Assigning an owner is the same three lines on both inboxes. */
-async function resolveOwner(owner) {
-  if (!owner) return undefined
-  const assignee = await User.findById(owner).select('_id')
-  if (!assignee) throw new HttpError(400, 'That owner does not exist')
-  return assignee._id
-}
+/** The essays are long; the list view never needs them. */
+const ESSAYS = [
+  'whyFlagship',
+  'twelveWeekOutcome',
+  'shipStory',
+  'curriculumHook',
+  'scholarshipCase',
+]
 
 /* ----------------------------- applications ----------------------------- */
 
 router.get(
   '/applications',
   asyncHandler(async (req, res) => {
-    const filter = searchFilter(req.query, ['fullName', 'email', 'phone', 'city'])
+    const filter = inboxWhere('application', req.query, APPLICATION_SEARCH)
     const limit = Math.min(Number(req.query.limit) || 50, 200)
     const skip = Number(req.query.skip) || 0
 
     const [items, total, counts] = await Promise.all([
-      FlagshipApplication.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        // The essays are long; the list view never needs them.
-        .select('-whyFlagship -twelveWeekOutcome -shipStory -curriculumHook -scholarshipCase')
-        .populate('owner', 'name email')
-        .lean(),
-      FlagshipApplication.countDocuments(filter),
+      listInbox('application', { where: filter, limit, offset: skip, omit: ESSAYS }),
+      countInbox('application', filter),
       // Board counts ignore the status filter, or picking one would zero the
       // others and the tab row would stop being a summary.
-      FlagshipApplication.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      statusCounts('application'),
     ])
 
     res.json({
       items,
       total,
       statuses: APPLICATION_STATUSES,
-      counts: Object.fromEntries(counts.map((c) => [c._id || 'New', c.count])),
+      counts: Object.fromEntries(counts.map((c) => [c.status || 'New', c.n])),
     })
   }),
 )
@@ -90,12 +81,9 @@ router.get(
 router.get(
   '/applications/export',
   asyncHandler(async (req, res) => {
-    const rows = await FlagshipApplication.find(
-      searchFilter(req.query, ['fullName', 'email', 'phone', 'city']),
-    )
-      .sort({ createdAt: -1 })
-      .populate('owner', 'name')
-      .lean()
+    const rows = await listInbox('application', {
+      where: inboxWhere('application', req.query, APPLICATION_SEARCH),
+    })
 
     sendCsv(res, 'flagship-applications.csv', rows, [
       { key: 'createdAt', label: 'Received', get: (r) => r.createdAt?.toISOString() },
@@ -111,7 +99,11 @@ router.get(
       { key: 'currentStatus', label: 'Current status' },
       { key: 'experienceLevel', label: 'Experience' },
       { key: 'weeklyHours', label: 'Weekly hours' },
-      { key: 'liveAvailability', label: 'Availability', get: (r) => (r.liveAvailability || []).join(' | ') },
+      {
+        key: 'liveAvailability',
+        label: 'Availability',
+        get: (r) => (r.liveAvailability || []).join(' | '),
+      },
       { key: 'channels', label: 'Channels', get: (r) => (r.channels || []).join(' | ') },
       { key: 'masterclassCity', label: 'Masterclass city' },
       { key: 'paymentPlan', label: 'Payment plan' },
@@ -125,39 +117,44 @@ router.get(
 router.get(
   '/applications/:id',
   asyncHandler(async (req, res) => {
-    const doc = await FlagshipApplication.findById(req.params.id)
-      .populate('owner', 'name email')
-      .lean()
+    const doc = await getInboxDoc('application', req.params.id)
     if (!doc) throw new HttpError(404, 'Application not found')
     // Surfaced together so a reviewer can see the person already booked a call.
-    const fitCalls = await FitCallBooking.find({ email: doc.email })
-      .sort({ createdAt: -1 })
-      .select('status scheduledAt preferredSlots createdAt')
-      .lean()
-    res.json({ ...doc, fitCalls })
+    const fitCalls = await db
+      .select({
+        id: fitCallBookings.id,
+        status: fitCallBookings.status,
+        scheduledAt: fitCallBookings.scheduledAt,
+        preferredSlots: fitCallBookings.preferredSlots,
+        createdAt: fitCallBookings.createdAt,
+      })
+      .from(fitCallBookings)
+      .where(eq(fitCallBookings.email, doc.email))
+      .orderBy(desc(fitCallBookings.createdAt))
+    res.json({ ...doc, fitCalls: withMongoId(fitCalls) })
   }),
 )
 
 router.put(
   '/applications/:id',
   asyncHandler(async (req, res) => {
-    const doc = await FlagshipApplication.findById(req.params.id)
+    const doc = await getInboxRow('application', req.params.id)
     if (!doc) throw new HttpError(404, 'Application not found')
 
     const { status, owner } = req.body
+    const patch = {}
     if (status !== undefined) {
       if (!APPLICATION_STATUSES.includes(status)) throw new HttpError(400, 'Unknown status')
       // Both stamps are written once. Re-saving a decided application must not
       // keep moving its dates forward — they are what "time to decision" is
       // measured from.
-      if (status !== 'New' && !doc.reviewedAt) doc.reviewedAt = new Date()
-      if (TERMINAL.has(status) && !doc.decidedAt) doc.decidedAt = new Date()
-      doc.status = status
+      if (status !== 'New' && !doc.reviewedAt) patch.reviewedAt = new Date()
+      if (TERMINAL.has(status) && !doc.decidedAt) patch.decidedAt = new Date()
+      patch.status = status
     }
-    if (owner !== undefined) doc.owner = await resolveOwner(owner)
+    if (owner !== undefined) patch.owner = await resolveOwner(owner)
 
-    await doc.save()
-    res.json(await FlagshipApplication.findById(doc._id).populate('owner', 'name email').lean())
+    res.json(await updateInbox('application', doc.id, patch))
   }),
 )
 
@@ -167,13 +164,11 @@ router.post(
     const body = req.body?.body?.trim()
     if (!body) throw new HttpError(400, 'Write something first')
 
-    const doc = await FlagshipApplication.findByIdAndUpdate(
-      req.params.id,
-      { $push: { notes: { body, author: req.user._id, authorName: req.user.name } } },
-      { new: true },
-    )
-      .populate('owner', 'name email')
-      .lean()
+    const doc = await addNote('application', req.params.id, {
+      body,
+      author: req.user.id,
+      authorName: req.user.name,
+    })
     if (!doc) throw new HttpError(404, 'Application not found')
     res.json(doc)
   }),
@@ -184,26 +179,21 @@ router.post(
 router.get(
   '/fit-calls',
   asyncHandler(async (req, res) => {
-    const filter = searchFilter(req.query, ['fullName', 'email', 'phone'])
+    const filter = inboxWhere('fitCall', req.query, FIT_CALL_SEARCH)
     const limit = Math.min(Number(req.query.limit) || 50, 200)
     const skip = Number(req.query.skip) || 0
 
     const [items, total, counts] = await Promise.all([
-      FitCallBooking.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate('owner', 'name email')
-        .lean(),
-      FitCallBooking.countDocuments(filter),
-      FitCallBooking.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      listInbox('fitCall', { where: filter, limit, offset: skip }),
+      countInbox('fitCall', filter),
+      statusCounts('fitCall'),
     ])
 
     res.json({
       items,
       total,
       statuses: FIT_CALL_STATUSES,
-      counts: Object.fromEntries(counts.map((c) => [c._id || 'Requested', c.count])),
+      counts: Object.fromEntries(counts.map((c) => [c.status || 'Requested', c.n])),
     })
   }),
 )
@@ -211,10 +201,9 @@ router.get(
 router.get(
   '/fit-calls/export',
   asyncHandler(async (req, res) => {
-    const rows = await FitCallBooking.find(searchFilter(req.query, ['fullName', 'email', 'phone']))
-      .sort({ createdAt: -1 })
-      .populate('owner', 'name')
-      .lean()
+    const rows = await listInbox('fitCall', {
+      where: inboxWhere('fitCall', req.query, FIT_CALL_SEARCH),
+    })
 
     sendCsv(res, 'fit-calls.csv', rows, [
       { key: 'createdAt', label: 'Requested', get: (r) => r.createdAt?.toISOString() },
@@ -241,34 +230,38 @@ router.get(
 router.get(
   '/fit-calls/:id',
   asyncHandler(async (req, res) => {
-    const doc = await FitCallBooking.findById(req.params.id)
-      .populate('owner', 'name email')
-      .lean()
+    const doc = await getInboxDoc('fitCall', req.params.id)
     if (!doc) throw new HttpError(404, 'Fit call not found')
-    const applications = await FlagshipApplication.find({ email: doc.email })
-      .sort({ createdAt: -1 })
-      .select('status trackPreference createdAt')
-      .lean()
-    res.json({ ...doc, applications })
+    const applications = await db
+      .select({
+        id: flagshipApplications.id,
+        status: flagshipApplications.status,
+        trackPreference: flagshipApplications.trackPreference,
+        createdAt: flagshipApplications.createdAt,
+      })
+      .from(flagshipApplications)
+      .where(eq(flagshipApplications.email, doc.email))
+      .orderBy(desc(flagshipApplications.createdAt))
+    res.json({ ...doc, applications: withMongoId(applications) })
   }),
 )
 
 router.put(
   '/fit-calls/:id',
   asyncHandler(async (req, res) => {
-    const doc = await FitCallBooking.findById(req.params.id)
+    const doc = await getInboxRow('fitCall', req.params.id)
     if (!doc) throw new HttpError(404, 'Fit call not found')
 
     const { status, owner, scheduledAt } = req.body
+    const patch = {}
     if (status !== undefined) {
       if (!FIT_CALL_STATUSES.includes(status)) throw new HttpError(400, 'Unknown status')
-      doc.status = status
+      patch.status = status
     }
-    if (owner !== undefined) doc.owner = await resolveOwner(owner)
-    if (scheduledAt !== undefined) doc.scheduledAt = scheduledAt ? new Date(scheduledAt) : undefined
+    if (owner !== undefined) patch.owner = await resolveOwner(owner)
+    if (scheduledAt !== undefined) patch.scheduledAt = scheduledAt ? new Date(scheduledAt) : null
 
-    await doc.save()
-    res.json(await FitCallBooking.findById(doc._id).populate('owner', 'name email').lean())
+    res.json(await updateInbox('fitCall', doc.id, patch))
   }),
 )
 
@@ -278,13 +271,11 @@ router.post(
     const body = req.body?.body?.trim()
     if (!body) throw new HttpError(400, 'Write something first')
 
-    const doc = await FitCallBooking.findByIdAndUpdate(
-      req.params.id,
-      { $push: { notes: { body, author: req.user._id, authorName: req.user.name } } },
-      { new: true },
-    )
-      .populate('owner', 'name email')
-      .lean()
+    const doc = await addNote('fitCall', req.params.id, {
+      body,
+      author: req.user.id,
+      authorName: req.user.name,
+    })
     if (!doc) throw new HttpError(404, 'Fit call not found')
     res.json(doc)
   }),

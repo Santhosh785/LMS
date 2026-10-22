@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { BlogPost, Course, Term, Workshop } from '../src/models/index.js'
+import { blogPosts, courses, terms, workshops } from '../src/db/schema/index.js'
+import { findRowById, insertRow } from './helpers/content.js'
 import { agent, paidCourse, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -24,7 +25,7 @@ describe('course cover image', () => {
       .send({ image: 'https://cdn.example.com/seo.jpg', imageAlt: 'An SEO dashboard' })
       .expect(200)
 
-    const stored = await Course.findById(course._id)
+    const stored = await findRowById(courses, course._id)
     expect(stored.image).toBe('https://cdn.example.com/seo.jpg')
     expect(stored.imageAlt).toBe('An SEO dashboard')
   })
@@ -50,12 +51,13 @@ describe('course cover image', () => {
   it('is absent, not empty-string, on content that never set one', async () => {
     await paidCourse()
     const res = await agent().get('/api/courses/seo-mastery').expect(200)
-    expect(res.body.image).toBeUndefined()
+    // An unset column is null in Postgres; the point is that it is not ''.
+    expect(res.body.image ?? undefined).toBeUndefined()
   })
 
   it('travels with a course into a homepage rail', async () => {
     await paidCourse({ tags: ['Most popular'], image: 'https://cdn.example.com/seo.jpg' })
-    await Term.create({
+    await insertRow(terms, {
       taxonomy: 'tag',
       name: 'Most popular',
       slug: 'most-popular',
@@ -69,7 +71,7 @@ describe('course cover image', () => {
 
 describe('workshop and blog cover images', () => {
   it('serves a workshop image', async () => {
-    await Workshop.create({
+    await insertRow(workshops, {
       title: 'SEO Live',
       slug: 'seo-live',
       image: 'https://cdn.example.com/ws.jpg',
@@ -80,7 +82,7 @@ describe('workshop and blog cover images', () => {
   })
 
   it('serves a blog post image', async () => {
-    await BlogPost.create({
+    await insertRow(blogPosts, {
       title: 'A post',
       slug: 'a-post',
       category: 'SEO',

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { Customer, Enrollment, Transaction, User } from '../src/models/index.js'
+import { courses, customers, enrollments, transactions, users } from '../src/db/schema/index.js'
+import { findTransactionById } from '../src/db/repos/transactions.js'
+import { createAccount } from '../src/db/repos/users.js'
+import { countRows, findRow } from './helpers/commerce.js'
 import { agent, paidCourse, signUpAdmin, submitUpiPayment } from './helpers/factories.js'
 
 /**
@@ -17,20 +20,20 @@ describe('manual UPI checkout', () => {
     expect(res.status).toBe(201)
     expect(res.body.status).toBe('PENDING')
 
-    const txn = await Transaction.findById(res.body.transactionId)
+    const txn = await findTransactionById(res.body.transactionId)
     expect(txn.status).toBe('PENDING')
     expect(txn.utr).toBe('429518847213')
-    expect(txn.courseId.toString()).toBe(course._id.toString())
+    expect(txn.courseId).toBe(course.id)
     expect(txn.buyer.email).toBe('anjali@example.in')
-    expect(await Customer.countDocuments({ email: 'anjali@example.in' })).toBe(1)
+    expect(await countRows(customers, { email: 'anjali@example.in' })).toBe(1)
   })
 
   it('grants no access whatsoever', async () => {
     await paidCourse()
     await submitUpiPayment()
 
-    expect(await Enrollment.countDocuments()).toBe(0)
-    expect(await User.countDocuments()).toBe(0)
+    expect(await countRows(enrollments)).toBe(0)
+    expect(await countRows(users)).toBe(0)
   })
 
   it('takes the amount from the database, ignoring anything the client sends', async () => {
@@ -45,7 +48,7 @@ describe('manual UPI checkout', () => {
       plan: '12 month access',
     })
 
-    const txn = await Transaction.findById(res.body.transactionId)
+    const txn = await findTransactionById(res.body.transactionId)
     expect(txn.amount).toBe(2499)
   })
 
@@ -57,7 +60,7 @@ describe('manual UPI checkout', () => {
 
     expect(res.status).toBe(409)
     expect(res.body.details.utr).toBeTruthy()
-    expect(await Transaction.countDocuments()).toBe(1)
+    expect(await countRows(transactions)).toBe(1)
   })
 
   it('rejects malformed input with field-level errors', async () => {
@@ -93,11 +96,11 @@ describe('admin approval', () => {
     expect(res.status).toBe(200)
     expect(res.body.accountCreated).toBe(true)
 
-    const buyer = await User.findOne({ email: 'anjali@example.in' })
+    const buyer = await findRow(users, { email: 'anjali@example.in' })
     expect(buyer).toBeTruthy()
-    expect(await Enrollment.countDocuments({ userId: buyer._id })).toBe(1)
-    expect((await Transaction.findById(body.transactionId)).status).toBe('SUCCESS')
-    expect((await course.constructor.findById(course._id)).enrolledCount).toBe(1)
+    expect(await countRows(enrollments, { userId: buyer.id })).toBe(1)
+    expect((await findTransactionById(body.transactionId)).status).toBe('SUCCESS')
+    expect((await findRow(courses, { id: course.id })).enrolledCount).toBe(1)
   })
 
   it('sets expiresAt from the purchased plan tier', async () => {
@@ -107,7 +110,7 @@ describe('admin approval', () => {
 
     await approve(body.transactionId, cookie)
 
-    const enrollment = await Enrollment.findOne({})
+    const enrollment = await findRow(enrollments)
     const months =
       (enrollment.expiresAt.getFullYear() - new Date().getFullYear()) * 12 +
       (enrollment.expiresAt.getMonth() - new Date().getMonth())
@@ -122,7 +125,7 @@ describe('admin approval', () => {
 
     await approve(body.transactionId, cookie)
 
-    expect((await Enrollment.findOne({})).expiresAt).toBeNull()
+    expect((await findRow(enrollments)).expiresAt).toBeNull()
   })
 
   it('does not double-enroll or double-charge the counter when approved twice', async () => {
@@ -135,25 +138,25 @@ describe('admin approval', () => {
 
     expect(second.status).toBe(200)
     expect(second.body.alreadyProcessed).toBe(true)
-    expect(await Enrollment.countDocuments()).toBe(1)
-    expect((await course.constructor.findById(course._id)).enrolledCount).toBe(1)
+    expect(await countRows(enrollments)).toBe(1)
+    expect((await findRow(courses, { id: course.id })).enrolledCount).toBe(1)
   })
 
   it('matches an existing account by email instead of creating a second one', async () => {
     await paidCourse()
     const { cookie } = await signUpAdmin()
-    await User.create({
+    await createAccount({
       name: 'Anjali R',
       email: 'anjali@example.in',
-      passwordHash: await User.hashPassword('an-existing-password'),
+      password: 'an-existing-password',
     })
-    const before = await User.countDocuments()
+    const before = await countRows(users)
 
     const { body } = await submitUpiPayment()
     const res = await approve(body.transactionId, cookie)
 
     expect(res.body.accountCreated).toBe(false)
-    expect(await User.countDocuments()).toBe(before)
+    expect(await countRows(users)).toBe(before)
   })
 
   it('assigns a sequential invoice number on approval', async () => {
@@ -165,8 +168,8 @@ describe('admin approval', () => {
     await approve(first.body.transactionId, cookie)
     await approve(second.body.transactionId, cookie)
 
-    const a = await Transaction.findById(first.body.transactionId)
-    const b = await Transaction.findById(second.body.transactionId)
+    const a = await findTransactionById(first.body.transactionId)
+    const b = await findTransactionById(second.body.transactionId)
     expect(a.invoiceNo).toMatch(/^GS-\d{4}-0001$/)
     expect(b.invoiceNo).toMatch(/^GS-\d{4}-0002$/)
   })
@@ -182,10 +185,10 @@ describe('admin approval', () => {
       .send({ reason: 'No matching credit in the statement' })
 
     expect(res.status).toBe(200)
-    const txn = await Transaction.findById(body.transactionId)
+    const txn = await findTransactionById(body.transactionId)
     expect(txn.status).toBe('FAILED')
     expect(txn.failureReason).toBe('No matching credit in the statement')
-    expect(await Enrollment.countDocuments()).toBe(0)
+    expect(await countRows(enrollments)).toBe(0)
   })
 
   it('refuses approval to a non-admin', async () => {
@@ -196,6 +199,6 @@ describe('admin approval', () => {
 
     const res = await approve(body.transactionId, cookie)
     expect(res.status).toBe(403)
-    expect(await Enrollment.countDocuments()).toBe(0)
+    expect(await countRows(enrollments)).toBe(0)
   })
 })

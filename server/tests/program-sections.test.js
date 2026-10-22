@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { Program } from '../src/models/index.js'
+import { programs } from '../src/db/schema/index.js'
+import { findRowById, insertRow } from './helpers/content.js'
 import { agent, signUpAdmin } from './helpers/factories.js'
 
 /**
@@ -24,7 +25,8 @@ const baseProgram = (over = {}) => ({
 
 describe('program redesign sections', () => {
   it('serves the new sections on the public endpoint', async () => {
-    await Program.create(
+    await insertRow(
+      programs,
       baseProgram({
         batchNote: 'Batch 4 open · 10 seats per batch',
         trustBar: [{ value: '42 hrs', label: 'AI-native Common Core' }],
@@ -33,7 +35,9 @@ describe('program redesign sections', () => {
           columns: ['Stage', 'Business owners', 'Freshers & freelancers'],
           rows: [{ stage: 'Common Core', values: ['Weeks 1–6 · 42 hours'] }],
         },
-        tracks: [{ tag: 'Track A', title: 'Business owners', modules: [{ code: 'A1', body: 'x' }] }],
+        tracks: [
+          { tag: 'Track A', title: 'Business owners', modules: [{ code: 'A1', body: 'x' }] },
+        ],
         toolGroups: [{ title: 'Paid media', items: ['Meta Ads Manager'] }],
         pricing: { amount: 79999, funding: [{ title: 'Common Core', body: 'Weeks 1–6' }] },
       }),
@@ -55,26 +59,29 @@ describe('program redesign sections', () => {
    * asserts the values come back, not just the status code.
    */
   it('round-trips the batch note through the information tab', async () => {
-    const program = await Program.create(baseProgram())
+    const program = await insertRow(programs, baseProgram())
     const as = await adminAgent()
 
     await as('put', `/api/admin/programs/${program._id}/information`)
       .send({ title: 'Complete Growth Marketing Course', batchNote: 'Batch 5 open · 8 seats left' })
       .expect(200)
 
-    const saved = await Program.findById(program._id).lean()
+    const saved = await findRowById(programs, program._id)
     expect(saved.batchNote).toBe('Batch 5 open · 8 seats left')
   })
 
   it('round-trips the redesign content sections and the pricing panel', async () => {
-    const program = await Program.create(baseProgram())
+    const program = await insertRow(programs, baseProgram())
     const as = await adminAgent()
 
     await as('put', `/api/admin/programs/${program._id}/content`)
       .send({
         trustBar: [{ value: '78–92 hrs', label: 'total by track' }],
         why: { paragraphs: ['One', 'Two'], brochureUrl: 'https://example.com/b.pdf' },
-        structure: { columns: ['Stage', 'A', 'B'], rows: [{ stage: 'Total', values: ['1', '2'], isTotal: true }] },
+        structure: {
+          columns: ['Stage', 'A', 'B'],
+          rows: [{ stage: 'Total', values: ['1', '2'], isTotal: true }],
+        },
         tracks: [{ tag: 'Track B', title: 'Freelancers', milestone: 'Client delivery' }],
         toolGroups: [{ title: 'SEO', items: ['GA4', 'Search Console'] }],
       })
@@ -94,7 +101,7 @@ describe('program redesign sections', () => {
       })
       .expect(200)
 
-    const saved = await Program.findById(program._id).lean()
+    const saved = await findRowById(programs, program._id)
     expect(saved.trustBar[0].value).toBe('78–92 hrs')
     expect(saved.why.paragraphs).toEqual(['One', 'Two'])
     expect(saved.structure.rows[0].isTotal).toBe(true)
@@ -110,8 +117,12 @@ describe('program redesign sections', () => {
 
   /** A program from before the redesign must keep working, just with fewer sections. */
   it('leaves a program without the new fields untouched', async () => {
-    await Program.create(
-      baseProgram({ slug: 'legacy-program', pricing: { amount: 49999, benefits: ['Live sessions'] } }),
+    await insertRow(
+      programs,
+      baseProgram({
+        slug: 'legacy-program',
+        pricing: { amount: 49999, benefits: ['Live sessions'] },
+      }),
     )
 
     const res = await agent().get('/api/programs/legacy-program').expect(200)

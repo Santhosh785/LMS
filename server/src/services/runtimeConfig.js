@@ -1,5 +1,5 @@
 import { env } from '../config/env.js'
-import { Setting } from '../models/index.js'
+import { getSettings } from '../db/repos/settings.js'
 import { open } from '../utils/secretBox.js'
 
 /**
@@ -34,17 +34,6 @@ const TTL_MS = 60_000
 
 let overrides = {}
 let loadedAt = 0
-
-/** Secrets are stored sealed; `select: false` means they must be asked for. */
-const SECRET_PATHS = [
-  '+payments.razorpayKeySecretEnc',
-  '+payments.razorpayWebhookSecretEnc',
-  '+mail.resendApiKeyEnc',
-  '+video.bunnySecurityKeyEnc',
-  '+video.bunnyApiKeyEnc',
-  '+video.bunnyWebhookTokenEnc',
-  '+media.bunnyStoragePasswordEnc',
-].join(' ')
 
 /** '' and null both mean "not set here" — only a real value overrides env. */
 const pick = (value, fallback) =>
@@ -88,7 +77,7 @@ function warnOnUnreadableSecrets(doc) {
 
 export async function refreshRuntimeConfig() {
   try {
-    const doc = await Setting.findOne({ key: 'site' }).select(SECRET_PATHS).lean()
+    const doc = await getSettings({ secrets: true })
     warnOnUnreadableSecrets(doc)
     overrides = doc || {}
   } catch {

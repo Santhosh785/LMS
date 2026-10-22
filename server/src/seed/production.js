@@ -1,4 +1,20 @@
-import * as M from '../models/index.js'
+import { count, eq, inArray, gt, ne, or, and, isNotNull } from 'drizzle-orm'
+import { db } from '../db/index.js'
+import {
+  certificates,
+  courses as coursesTable,
+  customers,
+  enrollments,
+  funnelLeads,
+  leaderboardEntries,
+  leads,
+  transactions,
+  users,
+  workshopRegistrations,
+} from '../db/schema/index.js'
+import { hydrateCourses } from '../db/repos/courses.js'
+import { createAccount, findUserByEmail, normaliseEmail } from '../db/repos/users.js'
+import { supabaseAdmin } from '../services/supabaseAdmin.js'
 import { error, log } from './guard.js'
 import { cfg } from '../services/runtimeConfig.js'
 
@@ -21,15 +37,29 @@ import { cfg } from '../services/runtimeConfig.js'
  * at production, and the numbers on the admin dashboard are fiction.
  */
 const MUST_BE_CLEAN = [
-  ['Transaction', M.Transaction],
-  ['Customer', M.Customer],
-  ['Enrollment', M.Enrollment],
-  ['Certificate', M.Certificate],
-  ['Lead', M.Lead],
-  ['FunnelLead', M.FunnelLead],
-  ['LeaderboardEntry', M.LeaderboardEntry],
-  ['WorkshopRegistration', M.WorkshopRegistration],
+  ['Transaction', transactions],
+  ['Customer', customers],
+  ['Enrollment', enrollments],
+  ['Certificate', certificates],
+  ['Lead', leads],
+  ['FunnelLead', funnelLeads],
+  ['LeaderboardEntry', leaderboardEntries],
+  ['WorkshopRegistration', workshopRegistrations],
 ]
+
+const countRows = async (table, where) => {
+  const [{ n }] = await db.select({ n: count() }).from(table).where(where)
+  return n
+}
+
+/** Enrolments per course id, from the real rows. */
+async function realEnrollmentCounts() {
+  const rows = await db
+    .select({ courseId: enrollments.courseId, n: count() })
+    .from(enrollments)
+    .groupBy(enrollments.courseId)
+  return new Map(rows.map((r) => [String(r.courseId), r.n]))
+}
 
 /** The fabricated people. Named so the audit can point at them specifically. */
 const DEMO_EMAILS = [
@@ -58,28 +88,37 @@ export async function ensureAdmin({ email, name, password }) {
     throw new Error('SEED_PASSWORD must be set (>= 8 characters) to create the admin account')
   }
 
-  const passwordHash = await M.User.hashPassword(password)
-  const existing = await M.User.findOne({ email })
+  const address = normaliseEmail(email)
+  const existing = await findUserByEmail(address)
 
   if (existing) {
-    existing.set({ passwordHash, role: 'admin', name: name || existing.name })
+    const { error: authError } = await supabaseAdmin().auth.admin.updateUserById(existing.id, {
+      password,
+    })
+    if (authError) throw new Error(`Supabase password update failed: ${authError.message}`)
     // Any outstanding reset link dies with the password change, and so does any
     // session issued before it — see middleware/auth.js.
-    existing.passwordChangedAt = new Date()
-    existing.passwordResetTokenHash = undefined
-    existing.passwordResetExpiresAt = undefined
-    await existing.save()
-    log(`admin: reset the password for existing account ${email}`)
-    return { user: existing, created: false }
+    await db
+      .update(users)
+      .set({
+        role: 'admin',
+        name: name || existing.name,
+        passwordChangedAt: new Date(),
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+      })
+      .where(eq(users.id, existing.id))
+    log(`admin: reset the password for existing account ${address}`)
+    return { user: await findUserByEmail(address), created: false }
   }
 
-  const user = await M.User.create({
+  const user = await createAccount({
+    email: address,
+    password,
     name: name || 'Growth Scholar',
-    email,
-    passwordHash,
     role: 'admin',
   })
-  log(`admin: created ${email}`)
+  log(`admin: created ${address}`)
   return { user, created: true }
 }
 
@@ -110,12 +149,12 @@ export async function auditProduction({ adminEmail } = {}) {
   /* --- demo-owned collections must be empty --- */
   log('')
   log('— transactional collections —')
-  for (const [label, Model] of MUST_BE_CLEAN) {
-    const count = await Model.countDocuments()
-    if (count === 0) {
+  for (const [label, table] of MUST_BE_CLEAN) {
+    const n = await countRows(table)
+    if (n === 0) {
       log(`  ${label.padEnd(22)} empty ✔`)
     } else {
-      log(`  ${label.padEnd(22)} ${count} document(s)`)
+      log(`  ${label.padEnd(22)} ${n} row(s)`)
     }
   }
   log('  (a non-zero count is only a problem if it is demo data — see below)')
@@ -123,9 +162,10 @@ export async function auditProduction({ adminEmail } = {}) {
   /* --- fabricated accounts --- */
   log('')
   log('— accounts —')
-  const demoUsers = await M.User.find({ email: { $in: DEMO_EMAILS } })
-    .select('name email')
-    .lean()
+  const demoUsers = await db
+    .select({ name: users.name, email: users.email })
+    .from(users)
+    .where(inArray(users.email, DEMO_EMAILS))
   if (demoUsers.length) {
     problems.push(
       `${demoUsers.length} demo account(s) present: ${demoUsers.map((u) => u.email).join(', ')}`,
@@ -135,7 +175,7 @@ export async function auditProduction({ adminEmail } = {}) {
     log('  no demo accounts ✔')
   }
 
-  const admins = await M.User.find({ role: 'admin' }).select('email').lean()
+  const admins = await db.select({ email: users.email }).from(users).where(eq(users.role, 'admin'))
   log(`  admins: ${admins.map((a) => a.email).join(', ') || 'none'}`)
   if (!admins.length) problems.push('no admin account exists — nobody can approve a payment')
   if (adminEmail && !admins.some((a) => a.email === adminEmail)) {
@@ -145,23 +185,24 @@ export async function auditProduction({ adminEmail } = {}) {
     log('  more than one admin — confirm each is a real operator')
   }
 
-  const totalUsers = await M.User.countDocuments()
+  const totalUsers = await countRows(users)
   log(`  total accounts: ${totalUsers}`)
 
   /* --- invented marketing numbers --- */
   log('')
   log('— course statistics —')
-  const invented = await M.Course.find({
-    $or: [{ rating: { $gt: 0 } }, { enrolledLabel: { $nin: [null, ''] } }],
-  })
-    .select('slug rating enrolledCount enrolledLabel')
-    .lean()
-  const realCounts = await M.Enrollment.aggregate([
-    { $group: { _id: '$courseId', n: { $sum: 1 } } },
-  ])
-  const realByCourse = new Map(realCounts.map((r) => [String(r._id), r.n]))
+  const invented = await db
+    .select()
+    .from(coursesTable)
+    .where(
+      or(
+        gt(coursesTable.rating, 0),
+        and(isNotNull(coursesTable.enrolledLabel), ne(coursesTable.enrolledLabel, '')),
+      ),
+    )
+  const realByCourse = await realEnrollmentCounts()
   for (const c of invented) {
-    const real = realByCourse.get(String(c._id)) || 0
+    const real = realByCourse.get(String(c.id)) || 0
     if (c.rating > 0 || (c.enrolledCount || 0) > real) {
       problems.push(
         `course "${c.slug}" advertises rating ${c.rating} / ${c.enrolledCount} enrolled, but has ${real} real enrolment(s)`,
@@ -175,7 +216,7 @@ export async function auditProduction({ adminEmail } = {}) {
   /* --- deliverability --- */
   log('')
   log('— publishable courses —')
-  const courses = await M.Course.find().select('slug title status sections').lean()
+  const courses = await hydrateCourses(await db.select().from(coursesTable))
   for (const c of courses) {
     const p = publishability(c)
     const flag = c.status === 'Published' && !p.deliverable ? 'NOT DELIVERABLE' : c.status
@@ -192,9 +233,10 @@ export async function auditProduction({ adminEmail } = {}) {
   /* --- prices --- */
   log('')
   log('— prices —')
-  const priced = await M.Course.find({ status: 'Published' })
-    .select('slug price amount pricingPlans')
-    .lean()
+  const priced = await hydrateCourses(
+    await db.select().from(coursesTable).where(eq(coursesTable.status, 'Published')),
+    { curriculum: false },
+  )
   for (const c of priced) {
     if (c.price === 'free') {
       log(`  ${c.slug}: free`)
@@ -228,12 +270,16 @@ export async function auditProduction({ adminEmail } = {}) {
  * human decision in the admin console.
  */
 export async function draftUndeliverableCourses({ dryRun = false } = {}) {
-  const courses = await M.Course.find({ status: 'Published' }).select('slug sections status')
+  const courses = await hydrateCourses(
+    await db.select().from(coursesTable).where(eq(coursesTable.status, 'Published')),
+  )
   const drafted = []
   for (const course of courses) {
     if (publishability(course).deliverable) continue
     drafted.push(course.slug)
-    if (!dryRun) await M.Course.updateOne({ _id: course._id }, { $set: { status: 'Draft' } })
+    if (!dryRun) {
+      await db.update(coursesTable).set({ status: 'Draft' }).where(eq(coursesTable.id, course.id))
+    }
   }
   if (drafted.length) {
     log(
@@ -254,19 +300,18 @@ export async function draftUndeliverableCourses({ dryRun = false } = {}) {
  * counts are recomputed from actual Enrollment documents.
  */
 export async function resetInventedStats() {
-  const counts = await M.Enrollment.aggregate([{ $group: { _id: '$courseId', n: { $sum: 1 } } }])
-  const byCourse = new Map(counts.map((r) => [String(r._id), r.n]))
+  const byCourse = await realEnrollmentCounts()
 
-  const courses = await M.Course.find().select('slug rating enrolledCount enrolledLabel')
+  const courses = await db.select().from(coursesTable)
   let changed = 0
   for (const c of courses) {
-    const real = byCourse.get(String(c._id)) || 0
+    const real = byCourse.get(String(c.id)) || 0
     const needs = c.rating !== 0 || c.enrolledCount !== real || c.enrolledLabel
     if (!needs) continue
-    await M.Course.updateOne(
-      { _id: c._id },
-      { $set: { rating: 0, enrolledCount: real, enrolledLabel: '' } },
-    )
+    await db
+      .update(coursesTable)
+      .set({ rating: 0, enrolledCount: real, enrolledLabel: '' })
+      .where(eq(coursesTable.id, c.id))
     changed += 1
   }
   log(`reset invented rating/enrolment figures on ${changed} course(s)`)

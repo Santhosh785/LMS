@@ -10,9 +10,20 @@
  * It depends on the catalogue existing (courses are looked up by slug), but it
  * never rewrites it: seedContent() owns Course/Program/Workshop/BlogPost/
  * Channel/PracticeItem/Badge/PointRule/Setting.
+ *
+ * Accounts: only the demo accounts below are ever deleted, matched by email.
+ * The Mongo version wiped every User document; with identities in Supabase Auth
+ * that would also erase real people who signed up on a dev or staging project,
+ * so the blast radius is now exactly the accounts this file creates.
  */
-import * as M from '../models/index.js'
+import { eq } from 'drizzle-orm'
+import { db } from '../db/index.js'
+import * as T from '../db/schema/index.js'
+import { hydrateCourses } from '../db/repos/courses.js'
+import { insertTransaction } from '../db/repos/transactions.js'
+import { createAccount, deleteAccount, findUserByEmail } from '../db/repos/users.js'
 import { log } from './guard.js'
+import { insertAll } from './db.js'
 
 import { channels, posts } from './data/community.js'
 import {
@@ -31,7 +42,7 @@ import { leaderboard } from './data/gamification.js'
 
 /** Named in the production refusal message so the operator sees the blast radius. */
 export const DEMO_COLLECTIONS = [
-  'User',
+  'User (the demo accounts only)',
   'Enrollment',
   'Certificate',
   'Transaction',
@@ -104,7 +115,7 @@ const enrollmentPlan = [
 
 export async function seedDemo({ seedPassword, keepUsers = false }) {
   /* --------------------- the catalogue must be there --------------------- */
-  const courseDocs = await M.Course.find({})
+  const courseDocs = await hydrateCourses(await db.select().from(T.courses))
   const bySlug = Object.fromEntries(courseDocs.map((c) => [c.slug, c]))
   const missing = enrollmentPlan.map((p) => p.slug).filter((slug) => !bySlug[slug])
   if (missing.length) {
@@ -116,45 +127,62 @@ export async function seedDemo({ seedPassword, keepUsers = false }) {
   }
 
   /* ------------------------------- wipe ---------------------------------- */
-  // Demo-owned collections only. The catalogue is left alone so this can be
-  // re-run on top of freshly published content.
+  // Demo-owned tables only. The catalogue is left alone so this can be re-run
+  // on top of freshly published content. Child tables (notes, likes, steps,
+  // attendees, list memberships) go with their parents via ON DELETE CASCADE.
   const wipe = [
-    M.Enrollment,
-    M.Certificate,
-    M.Lead,
-    M.WorkshopRegistration,
-    M.LiveClass,
-    M.Booking,
-    M.LiveBooking,
-    M.Post,
-    M.Comment,
-    M.Customer,
-    M.Transaction,
-    M.EmailList,
-    M.EmailContact,
-    M.Broadcast,
-    M.Funnel,
-    M.FunnelStep,
-    M.FunnelLead,
-    M.LeaderboardEntry,
+    T.enrollments,
+    T.certificates,
+    T.leads,
+    T.workshopRegistrations,
+    T.bookings,
+    T.liveClasses,
+    T.liveBookings,
+    T.comments,
+    T.posts,
+    T.transactions,
+    T.customers,
+    T.broadcasts,
+    T.emailContacts,
+    T.emailLists,
+    T.funnelLeads,
+    T.funnelSteps,
+    T.funnels,
+    T.leaderboardEntries,
   ]
-  await Promise.all(wipe.map((model) => model.deleteMany({})))
-  if (!keepUsers) await M.User.deleteMany({})
-  // These live on content documents but belong to the demo users, so they would
-  // otherwise dangle on ids that no longer exist.
-  await M.PracticeItem.updateMany({}, { $set: { attempts: [] } })
-  await M.Channel.updateMany({}, { $set: { memberIds: [] } })
-  log(`cleared ${wipe.length} demo collections${keepUsers ? ' (users kept)' : ''}`)
+  for (const table of wipe) await db.delete(table)
+  // These belong to the demo users but hang off catalogue rows, so they would
+  // otherwise dangle on accounts that are about to be recreated.
+  await db.delete(T.practiceAttempts)
+  await db.delete(T.channelMembers)
+  if (!keepUsers) {
+    for (const seed of userSeeds) {
+      const existing = await findUserByEmail(seed.email)
+      if (existing) await deleteAccount(existing.id)
+    }
+  }
+  log(`cleared ${wipe.length} demo tables${keepUsers ? ' (users kept)' : ''}`)
 
   /* ------------------------------- users --------------------------------- */
-  const passwordHash = await M.User.hashPassword(seedPassword)
-
   const users = {}
   for (const seed of userSeeds) {
-    const existing = keepUsers ? await M.User.findOne({ email: seed.email }) : null
-    users[seed.email] = existing || (await M.User.create({ ...seed, passwordHash }))
+    const existing = keepUsers ? await findUserByEmail(seed.email) : null
+    if (existing) {
+      users[seed.email] = existing
+      continue
+    }
+    const { email, name, role, avatarInitials, ...stats } = seed
+    const created = await createAccount({ email, name, role, password: seedPassword })
+    // Profile stats are not self-editable fields, so createAccount leaves them
+    // out; the demo writes them directly.
+    const [row] = await db
+      .update(T.users)
+      .set({ avatarInitials, ...stats })
+      .where(eq(T.users.id, created.id))
+      .returning()
+    users[seed.email] = row
   }
-  const userIds = Object.values(users).map((u) => u._id)
+  const userIds = Object.values(users).map((u) => u.id)
   log(`users: ${Object.keys(users).length}`)
 
   /* ------------------------ student learning state ----------------------- */
@@ -176,16 +204,16 @@ export async function seedDemo({ seedPassword, keepUsers = false }) {
     // otherwise the number visibly jumps the first time a learner clicks.
     const progressPct = lessons.length ? Math.round((take / lessons.length) * 100) : 0
     enrollments.push({
-      userId: priya._id,
-      courseId: course._id,
+      userId: priya.id,
+      courseId: course.id,
       progressPct,
       status: plan.status,
-      completedLessonIds: lessons.slice(0, take).map((l) => l._id),
-      currentSectionId: plan.slug === 'seo-mastery' ? module3._id : course.sections[0]._id,
+      completedLessonIds: lessons.slice(0, take).map((l) => l.id),
+      currentSectionId: plan.slug === 'seo-mastery' ? module3.id : course.sections[0].id,
       currentLessonId:
         plan.slug === 'seo-mastery'
-          ? module3.lessons[1]._id
-          : lessons[Math.min(take, lessons.length - 1)]._id,
+          ? module3.lessons[1].id
+          : lessons[Math.min(take, lessons.length - 1)].id,
       lastAccessedAt: new Date(Date.now() - i * 86400000),
       enrolledAt: new Date(Date.now() - (i + 3) * 86400000),
     })
@@ -194,34 +222,41 @@ export async function seedDemo({ seedPassword, keepUsers = false }) {
   // a few peers enrolled so the admin "Students" tab is not empty
   for (const email of ['sowndarya@email.com', 'anish@email.com', 'gokul@email.com']) {
     enrollments.push({
-      userId: users[email]._id,
-      courseId: seoCourse._id,
+      userId: users[email].id,
+      courseId: seoCourse.id,
       progressPct: 45,
       status: 'Active',
       completedLessonIds: seoLessons
         .slice(0, Math.round(seoLessons.length * 0.45))
-        .map((l) => l._id),
+        .map((l) => l.id),
       lastAccessedAt: new Date(),
     })
   }
-  await M.Enrollment.insertMany(enrollments)
+  for (const { completedLessonIds, ...e } of enrollments) {
+    const [row] = await db.insert(T.enrollments).values(e).returning({ id: T.enrollments.id })
+    if (completedLessonIds.length) {
+      await db
+        .insert(T.enrollmentCompletedLessons)
+        .values(completedLessonIds.map((lessonId) => ({ enrollmentId: row.id, lessonId })))
+    }
+  }
   log(
     `enrollments: ${enrollments.length} (SEO Mastery at ${enrollments[0].progressPct}%, ` +
       `${completedCount}/${seoLessons.length} lessons)`,
   )
 
-  await M.Certificate.insertMany([
+  await db.insert(T.certificates).values([
     {
-      userId: priya._id,
-      courseId: bySlug['digital-marketing-starter']._id,
+      userId: priya.id,
+      courseId: bySlug['digital-marketing-starter'].id,
       courseTitle: 'Digital Marketing Starter',
       issuedAt: new Date('2026-06-18'),
       credentialId: 'GS-DMS-2026-0431',
       status: 'Issued',
     },
     {
-      userId: priya._id,
-      courseId: seoCourse._id,
+      userId: priya.id,
+      courseId: seoCourse.id,
       courseTitle: 'SEO Mastery',
       credentialId: 'GS-SEO-2026-PENDING',
       status: 'In progress',
@@ -230,102 +265,99 @@ export async function seedDemo({ seedPassword, keepUsers = false }) {
 
   /* --------------------- practice attempts (demo user) -------------------- */
   for (const [i, item] of practiceItems.entries()) {
-    await M.PracticeItem.updateOne(
-      { title: item.title },
-      {
-        $set: {
-          attempts: [
-            {
-              userId: priya._id,
-              status: i === 0 ? 'Completed' : i === 1 ? 'In progress' : 'Not started',
-              score: i === 0 ? 87 : undefined,
-              attemptedAt: i < 2 ? new Date() : undefined,
-            },
-          ],
-        },
-      },
-    )
+    const [stored] = await db
+      .select({ id: T.practiceItems.id })
+      .from(T.practiceItems)
+      .where(eq(T.practiceItems.title, item.title))
+    if (!stored) continue
+    await db.insert(T.practiceAttempts).values({
+      practiceItemId: stored.id,
+      userId: priya.id,
+      status: i === 0 ? 'Completed' : i === 1 ? 'In progress' : 'Not started',
+      score: i === 0 ? 87 : null,
+      attemptedAt: i < 2 ? new Date() : null,
+    })
   }
 
   /* --------------------------------- live -------------------------------- */
-  const liveDocs = await M.LiveClass.insertMany(liveClasses)
-  await M.Booking.insertMany([
-    {
-      liveClassId: liveDocs[0]._id,
-      userId: priya._id,
-      slot: liveDocs[0].startsAt,
-      status: 'Booked',
-    },
-    {
-      liveClassId: liveDocs[1]._id,
-      userId: priya._id,
-      slot: liveDocs[1].startsAt,
-      status: 'Booked',
-    },
+  const liveDocs = await insertAll(T.liveClasses, liveClasses)
+  await db.insert(T.bookings).values([
+    { liveClassId: liveDocs[0].id, userId: priya.id, slot: liveDocs[0].startsAt, status: 'Booked' },
+    { liveClassId: liveDocs[1].id, userId: priya.id, slot: liveDocs[1].startsAt, status: 'Booked' },
   ])
-  await M.LiveBooking.insertMany(liveBookings)
+  await insertAll(T.liveBookings, liveBookings)
 
   /* ------------------------------ community ------------------------------ */
   // Channels themselves are catalogue content; only membership is demo data.
-  await M.Channel.updateMany(
-    { slug: { $in: channels.map((c) => c.slug) } },
-    { $set: { memberIds: userIds } },
-  )
-  const channelDocs = await M.Channel.find({}).select('_id slug')
+  const channelDocs = await db.select({ id: T.channels.id, slug: T.channels.slug }).from(T.channels)
   const channelBySlug = Object.fromEntries(channelDocs.map((c) => [c.slug, c]))
+  const seededChannels = channelDocs.filter((c) => channels.some((s) => s.slug === c.slug))
+  if (seededChannels.length && userIds.length) {
+    await db
+      .insert(T.channelMembers)
+      .values(seededChannels.flatMap((c) => userIds.map((userId) => ({ channelId: c.id, userId }))))
+  }
 
-  await M.Post.insertMany(
-    posts
-      .filter((p) => channelBySlug[p.channelSlug] && users[p.authorEmail])
-      .map((p) => ({
-        channelId: channelBySlug[p.channelSlug]._id,
-        authorId: users[p.authorEmail]._id,
+  const postSeeds = posts.filter((p) => channelBySlug[p.channelSlug] && users[p.authorEmail])
+  for (const p of postSeeds) {
+    const [row] = await db
+      .insert(T.posts)
+      .values({
+        channelId: channelBySlug[p.channelSlug].id,
+        authorId: users[p.authorEmail].id,
         body: p.body,
         pinned: !!p.pinned,
-        commentCount: p.commentCount,
-        likes: userIds.slice(0, Math.min(p.likeCount, userIds.length)),
+        commentCount: p.commentCount ?? 0,
         createdAt: new Date(Date.now() - p.minutesAgo * 60000),
-      })),
-  )
+      })
+      .returning({ id: T.posts.id })
+    const likers = userIds.slice(0, Math.min(p.likeCount || 0, userIds.length))
+    if (likers.length) {
+      await db.insert(T.postLikes).values(likers.map((userId) => ({ postId: row.id, userId })))
+    }
+  }
   log(`channel memberships: ${channelDocs.length}, posts: ${posts.length}`)
 
   /* ------------------------------ admin data ----------------------------- */
-  const customerDocs = await M.Customer.insertMany(
-    customers.map((c) => ({ ...c, userId: users[c.email]?._id })),
-  )
+  const customerDocs = await insertAll(T.customers, customers, (c) => ({
+    userId: users[c.email]?.id ?? null,
+  }))
   const customerByEmail = Object.fromEntries(customerDocs.map((c) => [c.email, c]))
 
-  await M.Transaction.insertMany(
-    transactions.map((t) => ({ ...t, customerId: customerByEmail[t.contact]?._id })),
-  )
+  for (const t of transactions) {
+    await insertTransaction({ ...t, customerId: customerByEmail[t.contact]?.id })
+  }
 
-  const listDocs = await M.EmailList.insertMany(emailLists)
+  const listDocs = await insertAll(T.emailLists, emailLists)
   const listByName = Object.fromEntries(listDocs.map((l) => [l.name, l]))
 
-  await M.EmailContact.insertMany(
-    emailContacts.map(({ lists, ...c }) => ({
-      ...c,
-      listIds: lists.map((n) => listByName[n]?._id).filter(Boolean),
-    })),
-  )
+  for (const { lists, ...c } of emailContacts) {
+    const [contact] = await insertAll(T.emailContacts, [c])
+    const listIds = lists.map((n) => listByName[n]?.id).filter(Boolean)
+    if (listIds.length) {
+      await db
+        .insert(T.emailContactLists)
+        .values(listIds.map((listId) => ({ contactId: contact.id, listId })))
+    }
+  }
 
-  await M.Broadcast.insertMany(
-    broadcasts.map((b) => ({ ...b, sendToListId: listByName[b.sendToListName]?._id })),
-  )
+  await insertAll(T.broadcasts, broadcasts, (b) => ({
+    sendToListId: listByName[b.sendToListName]?.id ?? null,
+  }))
 
   for (const { steps, ...funnel } of funnels) {
-    const doc = await M.Funnel.create(funnel)
-    await M.FunnelStep.insertMany(steps.map((s) => ({ ...s, funnelId: doc._id })))
+    const [doc] = await insertAll(T.funnels, [funnel])
+    await insertAll(T.funnelSteps, steps, () => ({ funnelId: doc.id }))
     if (funnel.slug === 'lead-magnet') {
-      await M.FunnelLead.insertMany(funnelLeads.map((l) => ({ ...l, funnelId: doc._id })))
+      await insertAll(T.funnelLeads, funnelLeads, () => ({ funnelId: doc.id }))
     }
   }
   log(`funnels: ${funnels.length}, customers: ${customerDocs.length}, lists: ${listDocs.length}`)
 
   /* ---------------------------- leaderboard ------------------------------ */
-  await M.LeaderboardEntry.insertMany(
-    leaderboard.map((e) => ({ ...e, userId: users[e.email]?._id })),
-  )
+  await insertAll(T.leaderboardEntries, leaderboard, (e) => ({
+    userId: users[e.email]?.id ?? null,
+  }))
 
   log('demo seed complete ✔')
   log('sign in as  priya.sharma@email.com   (student)')

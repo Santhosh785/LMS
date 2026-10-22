@@ -1,6 +1,11 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
-import { Workshop, WorkshopRegistration } from '../../models/index.js'
+import { and, count, desc, eq, gt, sql } from 'drizzle-orm'
+import { db, withMongoId } from '../../db/index.js'
+import { isUuid } from '../../db/coerce.js'
+import { users, workshopRegistrations, workshops } from '../../db/schema/index.js'
+import { registrationDoc } from '../../db/repos/workshops.js'
+import { pickColumns } from '../../db/repos/content.js'
 import { crudRouter } from '../../utils/crudRouter.js'
 import { sendCsv } from '../../utils/csv.js'
 
@@ -28,20 +33,49 @@ const attendee = (r) => ({
   registeredAt: r.createdAt,
 })
 
+/**
+ * Registrations joined to their account and workshop — the Mongo version's two
+ * `populate`s. `userId` and `workshopId` come back as the populated objects
+ * (or null), the shape `attendee()` and the admin screen read.
+ */
+async function loadRegistrations(where, { limit, workshopFields }) {
+  const query = db
+    .select({
+      registration: workshopRegistrations,
+      user: pickColumns(users, 'name email phone'),
+      workshop: pickColumns(workshops, workshopFields),
+    })
+    .from(workshopRegistrations)
+    .leftJoin(users, eq(users.id, workshopRegistrations.userId))
+    .leftJoin(workshops, eq(workshops.id, workshopRegistrations.workshopId))
+    .where(where)
+    .orderBy(desc(workshopRegistrations.createdAt))
+  const rows = limit ? await query.limit(limit) : await query
+  return rows.map(({ registration, user, workshop }) => ({
+    ...registrationDoc(registration),
+    userId: user?.id ? withMongoId(user) : null,
+    workshopId: workshop?.id ? withMongoId(workshop) : null,
+  }))
+}
+
+const byWorkshop = (id) =>
+  id && isUuid(String(id)) ? eq(workshopRegistrations.workshopId, String(id)) : undefined
+
 router.get(
   '/registrations',
   asyncHandler(async (req, res) => {
-    const filter = {}
-    if (req.query.workshopId) filter.workshopId = req.query.workshopId
-    if (req.query.attended === 'true') filter.attended = true
-    if (req.query.attended === 'false') filter.attended = false
+    // An unparseable workshop id matches nothing, as a Mongo cast would.
+    if (req.query.workshopId && !isUuid(String(req.query.workshopId))) {
+      return res.json({ items: [], total: 0 })
+    }
+    const clauses = [byWorkshop(req.query.workshopId)]
+    if (req.query.attended === 'true') clauses.push(eq(workshopRegistrations.attended, true))
+    if (req.query.attended === 'false') clauses.push(eq(workshopRegistrations.attended, false))
 
-    const rows = await WorkshopRegistration.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(Math.min(Number(req.query.limit) || 500, 1000))
-      .populate('userId', 'name email phone')
-      .populate('workshopId', 'title slug startsAt capacity registeredCount mode venue')
-      .lean()
+    const rows = await loadRegistrations(and(...clauses), {
+      limit: Math.min(Number(req.query.limit) || 500, 1000),
+      workshopFields: 'title slug startsAt capacity registeredCount mode venue',
+    })
 
     res.json({
       items: rows.map((r) => ({ ...attendee(r), workshop: r.workshopId })),
@@ -53,12 +87,10 @@ router.get(
 router.get(
   '/registrations/export',
   asyncHandler(async (req, res) => {
-    const filter = req.query.workshopId ? { workshopId: req.query.workshopId } : {}
-    const rows = await WorkshopRegistration.find(filter)
-      .sort({ createdAt: -1 })
-      .populate('userId', 'name email phone')
-      .populate('workshopId', 'title')
-      .lean()
+    const rows =
+      req.query.workshopId && !isUuid(String(req.query.workshopId))
+        ? []
+        : await loadRegistrations(byWorkshop(req.query.workshopId), { workshopFields: 'title' })
 
     sendCsv(
       res,
@@ -88,7 +120,17 @@ router.put(
     if (req.body.note !== undefined) patch.note = req.body.note
     if (req.body.waitlisted !== undefined) patch.waitlisted = Boolean(req.body.waitlisted)
 
-    const row = await WorkshopRegistration.findByIdAndUpdate(req.params.id, patch, { new: true })
+    if (!isUuid(req.params.id)) throw new HttpError(404, 'Registration not found')
+    const [row] = Object.keys(patch).length
+      ? await db
+          .update(workshopRegistrations)
+          .set(patch)
+          .where(eq(workshopRegistrations.id, req.params.id))
+          .returning({ id: workshopRegistrations.id })
+      : await db
+          .select({ id: workshopRegistrations.id })
+          .from(workshopRegistrations)
+          .where(eq(workshopRegistrations.id, req.params.id))
     if (!row) throw new HttpError(404, 'Registration not found')
     res.json({ ok: true })
   }),
@@ -101,12 +143,20 @@ router.put(
 router.delete(
   '/registrations/:id',
   asyncHandler(async (req, res) => {
-    const row = await WorkshopRegistration.findByIdAndDelete(req.params.id)
-    if (!row) throw new HttpError(404, 'Registration not found')
-    await Workshop.updateOne(
-      { _id: row.workshopId, registeredCount: { $gt: 0 } },
-      { $inc: { registeredCount: -1 } },
-    )
+    if (!isUuid(req.params.id)) throw new HttpError(404, 'Registration not found')
+    const removed = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .delete(workshopRegistrations)
+        .where(eq(workshopRegistrations.id, req.params.id))
+        .returning({ workshopId: workshopRegistrations.workshopId })
+      if (!row) return false
+      await tx
+        .update(workshops)
+        .set({ registeredCount: sql`${workshops.registeredCount} - 1` })
+        .where(and(eq(workshops.id, row.workshopId), gt(workshops.registeredCount, 0)))
+      return true
+    })
+    if (!removed) throw new HttpError(404, 'Registration not found')
     res.json({ ok: true })
   }),
 )
@@ -115,22 +165,24 @@ router.delete(
 router.get(
   '/summary',
   asyncHandler(async (_req, res) => {
-    const [workshops, grouped] = await Promise.all([
-      Workshop.find().sort({ startsAt: -1 }).lean(),
-      WorkshopRegistration.aggregate([
-        {
-          $group: {
-            _id: '$workshopId',
-            registered: { $sum: 1 },
-            attended: { $sum: { $cond: ['$attended', 1, 0] } },
-          },
-        },
-      ]),
+    const [list, grouped] = await Promise.all([
+      db
+        .select()
+        .from(workshops)
+        .orderBy(sql`${workshops.startsAt} desc nulls last`),
+      db
+        .select({
+          workshopId: workshopRegistrations.workshopId,
+          registered: count(),
+          attended: sql`count(*) filter (where ${workshopRegistrations.attended})`.mapWith(Number),
+        })
+        .from(workshopRegistrations)
+        .groupBy(workshopRegistrations.workshopId),
     ])
 
-    const byId = Object.fromEntries(grouped.map((g) => [String(g._id), g]))
+    const byId = Object.fromEntries(grouped.map((g) => [String(g.workshopId), g]))
     res.json({
-      items: workshops.map((w) => ({
+      items: withMongoId(list).map((w) => ({
         ...w,
         registered: byId[String(w._id)]?.registered || 0,
         attended: byId[String(w._id)]?.attended || 0,
@@ -140,6 +192,13 @@ router.get(
   }),
 )
 
-router.use('/', crudRouter(Workshop, { searchFields: ['title', 'slug'], sort: { startsAt: -1 } }))
+router.use(
+  '/',
+  crudRouter(workshops, {
+    name: 'Workshop',
+    searchFields: ['title', 'slug'],
+    sort: { startsAt: -1 },
+  }),
+)
 
 export default router

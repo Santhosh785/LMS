@@ -17,7 +17,6 @@
  *
  * `node src/seed/seed.js --help` prints the same usage the operator needs.
  */
-import mongoose from 'mongoose'
 import { connectDb, disconnectDb } from '../config/db.js'
 import { seedContent } from './content.js'
 import { seedSample } from './sample.js'
@@ -58,9 +57,9 @@ Going live (task 13)
 Commands
   content   Upsert courses, programs, workshops, blog posts, channels, practice
             items, badges, point rules and settings by natural key. Deletes
-            nothing. Leaves User, Enrollment, Transaction, Customer and
-            Certificate documents untouched. Safe against production.
-  demo      DESTRUCTIVE. Deletes every document in:
+            nothing. Leaves users, enrollments, transactions, customers and
+            certificates untouched. Safe against production.
+  demo      DESTRUCTIVE. Deletes every row in:
               ${DEMO_COLLECTIONS.join(', ')}
             then recreates the demo accounts and their data. Requires
             SEED_PASSWORD (>= 8 chars) in the environment; the password is never
@@ -83,9 +82,9 @@ Commands
             stays a human decision. Touches no customer data.
 
 Flags
-  --keep-users            demo/all: keep existing User documents instead of
-                          deleting them, reusing any account whose email matches
-                          a demo account.
+  --keep-users            demo/all: keep the existing demo accounts instead of
+                          deleting and recreating them. Accounts that are not
+                          demo accounts are never deleted either way.
   --dry-run               prepare: report what would change and change nothing.
   ${OVERRIDE_FLAG}   demo/all: the ONLY way to run a destructive seed
                           while NODE_ENV=production. Must be typed exactly.
@@ -187,6 +186,6 @@ run()
   .catch(async (err) => {
     error('failed:', err.message || err)
     if (!err.message) console.error(err)
-    await mongoose.disconnect().catch(() => {})
+    await disconnectDb().catch(() => {})
     process.exit(1)
   })

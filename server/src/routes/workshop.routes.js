@@ -2,8 +2,10 @@ import { Router } from 'express'
 import { body } from 'express-validator'
 import { validate } from '../middleware/validate.js'
 import { asyncHandler, HttpError } from '../middleware/error.js'
-import Workshop from '../models/Workshop.js'
-import WorkshopRegistration from '../models/WorkshopRegistration.js'
+import { and, eq, sql } from 'drizzle-orm'
+import { db, withMongoId } from '../db/index.js'
+import { isUuid } from '../db/coerce.js'
+import { workshopRegistrations, workshops } from '../db/schema/index.js'
 import { send } from '../mail/index.js'
 
 const router = Router()
@@ -11,20 +13,31 @@ const router = Router()
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const filter = {}
-    if (req.query.mode) filter.mode = req.query.mode
-    if (req.query.language) filter.language = req.query.language
-    const items = await Workshop.find(filter).sort({ language: 1, startsAt: 1 }).lean()
-    res.json({ items })
+    const clauses = []
+    if (req.query.mode) clauses.push(eq(workshops.mode, String(req.query.mode)))
+    if (req.query.language) clauses.push(eq(workshops.language, String(req.query.language)))
+    const items = await db
+      .select()
+      .from(workshops)
+      .where(clauses.length ? and(...clauses) : undefined)
+      // Mongo sorted missing values first; Postgres puts NULL last by default.
+      .orderBy(
+        sql`${workshops.language} asc nulls first`,
+        sql`${workshops.startsAt} asc nulls first`,
+      )
+    res.json({ items: withMongoId(items) })
   }),
 )
 
 router.get(
   '/:slug',
   asyncHandler(async (req, res) => {
-    const workshop = await Workshop.findOne({ slug: req.params.slug }).lean()
+    const [workshop] = await db
+      .select()
+      .from(workshops)
+      .where(eq(workshops.slug, String(req.params.slug).toLowerCase()))
     if (!workshop) throw new HttpError(404, 'Workshop not found')
-    res.json(workshop)
+    res.json(withMongoId(workshop))
   }),
 )
 
@@ -33,7 +46,9 @@ router.post(
   body('email').isEmail().withMessage('Enter a valid email').normalizeEmail(),
   validate,
   asyncHandler(async (req, res) => {
-    const workshop = await Workshop.findById(req.params.id).lean()
+    const [workshop] = isUuid(req.params.id)
+      ? await db.select().from(workshops).where(eq(workshops.id, req.params.id))
+      : []
     if (!workshop) throw new HttpError(404, 'Workshop not found')
 
     /**
@@ -46,10 +61,13 @@ router.post(
      * they did it, should be told they are in — not shown a failure.
      */
     const identity = req.user
-      ? { workshopId: workshop._id, userId: req.user._id }
-      : { workshopId: workshop._id, 'guest.email': req.body.email }
+      ? eq(workshopRegistrations.userId, req.user.id)
+      : eq(workshopRegistrations.guestEmail, req.body.email)
 
-    const existing = await WorkshopRegistration.findOne(identity).lean()
+    const [existing] = await db
+      .select({ id: workshopRegistrations.id })
+      .from(workshopRegistrations)
+      .where(and(eq(workshopRegistrations.workshopId, workshop.id), identity))
     if (existing) {
       return res.status(200).json({
         ok: true,
@@ -58,30 +76,39 @@ router.post(
       })
     }
 
-    try {
-      await WorkshopRegistration.create({
-        workshopId: workshop._id,
-        userId: req.user?._id,
-        guest: { name: req.body.name, email: req.body.email, phone: req.body.phone },
-      })
-    } catch (err) {
-      // The unique index caught a duplicate the check above raced past.
-      if (err?.code === 11000) {
-        return res.status(200).json({
-          ok: true,
-          alreadyRegistered: true,
-          registeredCount: workshop.registeredCount,
+    // The insert and the counter move together: a registration that commits
+    // without its increment would let the displayed count drift from reality.
+    const updated = await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(workshopRegistrations)
+        .values({
+          workshopId: workshop.id,
+          userId: req.user?.id ?? null,
+          guestName: req.body.name || null,
+          guestEmail: req.body.email,
+          guestPhone: req.body.phone || null,
         })
-      }
-      throw err
-    }
+        // A partial unique index caught a duplicate the check above raced past.
+        .onConflictDoNothing()
+        .returning({ id: workshopRegistrations.id })
+      if (!inserted) return null
 
-    // $inc, not read-modify-write — concurrent registrations lose increments.
-    const updated = await Workshop.findByIdAndUpdate(
-      workshop._id,
-      { $inc: { registeredCount: 1 } },
-      { new: true },
-    ).lean()
+      // Increment in SQL, not read-modify-write — concurrent registrations
+      // would otherwise lose increments.
+      const [row] = await tx
+        .update(workshops)
+        .set({ registeredCount: sql`${workshops.registeredCount} + 1` })
+        .where(eq(workshops.id, workshop.id))
+        .returning({ registeredCount: workshops.registeredCount })
+      return row
+    })
+    if (!updated) {
+      return res.status(200).json({
+        ok: true,
+        alreadyRegistered: true,
+        registeredCount: workshop.registeredCount,
+      })
+    }
 
     // Not awaited, and `send` swallows its own failures: a bounced confirmation
     // must not turn a successful registration into an error.
