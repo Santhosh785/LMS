@@ -103,9 +103,27 @@ export const env = {
   // rate limiting keys on req.ip, so behind an unacknowledged proxy every
   // visitor would share the proxy's IP and one bucket. Set it to the real hop
   // count and no higher — extra hops are client-spoofable via X-Forwarded-For.
+  // Without Cloudflare in front of Traefik the count is 1; with it, 2
+  // (Cloudflare -> Traefik -> Express). TRUST_PROXY=2 only yields the real
+  // client IP if Traefik trusts Cloudflare's forwarded header; otherwise use
+  // CF_PROXIED. See docs/cloudflare.md.
   trustProxy: Number.isFinite(Number(process.env.TRUST_PROXY))
     ? Number(process.env.TRUST_PROXY)
     : 0,
+
+  /**
+   * Optional. True when `CF_PROXIED` is `1` or `true`: the rate limiters key on
+   * the `CF-Connecting-IP` header (middleware/clientKey.js), falling back to
+   * req.ip when it is absent. That header is client-spoofable if the origin
+   * accepts traffic that did not come through Cloudflare, so enabling this
+   * REQUIRES restricting origin ingress (firewall or security group, ports
+   * 80/443) to Cloudflare's published IP ranges. Off by default.
+   */
+  cfProxied: ['1', 'true'].includes(
+    String(process.env.CF_PROXIED || '')
+      .trim()
+      .toLowerCase(),
+  ),
 
   /** 'postgres' | 'memory' — see resolveRateLimitStore above. */
   rateLimitStore: resolveRateLimitStore(process.env),

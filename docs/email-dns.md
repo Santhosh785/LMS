@@ -21,12 +21,12 @@ the DNS work can be planned before the account exists.
 Add these where the domain's nameservers live (Hostinger hPanel → Domains → DNS
 Zone if the domain is registered there). `@` means the apex.
 
-| Type | Name (host) | Value | TTL | Why |
-|---|---|---|---|---|
-| `TXT` | `send` (i.e. `send.growthscholar.in`) | `v=spf1 include:amazonses.com ~all` | 3600 | **SPF.** Authorises Resend's sending infrastructure for the subdomain mail leaves from. |
-| `MX` | `send` | `feedback-smtp.ap-south-1.amazonses.com` priority `10` | 3600 | Bounce and complaint returns. Without it, hard bounces are invisible and reputation quietly rots. |
-| `TXT` | `resend._domainkey` | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQ…` (long key from the dashboard) | 3600 | **DKIM.** Cryptographically signs each message. Gmail treats unsigned bulk mail as suspect. |
-| `TXT` | `_dmarc` | `v=DMARC1; p=none; rua=mailto:dmarc@growthscholar.in` | 3600 | **DMARC.** Not required by Resend, but Gmail and Yahoo require it for bulk senders and it is the only way to see who is spoofing the domain. Start at `p=none`, read reports for two weeks, then tighten to `p=quarantine`. |
+| Type  | Name (host)                           | Value                                                                     | TTL  | Why                                                                                                                                                                                                                         |
+| ----- | ------------------------------------- | ------------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TXT` | `send` (i.e. `send.growthscholar.in`) | `v=spf1 include:amazonses.com ~all`                                       | 3600 | **SPF.** Authorises Resend's sending infrastructure for the subdomain mail leaves from.                                                                                                                                     |
+| `MX`  | `send`                                | `feedback-smtp.ap-south-1.amazonses.com` priority `10`                    | 3600 | Bounce and complaint returns. Without it, hard bounces are invisible and reputation quietly rots.                                                                                                                           |
+| `TXT` | `resend._domainkey`                   | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQ…` (long key from the dashboard) | 3600 | **DKIM.** Cryptographically signs each message. Gmail treats unsigned bulk mail as suspect.                                                                                                                                 |
+| `TXT` | `_dmarc`                              | `v=DMARC1; p=none; rua=mailto:dmarc@growthscholar.in`                     | 3600 | **DMARC.** Not required by Resend, but Gmail and Yahoo require it for bulk senders and it is the only way to see who is spoofing the domain. Start at `p=none`, read reports for two weeks, then tighten to `p=quarantine`. |
 
 ### Watch for these
 
@@ -38,6 +38,9 @@ Zone if the domain is registered there). `@` means the apex.
   subdomain and does not conflict.
 - **Hostinger's panel appends the domain** to the Name field. Enter `send`, not
   `send.growthscholar.in`, or the record lands on `send.growthscholar.in.growthscholar.in`.
+
+> When the zone moves to Cloudflare ([cloudflare.md](./cloudflare.md)), these
+> records are recreated there and must stay **DNS-only (grey cloud)**.
 
 ## 3. Verify
 
@@ -61,7 +64,7 @@ Zone if the domain is registered there). `@` means the apex.
    even though the From address does not accept mail.
 4. End-to-end check — task 14's acceptance criterion. Trigger a real send and
    confirm it lands in an **external** inbox (a Gmail address, not the Resend
-   account owner's), then open *Show original* in Gmail and confirm all three
+   account owner's), then open _Show original_ in Gmail and confirm all three
    lines read `PASS`:
    ```
    SPF: PASS   DKIM: PASS   DMARC: PASS
