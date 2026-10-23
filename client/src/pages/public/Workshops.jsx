@@ -254,29 +254,6 @@ export default function Workshops() {
         </div>
       </div>
 
-      <section className="gs-convert-band" aria-labelledby="ws-convert-heading">
-        <div className="gs-convert-inner">
-          <div className="gs-convert-copy">
-            <p className="eyebrow">Ready for implementation?</p>
-            <h2 id="ws-convert-heading">
-              Workshops practice one skill. Flagship connects the full stack.
-            </h2>
-            <p>
-              10 seats per batch · LIVE builds · offline masterclass · apply when you’re ready to
-              implement for real.
-            </p>
-          </div>
-          <div className="gs-convert-actions">
-            <Link className="gs-btn-solid" to="/programs/apply">
-              Apply for Flagship
-            </Link>
-            <Link className="gs-btn-outline" to="/courses/category">
-              Browse self-paced courses
-            </Link>
-          </div>
-        </div>
-      </section>
-
       <Modal
         open={!!target}
         onClose={() => setTarget(null)}
