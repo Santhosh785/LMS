@@ -68,7 +68,7 @@ export const footerColumns = [
     title: 'Courses',
     menuKey: 'showCourses',
     termsFrom: 'topic',
-    links: [{ label: 'Marketing', to: '/courses/category' }],
+    links: [{ label: 'Digital Marketing', to: '/courses/category' }],
   },
   {
     title: 'Resources',

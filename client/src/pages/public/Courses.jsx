@@ -237,18 +237,14 @@ export default function Courses() {
         <div className="explore-hero-inner">
           <div>
             <p className="explore-hero-tag">Full course library</p>
-            <h1>Every self-paced marketing course in one place</h1>
+            <h1>Every self-paced digital marketing course in one place</h1>
             <p className="explore-hero-lede">
-              Filter by topic, level, and price — or jump to{' '}
-              <Link to="/courses/category">Marketing</Link> for curated starters, live workshops,
-              and Flagship.
+              Filter by topic, level, and price — or browse{' '}
+              <Link to="/courses/category">Digital Marketing</Link> by topic.
             </p>
             <div className="explore-hero-cta">
               <Link className="explore-btn-primary" to="/courses/category">
-                Browse marketing
-              </Link>
-              <Link className="explore-btn-secondary" to="/courses?price=free">
-                Free courses only
+                Browse digital marketing
               </Link>
             </div>
           </div>
@@ -261,16 +257,13 @@ export default function Courses() {
             <li>
               <strong>{total > 0 ? `${total}` : '—'}</strong> courses
             </li>
-            <li>
-              <strong>Free</strong> starters
-            </li>
           </ul>
         </div>
       </section>
 
       <div className="explore-top">
         <p className="breadcrumb">
-          <Link to="/">Home</Link> → <Link to="/courses/category">Marketing</Link> → Explore
+          <Link to="/">Home</Link> → <Link to="/courses/category">Digital Marketing</Link> → Explore
         </p>
         <div className="explore-tools">
           <button
@@ -421,29 +414,6 @@ export default function Courses() {
           )}
         </section>
       </div>
-
-      <section className="gs-convert-band" aria-labelledby="explore-convert-heading">
-        <div className="gs-convert-inner">
-          <div className="gs-convert-copy">
-            <p className="eyebrow">Next step</p>
-            <h2 id="explore-convert-heading">
-              Self-paced gets you started. Flagship makes you ship.
-            </h2>
-            <p>
-              Pick free foundation tracks here — apply for Complete Growth Marketing when you want
-              LIVE implementation with mentors.
-            </p>
-          </div>
-          <div className="gs-convert-actions">
-            <Link className="gs-btn-solid" to="/programs/apply">
-              Apply for Flagship
-            </Link>
-            <Link className="gs-btn-outline" to="/workshops">
-              Join a live workshop
-            </Link>
-          </div>
-        </div>
-      </section>
     </div>
   )
 }

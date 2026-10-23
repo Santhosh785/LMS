@@ -55,7 +55,6 @@ function StickyBar({ course, onEnroll, isPaid }) {
       <div className="course-sticky-inner">
         <div className="course-sticky-price">
           <span className="now">{course.amount ? inr(course.amount) : 'Free'}</span>
-          {course.strikeAmount > 0 && <span className="was">{inr(course.strikeAmount)}</span>}
           <span className="label">
             {course.title} · {course.kind || 'Self-paced'}
           </span>
@@ -125,10 +124,6 @@ export default function CourseDetail() {
 
   const isPaid = course.price !== 'free'
   const toc = tocFor(course)
-  const discount =
-    course.strikeAmount > 0 && course.amount > 0
-      ? Math.round(100 - (course.amount / course.strikeAmount) * 100)
-      : 0
 
   /**
    * Paid courses go to checkout, and go there logged out — requiring an account
@@ -154,11 +149,6 @@ export default function CourseDetail() {
             <p className="breadcrumb">
               <Link to="/">Home</Link> / <Link to="/courses">Courses</Link> / {course.topic}
             </p>
-            {discount > 0 && (
-              <p className="course-hero-ribbon">
-                Limited-time · <strong>{discount}% off</strong>
-              </p>
-            )}
             {course.kind && <p className="eyebrow">{course.kind}</p>}
             <h1>{course.title}</h1>
             {course.summary && <p className="hero-sub">{course.summary}</p>}
@@ -198,13 +188,8 @@ export default function CourseDetail() {
               <button className="course-btn-primary" type="button" onClick={onEnroll}>
                 {enrollLabel}
               </button>
-              <Link className="course-btn-secondary" to="/workshops">
-                Try a free live workshop
-              </Link>
             </div>
-            <p className="course-hero-micro">
-              Lifetime access · Certificate · 7-day refund on self-paced
-            </p>
+            <p className="course-hero-micro">Lifetime access · Certificate</p>
           </div>
 
           {/*
@@ -234,13 +219,8 @@ export default function CourseDetail() {
               </div>
             )}
             <div className="course-buy-body">
-              {discount > 0 && <p className="course-buy-tag">Limited-time pricing</p>}
               <div className="price-row">
                 <span className="price">{course.amount ? inr(course.amount) : 'Free'}</span>
-                {course.strikeAmount > 0 && (
-                  <span className="strike">{inr(course.strikeAmount)}</span>
-                )}
-                {discount > 0 && <span className="save-pill">Save {discount}%</span>}
               </div>
               <button
                 className="course-btn-primary course-btn-block"
@@ -250,9 +230,6 @@ export default function CourseDetail() {
               >
                 {enroll.isPending ? 'Enrolling…' : enrollLabel}
               </button>
-              <Link className="course-buy-alt" to="/workshops">
-                Not ready? Join a free live workshop →
-              </Link>
               <ul className="buy-list">
                 <li>Lifetime access to lessons</li>
                 <li>Practice worksheets &amp; templates</li>
@@ -373,21 +350,6 @@ export default function CourseDetail() {
               </div>
             </section>
           )}
-
-          <section className="course-convert-band">
-            <h2>Want live feedback before you enroll?</h2>
-            <p>
-              Join the next live workshop — three hours live with mentors, certificate included.
-            </p>
-            <div className="course-convert-actions">
-              <Link className="course-btn-primary" to="/workshops">
-                Browse live workshops
-              </Link>
-              <a className="course-btn-secondary on-dark" href="#enroll">
-                Enroll self-paced
-              </a>
-            </div>
-          </section>
 
           {course.faqs?.length > 0 && (
             <section id="faq" className="faq">

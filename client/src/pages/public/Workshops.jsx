@@ -76,14 +76,7 @@ function WorkshopCard({ workshop, onRegister, registered }) {
             </span>
           )}
           <span className="ws-price">
-            {workshop.priceNew ? (
-              <>
-                {workshop.priceOld > 0 && <span className="old">{inr(workshop.priceOld)}</span>}{' '}
-                {inr(workshop.priceNew)}
-              </>
-            ) : (
-              <span className="free">Free</span>
-            )}
+            {workshop.priceNew ? inr(workshop.priceNew) : <span className="free">Free</span>}
           </span>
         </div>
         <div className="ws-register">

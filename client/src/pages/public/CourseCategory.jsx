@@ -81,7 +81,6 @@ function CatCard({ course }) {
         {/* Ratings render only when there are real ones — see Courses.jsx. */}
         {course.rating > 0 && <p className="rating-row">★ {course.rating}</p>}
         <p className="price">{course.amount ? inr(course.amount) : 'Free'}</p>
-        {course.tags?.includes('Most popular') && <span className="badge-best">Bestseller</span>}
       </div>
     </Link>
   )
@@ -113,7 +112,6 @@ function CatRow({ course }) {
       </div>
       <div className="side">
         <p className="price">{course.amount ? inr(course.amount) : 'Free'}</p>
-        {course.tags?.includes('Most popular') && <span className="badge-best">Bestseller</span>}
       </div>
     </Link>
   )
@@ -151,7 +149,7 @@ function Carousel({ children }) {
 }
 
 export default function CourseCategory() {
-  useDocumentTitle('Marketing Courses | Growth Scholar')
+  useDocumentTitle('Digital Marketing Courses | Growth Scholar')
   useBodyClass('gs-redesign cat-page--convert')
   const [searchParams, setSearchParams] = useSearchParams()
   const [starterTab, setStarterTab] = useState('popular')
@@ -230,10 +228,10 @@ export default function CourseCategory() {
 
   return (
     <div className="cat-page">
-      <nav className="cat-subnav" aria-label="Marketing subcategories">
+      <nav className="cat-subnav" aria-label="Digital Marketing subcategories">
         <div className="cat-subnav-inner">
           <Link className={cn(!topic && 'is-active')} to={topicHref('')}>
-            Marketing
+            Digital Marketing
           </Link>
           {topics.map((t) => (
             <Link
@@ -250,24 +248,17 @@ export default function CourseCategory() {
       <section className="cat-hero" aria-labelledby="cat-hero-title">
         <div className="cat-hero-inner">
           <div className="cat-hero-copy">
-            <p className="cat-hero-ribbon">Self-paced · Live workshops · Flagship LIVE</p>
             <h1 id="cat-hero-title">
-              Marketing courses built to ship campaigns — not hoard certificates
+              Digital marketing courses built to ship campaigns — not hoard certificates
             </h1>
             <p className="cat-hero-lede">
-              Start free self-paced tracks, join a live workshop, or apply for Flagship LIVE (10
-              seats per batch). Every path is built around real drills and shipped projects.
+              Self-paced tracks built around real drills and shipped projects, in the language you
+              think in.
             </p>
             <div className="cat-hero-cta">
               <a className="cat-btn-primary" href="#all-courses">
-                Browse free courses
+                Browse courses
               </a>
-              <Link className="cat-btn-secondary" to="/workshops">
-                Free live workshop
-              </Link>
-              <Link className="cat-btn-ghost" to="/programs/complete-growth-marketing">
-                Flagship LIVE →
-              </Link>
             </div>
             {/*
               The drop's first figure was "4.8★ avg course rating" — invented,
@@ -276,22 +267,12 @@ export default function CourseCategory() {
             */}
             <ul className="cat-hero-trust">
               <li>
-                <strong>{topics.length}+</strong> marketing topics
+                <strong>{topics.length}+</strong> digital marketing topics
               </li>
               <li>
                 <strong>1,000+</strong> learners
               </li>
             </ul>
-          </div>
-          <div className="cat-hero-aside" aria-hidden="true">
-            <div className="cat-hero-stat">
-              <span className="num">Free</span>
-              <span className="lbl">Starter tracks</span>
-            </div>
-            <div className="cat-hero-stat accent">
-              <span className="num">LIVE</span>
-              <span className="lbl">Workshops &amp; Flagship</span>
-            </div>
           </div>
         </div>
       </section>
@@ -301,39 +282,12 @@ export default function CourseCategory() {
           <span>Operator-led curriculum</span>
           <span>Templates &amp; worksheets included</span>
           <span>Certificate on completion</span>
-          <span>Upgrade path to Flagship</span>
         </div>
       </div>
 
-      <section className="cat-paths" aria-labelledby="cat-paths-heading">
-        <div className="cat-paths-inner">
-          <h2 id="cat-paths-heading" className="sr-only">
-            Choose your path
-          </h2>
-          <a className="cat-path-card" href="#all-courses">
-            <p className="tag">Self-paced</p>
-            <h3>Start free</h3>
-            <p>Digital Marketing Starter, Copy sprint, and more — no card required.</p>
-            <span className="cta">Explore free →</span>
-          </a>
-          <Link className="cat-path-card highlight" to="/workshops">
-            <p className="tag">Live</p>
-            <h3>Live workshops</h3>
-            <p>Online and in-person sessions — register and practise with mentors.</p>
-            <span className="cta">Claim seat →</span>
-          </Link>
-          <Link className="cat-path-card flagship" to="/programs/complete-growth-marketing">
-            <p className="tag">Flagship LIVE</p>
-            <h3>Complete Growth Marketing</h3>
-            <p>12–14 weeks · 10 seats/batch · offline masterclass + weekly builds.</p>
-            <span className="cta">Apply now →</span>
-          </Link>
-        </div>
-      </section>
-
       <div className="cat-wrap">
         <p className="cat-breadcrumb">
-          <Link to="/">Home</Link> → <Link to="/courses">Courses</Link> → Marketing
+          <Link to="/">Home</Link> → <Link to="/courses">Courses</Link> → Digital Marketing
         </p>
 
         <section className="cat-section" aria-labelledby="starter-heading">
@@ -427,7 +381,7 @@ export default function CourseCategory() {
             <div className="cat-all-main">
               <div className="toolbar">
                 <div>
-                  <h2 id="all-heading">All {topic || 'Marketing'} courses</h2>
+                  <h2 id="all-heading">All {topic || 'Digital Marketing'} courses</h2>
                   <p className="cat-result-meta">
                     {total === 0 ? 'No courses found' : `Showing ${items.length} of ${total}`}
                   </p>
@@ -465,13 +419,6 @@ export default function CourseCategory() {
                 </div>
               </div>
 
-              <div className="cat-guarantee">
-                <span aria-hidden="true">✓</span>
-                <p>
-                  <strong>Not sure?</strong> All courses have a 7-day money-back guarantee.
-                </p>
-              </div>
-
               <div className="cat-list">
                 {items.map((c) => (
                   <CatRow key={c._id} course={c} />
@@ -481,27 +428,6 @@ export default function CourseCategory() {
           </div>
         </section>
       </div>
-
-      <section className="cat-convert-band">
-        <div className="cat-convert-inner">
-          <div className="cat-convert-copy">
-            <p className="eyebrow">Not sure where to start?</p>
-            <h2>Try a free course tonight — or join the next live workshop</h2>
-            <p>
-              Most learners begin with a free self-paced track, then join a live session to get
-              feedback. Ready to go all-in? Flagship is open — 10 seats per batch.
-            </p>
-          </div>
-          <div className="cat-convert-actions">
-            <a className="cat-btn-primary" href="#all-courses">
-              Start free
-            </a>
-            <Link className="cat-btn-secondary on-dark" to="/workshops">
-              Browse workshops
-            </Link>
-          </div>
-        </div>
-      </section>
     </div>
   )
 }

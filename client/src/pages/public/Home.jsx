@@ -382,9 +382,6 @@ export default function Home() {
               <Link className="btn-outline" to="/workshops">
                 Browse all workshops
               </Link>
-              <Link className="btn-solid" to={`/workshops/${workshops[0].slug}`}>
-                Register for {workshops[0].title}
-              </Link>
             </div>
           </div>
         </section>

@@ -155,7 +155,6 @@ export default function WorkshopDetail() {
               </div>
 
               <div className="wl-hero-price">
-                {workshop.priceOld > 0 && <span className="was">{inr(workshop.priceOld)}</span>}
                 <span className="now">{isFree ? 'FREE' : inr(workshop.priceNew)}</span>
                 <span className="note">
                   {landing.priceNote || 'Register before the cohort fills'}
