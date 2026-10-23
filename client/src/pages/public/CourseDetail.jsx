@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLoaderData, useNavigate, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { Button, cn, Loading, useToast } from '../../components/ui/index.jsx'
+import { cn, useToast } from '../../components/ui/index.jsx'
 import CurriculumList from '../../components/student/Curriculum.jsx'
 import {
   courseSeconds,
@@ -12,7 +12,6 @@ import {
   lessonCount,
 } from '../../components/student/curriculum.js'
 import LessonPlayer from '../../components/student/LessonPlayer.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import useBodyClass from '../../hooks/useBodyClass.js'
 
 /**
@@ -20,6 +19,13 @@ import useBodyClass from '../../hooks/useBodyClass.js'
  * course player: a video stage, a "Course content" sidebar, and tabs under the
  * stage. A visitor sees the curriculum with every lesson locked except the free
  * previews, which play right here; the sales copy lives in the Overview tab.
+ *
+ * Server-rendered: the course arrives as loader data (routes/public/
+ * course-detail.ts), already stripped of video references, so the first render
+ * on the server and in the browser is the same anonymous page. Everything
+ * personal — the enrollment lookup, the player's signed preview URL — happens
+ * in the browser after hydration. The <title> and the rest of the head come
+ * from the route's `meta`.
  *
  * The purchase path is untouched: paid courses still go to /checkout/:slug
  * logged out, and only free courses reach POST /api/enrollments. A signed-in
@@ -85,22 +91,20 @@ export default function CourseDetail() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const toast = useToast()
-  const [openSections, setOpenSections] = useState({})
+  const { course } = useLoaderData()
+  // The first section starts open, as the old syllabus did — from the first
+  // render, so the server HTML already shows its lessons.
+  const firstSection = course.sections?.[0]?._id
+  const [openSections, setOpenSections] = useState(() =>
+    firstSection ? { [String(firstSection)]: true } : {},
+  )
   const [previewId, setPreviewId] = useState(null)
   // 'content' only exists as a tab on narrow screens; wide screens show the
   // curriculum in the sidebar and fall back to Overview through CSS.
   const [tab, setTab] = useState('content')
 
-  const {
-    data: course,
-    isPending,
-    error,
-  } = useQuery({
-    queryKey: ['course', slug],
-    queryFn: async () => (await api.get(`/courses/${slug}`)).data,
-  })
-
-  // Only asked when someone is signed in; a 403/404 simply means "not yours".
+  // Only asked when someone is signed in, and only ever in the browser (queries
+  // do not run during SSR); a 403/404 simply means "not yours".
   const { data: owned } = useQuery({
     queryKey: ['enrollment', slug],
     queryFn: async () => (await api.get(`/enrollments/course/${slug}`)).data,
@@ -109,18 +113,17 @@ export default function CourseDetail() {
   })
   const isEnrolled = Boolean(owned?.enrollment)
 
-  useDocumentTitle(course ? `${course.title} | Growth Scholar` : 'Course | Growth Scholar')
   useBodyClass('gs-redesign course-page--convert')
 
-  // The first section starts open, as the old syllabus did.
-  const firstSection = course?.sections?.[0]?._id
+  // A client-side move to another course keeps this component mounted; open
+  // that course's first section too.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (firstSection) setOpenSections((s) => ({ [String(firstSection)]: true, ...s }))
   }, [firstSection])
 
   const previews = useMemo(
-    () => (course?.sections || []).flatMap((s) => s.lessons.filter(isPlayablePreview)),
+    () => (course.sections || []).flatMap((s) => s.lessons.filter(isPlayablePreview)),
     [course],
   )
 
@@ -147,19 +150,6 @@ export default function CourseDetail() {
       toast.show(apiError(err))
     },
   })
-
-  if (isPending) return <Loading />
-  if (error) {
-    return (
-      <div className="px-5 py-20 text-center">
-        <h1 className="text-[1.5rem]">Course not found</h1>
-        <p className="mt-2 text-muted">{apiError(error)}</p>
-        <Button to="/courses" variant="outline" className="mt-5">
-          Browse courses
-        </Button>
-      </div>
-    )
-  }
 
   const isPaid = course.price !== 'free'
   const totalSeconds = courseSeconds(course)
