@@ -33,7 +33,12 @@ async function passwordSession(email, password) {
   return data.session
 }
 
-const publicUser = (u) => ({
+/**
+ * The user as the browser may see it. Also what the React Router load context
+ * carries as `user` for a server render (middleware/reactRouter.js), so the
+ * document and GET /auth/me agree on the shape.
+ */
+export const publicUser = (u) => ({
   id: u._id,
   name: u.name,
   email: u.email,

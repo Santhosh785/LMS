@@ -13,3 +13,7 @@ logs/
 # at runtime (see server/src/routes/admin/media.routes.js) — editor content,
 # not source, and it must not end up in a commit or be wiped by a deploy.
 server/uploads/
+
+# React Router build output and generated route types (client)
+client/build/
+.react-router/

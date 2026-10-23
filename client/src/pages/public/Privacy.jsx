@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import LegalPage, { Bullets, Field, Mail, Section } from '../../components/public/LegalPage.jsx'
 import useBusiness from '../../hooks/useBusiness.js'
 

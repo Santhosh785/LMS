@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, apiError, apiFieldErrors } from '../../api/client.js'
 import { useAuth } from '../../context/AuthContext.jsx'

@@ -4,31 +4,35 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_OPTIONS=--max-http-header-size=65536 vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "build": "react-router build",
+    "typecheck": "react-router typegen && tsc",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"src/**/*.{js,jsx}\" \"*.js\"",
-    "format:check": "prettier --check \"src/**/*.{js,jsx}\" \"*.js\""
+    "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx}\" \"*.{js,ts}\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,ts,tsx}\" \"*.{js,ts}\""
   },
   "dependencies": {
+    "@gs/seo": "*",
+    "@react-router/node": "^7.18.4",
     "@sentry/react": "^10.70.0",
     "@tanstack/react-query": "^5.64.1",
     "axios": "^1.7.9",
+    "isbot": "^5.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.1",
+    "react-router": "^7.18.4",
     "tus-js-client": "^4.3.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
+    "@react-router/dev": "^7.18.4",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
-    "vite": "^6.0.7"
+    "typescript": "^5.9.3"
   }
 }

@@ -14,11 +14,17 @@ const router = Router()
  *
  * Public and unauthenticated on purpose: it carries display configuration only,
  * never a secret, and it has to be known before /auth/me has resolved.
+ *
+ * The one API response that may be cached: it is the same for every visitor
+ * and the server caches it for a minute itself, so the edge may hold it for
+ * the same minute. Set here, after the `/api` default of `no-store`.
  */
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
-    res.json(await getSiteConfig())
+    const config = await getSiteConfig()
+    res.set('Cache-Control', 'public, s-maxage=60')
+    res.json(config)
   }),
 )
 

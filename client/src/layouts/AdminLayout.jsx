@@ -1,11 +1,16 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { adminNav } from '../data/nav.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useFeatures, visibleNav } from '../context/SiteConfigContext.jsx'
 import { cn } from '../components/ui/index.jsx'
 import BrandLogo from '../components/BrandLogo.jsx'
 
-export default function AdminLayout() {
+/**
+ * @param {{ children?: import('react').ReactNode }} props `children` replace
+ *   the outlet, so the route's ErrorBoundary can show a failure inside this
+ *   chrome instead of losing the navigation with the page.
+ */
+export default function AdminLayout({ children }) {
   const { user, logout } = useAuth()
   const features = useFeatures()
   const navigate = useNavigate()
@@ -15,7 +20,7 @@ export default function AdminLayout() {
   // The blog is intentionally a self-contained WordPress-style workspace.
   // It owns its toolbar, sidebar and editor chrome; the rest of the product
   // keeps the Growth Scholar admin shell below unchanged.
-  if (location.pathname.startsWith('/admin/blog')) return <Outlet />
+  if (location.pathname.startsWith('/admin/blog')) return children ?? <Outlet />
 
   return (
     <div className="min-h-screen bg-surface-admin">
@@ -80,9 +85,7 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-admin px-5 py-6 mx-640:px-4">
-        <Outlet />
-      </div>
+      <div className="mx-auto max-w-admin px-5 py-6 mx-640:px-4">{children ?? <Outlet />}</div>
     </div>
   )
 }

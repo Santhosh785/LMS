@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 
 export const cn = (...parts) => parts.filter(Boolean).join(' ')
 

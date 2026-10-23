@@ -13,11 +13,10 @@
   ],
   "scripts": {
     "install:all": "npm install",
-    "dev": "concurrently -n server,client -c green,cyan \"npm:dev:server\" \"npm:dev:client\"",
-    "dev:server": "npm --prefix server run dev",
-    "dev:client": "npm --prefix client run dev",
+    "dev": "npm --prefix server run dev",
     "seed": "npm --prefix server run seed",
     "build": "npm --prefix client run build",
+    "typecheck": "npm --prefix client run typecheck",
     "start": "npm --prefix server start",
     "test": "npm --prefix client run build && npm --prefix server test",
     "test:server": "npm --prefix server test",
@@ -27,11 +26,11 @@
     "check": "npm run lint && npm run format:check && npm test"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0",
     "drizzle-orm": "^0.45.4",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.9.0",
-    "prettier": "^3.9.6"
+    "prettier": "^3.9.6",
+    "vite": "^6.4.5"
   }
 }

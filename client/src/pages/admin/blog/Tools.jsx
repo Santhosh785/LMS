@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../../api/client.js'
 import useDocumentTitle from '../../../hooks/useDocumentTitle.js'

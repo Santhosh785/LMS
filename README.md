@@ -32,15 +32,17 @@ npm run seed
 #    SEED_PASSWORD in server/.env.
 npm --prefix server run seed:demo
 
-# 5. run both apps
+# 5. run the app
 npm run dev
 ```
 
-- Client: <http://localhost:5173>
+- App: <http://localhost:5000>
 - API: <http://localhost:5000/api>
 
-Vite proxies `/api` to the Express server, so there is nothing to configure on
-the client side.
+One process. Express renders the client with React Router (server-side
+rendering) and, in development, runs Vite in middleware mode for hot reloading
+— there is no separate client dev server, so `CLIENT_ORIGIN` is the server's
+own origin and nothing is proxied.
 
 ### Tests
 
@@ -111,8 +113,13 @@ growth-scholar-mern/
 │       ├── seed/                 seed.js + data/ transcribed from the static HTML
 │       └── utils/                csv helpers, generic CRUD router
 └── client/
+    ├── react-router.config.ts    framework mode, ssr: true
     └── src/
-        ├── App.jsx               the whole route tree + legacy .html redirects
+        ├── root.tsx              the document, providers, SEO meta from the root loader
+        ├── routes.ts             the route table (legacy .html redirects live in the server)
+        ├── routes/               one thin module per route, wrapping the pages
+        ├── entry.client.tsx      hydration
+        ├── entry.server.tsx      streaming render
         ├── index.css             tailwind + the decorative gradients
         ├── layouts/              Public / Student / Community / Admin shells
         ├── components/           ui kit, plus public/ student/ community/ admin/
@@ -353,10 +360,11 @@ browser reads them once from `GET /api/config` (`context/FeatureContext.jsx`).
 | Command | What it does |
 |---|---|
 | `npm run install:all` | install root + server + client |
-| `npm run dev` | Express on :5000 and Vite on :5173 together |
+| `npm run dev` | Express on :5000, serving the client from source through embedded Vite |
 | `npm run seed` | publish catalogue content — idempotent, deletes nothing |
-| `npm run build` | production build of the client into `client/dist` |
-| `npm start` | run the API, which also serves `client/dist` on the same origin |
+| `npm run build` | `react-router build`: the client and server bundles into `client/build` |
+| `npm run typecheck` | generate the route types and run `tsc` over the client |
+| `npm start` | run Express, which server-renders the client from `client/build` on the same origin |
 | `npm test` | build the client, then run the money-path test suite |
 | `npm run lint` | ESLint over both packages |
 | `npm run format` | Prettier over both packages |

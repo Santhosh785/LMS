@@ -10,10 +10,19 @@ and auth are Supabase (Postgres + Auth); there is no database on the server.
 
 Coolify builds the repo's `main` branch with Railpack: the root `npm run build`
 builds the client, and `npm start` runs Express (port 3000 in Coolify).
-Express serves `client/dist` and `/api/*` from one origin, so there is no CORS
-or cross-site cookie setup. Coolify's Traefik proxy terminates TLS (Let's
-Encrypt) and redirects `www` and `http` to the apex. Health check:
-`/api/health`.
+Express serves the pages and `/api/*` from one origin, so there is no CORS or
+cross-site cookie setup. Coolify's Traefik proxy terminates TLS (Let's Encrypt)
+and redirects `www` and `http` to the apex. Health check: `/api/health`.
+
+**The client is server-rendered by the Express process** (React Router
+framework mode). This changes nothing in Coolify: the build command is still
+`npm run build` and the start command is still `npm start`. What the build
+produces is `client/build/` — `client/build/server/index.js`, which Express
+imports at boot, and `client/build/client/`, the browser assets it serves — so
+the client build output must exist at runtime, next to the server, in the same
+container image. A start without it logs `client build missing` and answers
+every page with the JSON 404. Vite is a build-time dependency only; in
+production nothing imports it.
 
 Deploys are triggered from the Coolify dashboard (or its API). The GitHub
 Actions workflow that redeployed on every push was removed, so whether a push
@@ -152,7 +161,7 @@ curl -sSi -X POST https://growthscholar.in/api/auth/login \
 
 # The credential leak this project already shipped once
 curl -s https://growthscholar.in/login | grep -c password123        # must be 0
-grep -rc password123 client/dist                                     # must be 0
+grep -rc password123 client/build/client                             # must be 0
 
 # The seed guard refuses production
 NODE_ENV=production npm --prefix server run seed:demo                # must refuse, exit 1

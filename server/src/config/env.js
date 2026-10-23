@@ -88,7 +88,9 @@ export const env = {
   replicas: parseReplicas(process.env.REPLICAS),
   jwtSecret: process.env.JWT_SECRET || 'dev-only-insecure-secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  // In development the client is served by this process (Vite in middleware
+  // mode), so the default is the server's own origin, not a separate dev port.
+  clientOrigin: process.env.CLIENT_ORIGIN || `http://localhost:${process.env.PORT || 5000}`,
   isProd: process.env.NODE_ENV === 'production',
   /**
    * Under test the module must not open a connection or bind a port — supertest
@@ -157,13 +159,14 @@ export const env = {
   resendApiKey: process.env.RESEND_API_KEY || '',
   mailFrom: process.env.MAIL_FROM || '',
 
-  // Absolute base for links inside emails. In production the SPA and the API
-  // share one origin (task 14), so this is simply the public site URL; in
-  // development it is the Vite dev server, not the API port.
-  siteUrl: (process.env.PUBLIC_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173').replace(
-    /\/+$/,
-    '',
-  ),
+  // Absolute base for links inside emails. The app and the API share one
+  // origin in every environment (Express renders the client), so this is
+  // simply the public site URL, or the server's own origin in development.
+  siteUrl: (
+    process.env.PUBLIC_URL ||
+    process.env.CLIENT_ORIGIN ||
+    `http://localhost:${process.env.PORT || 5000}`
+  ).replace(/\/+$/, ''),
 
   /**
    * Cloudflare edge-cache purge after content changes (jobs/cloudflare.js).

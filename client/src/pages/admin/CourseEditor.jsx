@@ -1,4 +1,4 @@
-import { Outlet, useParams } from 'react-router-dom'
+import { Outlet, useParams } from 'react-router'
 import { useAdminOne } from '../../api/admin.js'
 import { Loading, StatusPill } from '../../components/ui/index.jsx'
 import { PageHead, SubNavTabs } from '../../components/admin/index.jsx'

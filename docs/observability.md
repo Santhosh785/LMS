@@ -7,20 +7,24 @@ they vanish — and client errors went to a browser console nobody is watching.
 
 ## Error boundaries
 
-Two, at different levels, because they fail differently:
+Two, at different levels, because they fail differently. Both are React
+Router route `ErrorBoundary` exports rendering `components/RouteErrorView.tsx`:
 
-- **Root** (`main.jsx`) — wraps the providers themselves. Last resort, for a
-  failure where there is no router left to navigate with.
-- **Route** (`App.jsx`) — wraps the route outlet, so an ordinary broken page
-  keeps the header and navigation working.
+- **Root** (`src/root.tsx`) — outside every provider. Last resort, for a
+  failure in the root loader or the providers themselves; a 404 error
+  response renders the not-found page.
+- **Layout** (`src/routes/*/layout.tsx`) — each layout route renders the
+  failure UI inside its own chrome, so an ordinary broken page keeps the
+  header and navigation working.
 
-The route boundary is **keyed on `pathname`**. This is the part that is easy to
-get wrong: without the key, a boundary that has caught an error holds it forever
-and every subsequent navigation renders the same failure page. Changing the key
-remounts it, clearing the error the moment the visitor goes elsewhere.
+The router clears a route error on the next navigation, which is what the
+old pathname-keyed boundary did by remounting. `components/ErrorBoundary.jsx`
+(the class boundary) remains for boundaries placed inside a page.
 
-Both show a human message with a *Try again* and a *Back home*, never a stack
-trace — the stack renders only under `import.meta.env.DEV`.
+Both show a human message and a *Back home* (the class boundary also a *Try
+again*), never a stack trace — the stack renders only under
+`import.meta.env.DEV`. The report goes out from an effect, never during a
+server render.
 
 To test: throw from any component's render and confirm you get the message, that
 the header still works, and that navigating away clears it.

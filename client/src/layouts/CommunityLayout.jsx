@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client.js'
 import { communityNav } from '../data/nav.js'
@@ -7,7 +7,12 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { cn } from '../components/ui/index.jsx'
 import BrandLogo from '../components/BrandLogo.jsx'
 
-export default function CommunityLayout() {
+/**
+ * @param {{ children?: import('react').ReactNode }} props `children` replace
+ *   the outlet, so the route's ErrorBoundary can show a failure inside this
+ *   chrome instead of losing the navigation with the page.
+ */
+export default function CommunityLayout({ children }) {
   const { user, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState({})
@@ -167,9 +172,7 @@ export default function CommunityLayout() {
           ))}
         </aside>
 
-        <main className="min-w-0 flex-1 p-6 mx-640:p-4">
-          <Outlet />
-        </main>
+        <main className="min-w-0 flex-1 p-6 mx-640:p-4">{children ?? <Outlet />}</main>
       </div>
     </div>
   )

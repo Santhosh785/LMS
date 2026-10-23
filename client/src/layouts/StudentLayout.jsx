@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { studentNav, studentTopNav } from '../data/nav.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useFeatures, visibleNav } from '../context/SiteConfigContext.jsx'
 import { Button, cn } from '../components/ui/index.jsx'
 import BrandLogo from '../components/BrandLogo.jsx'
 
-export default function StudentLayout() {
+/**
+ * @param {{ children?: import('react').ReactNode }} props `children` replace
+ *   the outlet, so the route's ErrorBoundary can show a failure inside this
+ *   chrome instead of losing the navigation with the page.
+ */
+export default function StudentLayout({ children }) {
   const [sideOpen, setSideOpen] = useState(false)
   const [search, setSearch] = useState('')
   const sideRef = useRef(null)
@@ -171,9 +176,7 @@ export default function StudentLayout() {
           </button>
         </aside>
 
-        <main className="ml-side flex-1 p-6 mx-960:ml-0 mx-640:p-4">
-          <Outlet />
-        </main>
+        <main className="ml-side flex-1 p-6 mx-960:ml-0 mx-640:p-4">{children ?? <Outlet />}</main>
       </div>
     </div>
   )

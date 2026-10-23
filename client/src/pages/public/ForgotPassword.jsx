@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { api, apiError, apiFieldErrors } from '../../api/client.js'
 import { Button, ErrorNote, TextField } from '../../components/ui/index.jsx'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'

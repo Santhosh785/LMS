@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client.js'
 import { Button, EmptyState, Loading, cn } from '../../components/ui/index.jsx'

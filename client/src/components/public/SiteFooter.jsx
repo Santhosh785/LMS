@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { footerColumns, socialLinks } from '../../data/nav.js'
 import { legalNav } from '../../data/legal.js'
 import BrandLogo from '../BrandLogo.jsx'

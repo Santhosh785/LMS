@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { Outlet, useNavigate, useOutletContext, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import {

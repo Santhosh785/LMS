@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { useAdminDelete, useAdminList, useAdminSave } from '../../api/admin.js'

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import useBodyClass from '../../hooks/useBodyClass.js'
 import useRevealOnScroll from '../../hooks/useRevealOnScroll.js'

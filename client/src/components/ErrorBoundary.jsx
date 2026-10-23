@@ -2,6 +2,60 @@ import { Component } from 'react'
 import { reportClientError } from '../lib/observability.js'
 
 /**
+ * The failure UI, on its own so the route-level boundaries (which React Router
+ * drives from `useRouteError`) render exactly what the class boundary below
+ * does. `onRetry` is optional: a route boundary cannot clear its own error — the
+ * router does that on the next navigation — so it offers only the way home.
+ *
+ * @param {{ error: unknown, onRetry?: () => void }} props
+ */
+export function ErrorView({ error, onRetry }) {
+  return (
+    <div className="grid min-h-[50vh] place-items-center px-5 py-16 text-center">
+      <div className="max-w-md">
+        <span className="text-3xl" aria-hidden="true">
+          ⚠️
+        </span>
+        <h1 className="mt-3 text-[1.4rem]">Something went wrong on this page</h1>
+        <p className="mt-2 text-[0.92rem] leading-relaxed text-muted">
+          It has been reported and we will look at it. Nothing you have paid for is affected.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          {/*
+            Clearing the error re-renders the same subtree, which is the right
+            first try for a transient failure. The reload is the escape hatch
+            when it is not transient — a message with no way back is only
+            marginally better than a white screen.
+          */}
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex min-h-[42px] items-center rounded-full bg-brand px-5 text-[0.92rem] font-semibold text-white hover:bg-brand-deep"
+            >
+              Try again
+            </button>
+          )}
+          <a
+            href="/"
+            className="inline-flex min-h-[42px] items-center rounded-full border border-line px-5 text-[0.92rem] font-semibold text-brand hover:bg-accent-soft"
+          >
+            Back home
+          </a>
+        </div>
+        {/* The stack is for a developer, not a learner — hidden by default and
+            never shown in a production build. */}
+        {import.meta.env.DEV && (
+          <pre className="mt-6 overflow-x-auto whitespace-pre-wrap rounded-md2 bg-surface-mist p-3 text-left text-[0.72rem] text-muted">
+            {error?.stack || String(error)}
+          </pre>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Catches render errors so one broken component does not white-screen the site.
  *
  * There was no boundary anywhere: any error thrown during render unmounted the
@@ -9,7 +63,9 @@ import { reportClientError } from '../lib/observability.js'
  * stack trace went to a console nobody is watching.
  *
  * Still a class component — `componentDidCatch` has no hook equivalent, and
- * that is the only way React exposes this.
+ * that is the only way React exposes this. The route modules use React
+ * Router's `ErrorBoundary` export instead (see components/RouteErrorView.tsx);
+ * this class remains for boundaries placed inside a page.
  */
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -31,46 +87,6 @@ export default class ErrorBoundary extends Component {
 
     if (this.props.fallback) return this.props.fallback(error, () => this.setState({ error: null }))
 
-    return (
-      <div className="grid min-h-[50vh] place-items-center px-5 py-16 text-center">
-        <div className="max-w-md">
-          <span className="text-3xl" aria-hidden="true">
-            ⚠️
-          </span>
-          <h1 className="mt-3 text-[1.4rem]">Something went wrong on this page</h1>
-          <p className="mt-2 text-[0.92rem] leading-relaxed text-muted">
-            It has been reported and we will look at it. Nothing you have paid for is affected.
-          </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            {/*
-              Clearing the error re-renders the same subtree, which is the right
-              first try for a transient failure. The reload is the escape hatch
-              when it is not transient — a message with no way back is only
-              marginally better than a white screen.
-            */}
-            <button
-              type="button"
-              onClick={() => this.setState({ error: null })}
-              className="inline-flex min-h-[42px] items-center rounded-full bg-brand px-5 text-[0.92rem] font-semibold text-white hover:bg-brand-deep"
-            >
-              Try again
-            </button>
-            <a
-              href="/"
-              className="inline-flex min-h-[42px] items-center rounded-full border border-line px-5 text-[0.92rem] font-semibold text-brand hover:bg-accent-soft"
-            >
-              Back home
-            </a>
-          </div>
-          {/* The stack is for a developer, not a learner — hidden by default and
-              never shown in a production build. */}
-          {import.meta.env.DEV && (
-            <pre className="mt-6 overflow-x-auto whitespace-pre-wrap rounded-md2 bg-surface-mist p-3 text-left text-[0.72rem] text-muted">
-              {error.stack || String(error)}
-            </pre>
-          )}
-        </div>
-      </div>
-    )
+    return <ErrorView error={error} onRetry={() => this.setState({ error: null })} />
   }
 }

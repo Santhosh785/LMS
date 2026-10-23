@@ -18,7 +18,9 @@ import { agent } from './helpers/factories.js'
  */
 
 const root = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
-const dist = path.join(root, 'client', 'dist')
+// The browser half of `react-router build`. The server bundle next to it
+// (client/build/server) never leaves the process, so it is not what this guards.
+const dist = path.join(root, 'client', 'build', 'client')
 
 /**
  * Strings that must never appear in anything served to a browser. Deliberately
@@ -89,7 +91,7 @@ describe('credential leak', () => {
   it('has no seeded credential or secret in the built client', () => {
     if (!fs.existsSync(dist)) {
       throw new Error(
-        `client/dist not found. Run "npm --prefix client run build" before the test suite — ` +
+        `client/build/client not found. Run "npm --prefix client run build" before the test suite — ` +
           'this check is meaningless against a stale or missing build.',
       )
     }
@@ -108,7 +110,9 @@ describe('credential leak', () => {
   })
 
   it('does not contain the configured Supabase secrets themselves', () => {
-    if (!fs.existsSync(dist)) throw new Error('client/dist not found — build the client first.')
+    if (!fs.existsSync(dist)) {
+      throw new Error('client/build/client not found — build the client first.')
+    }
     const secrets = secretValues()
     expect(secrets.length).toBeGreaterThan(0)
 

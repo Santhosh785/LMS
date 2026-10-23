@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router'
 import { cn, EmptyState, Loading } from '../ui/index.jsx'
 
 /* ------------------------------- Page header ------------------------------ */

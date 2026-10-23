@@ -1,9 +1,11 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router'
 import { useAuth } from '../context/AuthContext.jsx'
 
 /**
  * Mirrors the server's requireAuth / requireRole. This is UX only — the API
  * enforces the same rules, so a hand-crafted request cannot slip past it.
+ *
+ * @param {{ role?: string, children: import('react').ReactNode }} props
  */
 export default function ProtectedRoute({ role, children }) {
   const { user, loading } = useAuth()

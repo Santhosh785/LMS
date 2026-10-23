@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router'
 import { legalNav } from '../../data/legal.js'
 import useBusiness from '../../hooks/useBusiness.js'
 import { cn } from '../ui/index.jsx'

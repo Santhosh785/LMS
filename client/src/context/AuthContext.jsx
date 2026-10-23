@@ -3,17 +3,26 @@ import { api } from '../api/client.js'
 
 const AuthContext = createContext(null)
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+/**
+ * @param {{ children: import('react').ReactNode, initialUser?: object | null }} props
+ *   `initialUser` is the session the server resolved for this request: a user,
+ *   or `null` for a known "nobody is signed in". Either value skips the
+ *   /auth/me boot fetch and starts with `loading: false`; only an unspecified
+ *   initial value (`undefined`) keeps the old loading boot path.
+ */
+export function AuthProvider({ children, initialUser }) {
+  const known = initialUser !== undefined
+  const [user, setUser] = useState(known ? initialUser : null)
+  const [loading, setLoading] = useState(!known)
 
   useEffect(() => {
+    if (known) return
     api
       .get('/auth/me')
       .then((res) => setUser(res.data.user ?? null))
       .catch(() => setUser(null))
       .finally(() => setLoading(false))
-  }, [])
+  }, [known])
 
   const value = useMemo(
     () => ({

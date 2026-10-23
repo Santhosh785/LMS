@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useAdminDelete, useAdminList, useAdminSave } from '../../api/admin.js'
 import {
   Button,

@@ -4,7 +4,9 @@
  * student/css/student.css — do not "improve" these values, they define the look.
  */
 export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+  // Relative to this file, not the process: in development Tailwind runs inside
+  // the Express process (Vite in middleware mode), whose cwd is server/.
+  content: { relative: true, files: ['./src/**/*.{js,jsx,ts,tsx}'] },
   theme: {
     // The original stylesheets are desktop-first and use max-width queries only.
     // Mirroring that exactly keeps every layout shift at the same pixel as before.

@@ -1,10 +1,7 @@
-import path from 'node:path'
-import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import http from 'node:http'
 import { sql } from 'drizzle-orm'
 import express from 'express'
 import cors from 'cors'
-import helmet from 'helmet'
 import morgan from 'morgan'
 import cookieParser from 'cookie-parser'
 
@@ -14,6 +11,9 @@ import { db, closeDb } from './db/index.js'
 import { accessLogStream, captureMessage, initObservability } from './config/observability.js'
 import { attachUser } from './middleware/auth.js'
 import { errorHandler, notFound } from './middleware/error.js'
+import { cspNonce, securityHeaders } from './middleware/security.js'
+import { apiNoStore } from './middleware/cacheControl.js'
+import { mountReactRouter } from './middleware/reactRouter.js'
 
 import configRoutes from './routes/config.routes.js'
 import showcaseRoutes from './routes/showcase.routes.js'
@@ -42,72 +42,21 @@ import adminRoutes from './routes/admin/index.js'
 import { mediaDir } from './routes/admin/media.routes.js'
 import { legacyRedirect } from './middleware/legacyRedirect.js'
 import sitemapRoutes from './routes/sitemap.routes.js'
-import { spaShell } from './middleware/spaShell.js'
 
 const app = express()
+// Created here rather than by app.listen() so development Vite can share it
+// for hot-module WebSockets (one origin, nothing extra for the CSP to allow).
+const httpServer = http.createServer(app)
 
 // Must be set before the rate limiter reads req.ip. See env.trustProxy.
 app.set('trust proxy', env.trustProxy)
 
 /* ----------------------------- security headers ---------------------------- */
-// Third-party origins the app legitimately needs. Helmet's stock policy falls
-// back to default-src 'self' for frames and media, which would kill the Bunny
-// player outright, so the origins are named here rather than dropping the CSP.
-const FONTSHARE_CSS = 'https://api.fontshare.com' // <link> in client/index.html
-const FONTSHARE_FILES = 'https://cdn.fontshare.com' // the woff2 files that CSS pulls
-const BUNNY_EMBED = 'https://iframe.mediadelivery.net' // Bunny Stream player iframe
-const BUNNY_CDN = 'https://*.b-cdn.net' // vz-*.b-cdn.net: HLS segments + thumbnails
-// Razorpay's hosted checkout (task 16). It injects a script, opens its payment
-// form in an iframe and beacons telemetry, so it needs all four directives —
-// miss one and the modal opens blank, which reads to a buyer as a broken
-// checkout rather than a policy error.
-const RZP_CHECKOUT = 'https://checkout.razorpay.com'
-const RZP_API = 'https://api.razorpay.com'
-const RZP_TELEMETRY = 'https://lumberjack.razorpay.com'
-const RZP_CDN = 'https://cdn.razorpay.com'
-
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        'default-src': ["'self'"],
-        'base-uri': ["'self'"],
-        'form-action': ["'self'"],
-        'object-src': ["'none'"],
-        'script-src': ["'self'", RZP_CHECKOUT],
-        'style-src': ["'self'", "'unsafe-inline'", FONTSHARE_CSS],
-        'font-src': ["'self'", 'data:', FONTSHARE_FILES, FONTSHARE_CSS],
-        /*
-         * `https:` rather than a host list, because image URLs are now operator
-         * input: the logo, favicon, course covers, workshop banners and blog
-         * heroes are all pasted into the admin panel and can point at any CDN.
-         * A fixed allowlist would block whatever host the client actually uses,
-         * and the failure only appears in production — the dev server does not
-         * apply this policy, so it would have shipped looking fine.
-         *
-         * Widened for images only. Scripts, frames and connections stay pinned
-         * to named hosts, which is where the real risk is.
-         */
-        'img-src': [
-          "'self'",
-          'data:',
-          'blob:',
-          'https:',
-          BUNNY_CDN,
-          BUNNY_EMBED,
-          RZP_CDN,
-          RZP_CHECKOUT,
-        ],
-        'media-src': ["'self'", 'blob:', BUNNY_CDN],
-        'frame-src': ["'self'", BUNNY_EMBED, RZP_CHECKOUT, RZP_API],
-        'connect-src': ["'self'", BUNNY_CDN, RZP_API, RZP_CHECKOUT, RZP_TELEMETRY],
-        // Only meaningful once the site is on https; in development it would
-        // rewrite http://localhost API calls and break them.
-        'upgrade-insecure-requests': env.isProd ? [] : null,
-      },
-    },
-  }),
-)
+// The per-request CSP nonce first: helmet reads it back for `script-src`, and
+// the React Router handler puts it on the inline scripts it emits. Directives
+// live in middleware/security.js.
+app.use(cspNonce)
+app.use(securityHeaders({ isProd: env.isProd }))
 
 /**
  * `dev` is a development formatter — colourised, no timestamps, unparseable. In
@@ -139,6 +88,10 @@ app.use(express.json({ limit: '2mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 app.use(attachUser)
+
+// Every API response is `no-store` unless a route says otherwise (GET
+// /api/config does). Before the routers, so theirs is the last word.
+app.use('/api', apiNoStore)
 
 /**
  * Health check.
@@ -189,62 +142,28 @@ app.use('/api/admin', adminRoutes)
 // the client build, so deploys do not wipe an editor's uploaded images.
 app.use('/uploads/media', express.static(mediaDir, { fallthrough: false, maxAge: '7d' }))
 
-// Mongo-era bookmarks (/admin/courses/<ObjectId>) → their Postgres ids. Ahead of
-// the SPA so the browser is redirected before index.html is served.
+// Mongo-era bookmarks (/admin/courses/<ObjectId>) → their Postgres ids, and the
+// old static site's .html URLs. Ahead of the app so the browser is redirected
+// before a page is rendered.
 app.use(legacyRedirect)
 
-// /sitemap.xml and /robots.txt. Outside the client-build check below, so they are
-// served in development too, and ahead of the SPA fallback, which would
-// otherwise answer both with the app shell.
+// /sitemap.xml and /robots.txt, ahead of the app, which would otherwise answer
+// both with a page.
 app.use(sitemapRoutes)
 
-/* ------------------------------ the SPA ---------------------------------- */
+/* ------------------------------- the app --------------------------------- */
 /**
- * Express serves the built client from the same origin as the API.
+ * The client, server-rendered here by React Router (middleware/reactRouter.js):
+ * the production build in production, Vite in middleware mode in development.
+ * Same origin as the API, so the auth cookie stays same-site with no CORS to
+ * get wrong on launch night.
  *
- * That is the whole point: one origin means the auth cookie is same-site and the
- * existing `sameSite: 'lax'` setting works untouched, with no CORS configuration
- * to get wrong on launch night.
- *
- * Ordering matters and is the reason this block sits here rather than higher up.
- * Every `/api/*` route is already mounted, so the fallback below cannot shadow
- * one; and the fallback answers only GET, so an unmatched POST /api/whatever
- * still reaches `notFound` and gets JSON instead of a page of HTML.
+ * Last, after every `/api` router, the media files, the legacy redirects and
+ * the sitemap: it answers every other request, and passes `/api/*` through so
+ * an unmatched API call still gets the JSON 404 below. Nothing is mounted
+ * under test — the suite never imports the client build or starts Vite.
  */
-const clientDist = path.resolve(fileURLToPath(new URL('../../client/dist', import.meta.url)))
-const indexHtml = path.join(clientDist, 'index.html')
-
-if (fs.existsSync(indexHtml)) {
-  app.use(
-    express.static(clientDist, {
-      // `index: false` so *every* HTML response — "/" included — goes through
-      // the one fallback below and gets the same headers. Otherwise "/" and
-      // "/courses/seo-mastery" are served by different code paths and only one
-      // of them ends up with the right cache policy.
-      index: false,
-      setHeaders: (res, filePath) => {
-        // Vite fingerprints everything under /assets, so those never change
-        // under a fixed name and can be cached for a year.
-        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-        }
-      },
-    }),
-  )
-
-  // GET only, `/api/*` passed through, `Cache-Control: no-cache` on every
-  // response; the head carries per-route SEO tags unless SEO_INJECT=0.
-  app.get('*', spaShell({ indexHtml, inject: env.seoInject }))
-  console.log(
-    `[server] serving the SPA from ${clientDist}${env.seoInject ? '' : ' (SEO_INJECT=0: no head injection)'}`,
-  )
-} else if (env.isProd) {
-  // In production this is a broken deploy, not a preference: the site would
-  // answer every page request with a JSON 404.
-  console.error(`[server] client build missing at ${clientDist} — run "npm run build"`)
-} else {
-  console.log('[server] no client build found — Vite dev server serves the SPA')
-}
+await mountReactRouter(app, httpServer)
 
 app.use(notFound)
 app.use(errorHandler)
@@ -274,7 +193,6 @@ process.on('uncaughtException', (err) => {
  * a deploy should never hang on a stuck handler.
  */
 const SHUTDOWN_TIMEOUT_MS = 30_000
-let httpServer = null
 let shuttingDown = false
 
 async function shutdown(signal) {
@@ -292,9 +210,7 @@ async function shutdown(signal) {
   try {
     // close() stops new connections at once; its callback waits for in-flight
     // requests, which finish alongside the queue drain rather than ahead of it.
-    const httpClosed = httpServer
-      ? new Promise((resolve) => httpServer.close(() => resolve()))
-      : Promise.resolve()
+    const httpClosed = new Promise((resolve) => httpServer.close(() => resolve()))
     await stopQueue()
     await httpClosed
     // Its own long-lived connection, outside the pool closeDb() ends.
@@ -332,7 +248,7 @@ if (!env.isTest) {
       // Cross-instance cache invalidation. Not awaited: an unreachable listener
       // database leaves the caches on their TTLs, it never blocks or fails boot.
       startInvalidationListener()
-      httpServer = app.listen(env.port, () => {
+      httpServer.listen(env.port, () => {
         console.log(`[server] listening on http://localhost:${env.port}`)
       })
     })

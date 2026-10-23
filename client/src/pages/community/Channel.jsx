@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'

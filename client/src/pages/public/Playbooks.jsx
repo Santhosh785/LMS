@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'

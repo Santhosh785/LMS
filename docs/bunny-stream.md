@@ -136,4 +136,4 @@ smaller catalogue.
 3. As a user enrolled in a *different* course, call the endpoint → 403, no URL.
 4. Set that enrolment's `expiresAt` to yesterday → 403, no URL.
 5. Pass a lesson id from another course → 403, no URL.
-6. `grep -r "BUNNY_SECURITY_KEY" client/dist` → empty.
+6. `grep -r "BUNNY_SECURITY_KEY" client/build/client` → empty.

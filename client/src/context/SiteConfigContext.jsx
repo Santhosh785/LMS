@@ -45,31 +45,45 @@ const DEFAULTS = {
 
 const SiteConfigContext = createContext(DEFAULTS)
 
-export function SiteConfigProvider({ children }) {
-  const [config, setConfig] = useState(DEFAULTS)
+/** The GET /api/config payload (or the root loader's copy of it) merged over the defaults. */
+function fromPayload(data) {
+  return {
+    // A module that cannot be confirmed enabled stays hidden.
+    features: { ...ALL_OFF, ...(data?.features || {}) },
+    branding: { ...DEFAULTS.branding, ...(data?.branding || {}) },
+    menu: { ...DEFAULTS.menu, ...(data?.menu || {}) },
+    help: { ...DEFAULTS.help, ...(data?.help || {}) },
+    taxonomy: data?.taxonomy || {},
+    loaded: true,
+  }
+}
+
+/**
+ * @param {{ children: import('react').ReactNode, initialConfig?: object | null }} props
+ *   `initialConfig` is the site config the server already resolved for this
+ *   request (the root loader passes it through). When it is given the boot
+ *   fetch is skipped, so the server render and the hydrated render agree and
+ *   the header never flashes the defaults.
+ */
+export function SiteConfigProvider({ children, initialConfig }) {
+  const [config, setConfig] = useState(() =>
+    initialConfig ? fromPayload(initialConfig) : DEFAULTS,
+  )
 
   useEffect(() => {
+    if (initialConfig) return undefined
     let cancelled = false
     api
       .get('/config')
       .then((res) => {
         if (cancelled) return
-        const data = res.data || {}
-        setConfig({
-          // A module that cannot be confirmed enabled stays hidden.
-          features: { ...ALL_OFF, ...(data.features || {}) },
-          branding: { ...DEFAULTS.branding, ...(data.branding || {}) },
-          menu: { ...DEFAULTS.menu, ...(data.menu || {}) },
-          help: { ...DEFAULTS.help, ...(data.help || {}) },
-          taxonomy: data.taxonomy || {},
-          loaded: true,
-        })
+        setConfig(fromPayload(res.data))
       })
       .catch(() => !cancelled && setConfig({ ...DEFAULTS, loaded: true }))
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [initialConfig])
 
   // The favicon and the accent are document-level, so they are applied here
   // rather than by whichever component happens to render first.

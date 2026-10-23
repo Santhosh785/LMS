@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { apiError, apiFieldErrors } from '../../api/client.js'
 import { Button, ErrorNote, TextField } from '../../components/ui/index.jsx'

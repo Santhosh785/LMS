@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, apiError, apiFieldErrors } from '../../api/client.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Button, ErrorNote, Loading, TextField } from '../../components/ui/index.jsx'
