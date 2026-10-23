@@ -11,7 +11,6 @@ import {
   ProgressBar,
   StatTile,
 } from '../../components/student/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import CoverArt from '../../components/CoverArt.jsx'
 
 /** "Today", "Yesterday", or a short date — the drop's activity/deadline stamps. */
@@ -26,7 +25,6 @@ function dayLabel(value) {
 }
 
 export default function Dashboard() {
-  useDocumentTitle('My Learning Dashboard | Growth Scholar')
   const { user } = useAuth()
   const features = useFeatures()
 

@@ -2,10 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client.js'
 import { Button, EmptyState, Loading, StatusPill, useToast } from '../../components/ui/index.jsx'
 import { PageHead } from '../../components/student/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 export default function Certificates() {
-  useDocumentTitle('Certificates | Growth Scholar')
   const toast = useToast()
 
   const { data, isPending } = useQuery({

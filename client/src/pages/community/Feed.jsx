@@ -9,11 +9,9 @@ import {
   PostCard,
 } from '../../components/community/index.jsx'
 import { featuredChallenge, huddle, leaderboardRail } from '../../data/communityContent.js'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import { useFeatures } from '../../context/SiteConfigContext.jsx'
 
 export default function Feed() {
-  useDocumentTitle('Community | Growth Scholar')
   const features = useFeatures()
 
   const { data, isPending } = useQuery({

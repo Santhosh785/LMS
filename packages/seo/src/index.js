@@ -3,7 +3,7 @@
  *
  * Plain objects in, plain objects/strings out. No database, no Express, no
  * URL routing and no Node-only APIs: the same module runs in React Router
- * `meta()` on the client and in the Express SEO stopgap on the server.
+ * `meta()` on the client and on the server.
  */
 
 export {

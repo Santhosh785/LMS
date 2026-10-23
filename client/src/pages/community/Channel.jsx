@@ -5,7 +5,6 @@ import { api, apiError } from '../../api/client.js'
 import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'
 import { Composer, LeaderboardRail, PostCard } from '../../components/community/index.jsx'
 import { leaderboardRail } from '../../data/communityContent.js'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import { useFeatures } from '../../context/SiteConfigContext.jsx'
 
 const TABS = [
@@ -22,10 +21,6 @@ export default function Channel() {
     queryKey: ['channel', slug],
     queryFn: async () => (await api.get(`/channels/${slug}/posts`)).data,
   })
-
-  useDocumentTitle(
-    data?.channel ? `#${data.channel.name} | Growth Scholar` : 'Channel | Growth Scholar',
-  )
 
   if (isPending) return <Loading />
   if (error) {

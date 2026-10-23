@@ -364,6 +364,21 @@ describe('postMeta and blogPosting JSON-LD', () => {
       mainEntityOfPage: { '@type': 'WebPage', '@id': meta.canonical },
     })
   })
+  it('breadcrumbs Home › Blog › the category, like the article page', () => {
+    const crumbs = (meta) =>
+      meta.jsonLd
+        .find((j) => j['@type'] === 'BreadcrumbList')
+        .itemListElement.map(({ name, item }) => [name, item])
+    expect(crumbs(postMeta(post, site))).toEqual([
+      ['Home', 'https://growthscholar.in'],
+      ['Blog', 'https://growthscholar.in/blog'],
+      ['SEO', 'https://growthscholar.in/blog?category=SEO'],
+    ])
+    expect(crumbs(postMeta({ ...post, category: null }, site)).at(-1)).toEqual([
+      post.title,
+      'https://growthscholar.in/blog/seo-content-calendar',
+    ])
+  })
   it('falls back for dateModified and author', () => {
     const ld = blogPosting({ ...post, updatedAt: null, author: null }, site)
     expect(ld.dateModified).toBe(ld.datePublished)
@@ -557,6 +572,22 @@ describe('breadcrumbList and itemList', () => {
       '@type': 'ItemList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, url: 'https://x.in/a' },
+        { '@type': 'ListItem', position: 2, url: 'https://x.in/b' },
+      ],
+    })
+  })
+  it('names { url, name } entries and skips entries without a URL', () => {
+    expect(
+      itemList([
+        { url: 'https://x.in/a', name: '  Post  A ' },
+        { url: '', name: 'No URL' },
+        { url: 'https://x.in/b' },
+      ]),
+    ).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, url: 'https://x.in/a', name: 'Post A' },
         { '@type': 'ListItem', position: 2, url: 'https://x.in/b' },
       ],
     })

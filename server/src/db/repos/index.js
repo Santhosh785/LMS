@@ -7,6 +7,7 @@ import * as customers from './customers.js'
 import * as email from './email.js'
 import * as enrollments from './enrollments.js'
 import * as programs from './programs.js'
+import * as resources from './resources.js'
 import * as settings from './settings.js'
 import * as transactions from './transactions.js'
 import * as users from './users.js'
@@ -28,6 +29,7 @@ export const repos = Object.freeze({
   email,
   enrollments,
   programs,
+  resources,
   settings,
   transactions,
   users,

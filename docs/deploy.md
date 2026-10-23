@@ -15,14 +15,35 @@ cross-site cookie setup. Coolify's Traefik proxy terminates TLS (Let's Encrypt)
 and redirects `www` and `http` to the apex. Health check: `/api/health`.
 
 **The client is server-rendered by the Express process** (React Router
-framework mode). This changes nothing in Coolify: the build command is still
-`npm run build` and the start command is still `npm start`. What the build
-produces is `client/build/` — `client/build/server/index.js`, which Express
-imports at boot, and `client/build/client/`, the browser assets it serves — so
-the client build output must exist at runtime, next to the server, in the same
+framework mode). **No Coolify changes are required**: the build command is
+still `npm run build`, the start command is still `npm start`, the port, health
+check and proxy settings are unchanged, and no new service or volume is needed.
+
+### Build output
+
+`npm run build` (`react-router build`) writes two bundles to `client/build/`:
+
+| Path                           | What it is                                                                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `client/build/server/index.js` | the server bundle Express imports at boot to render pages                                                                          |
+| `client/build/client/`         | the browser assets: `assets/` (fingerprinted, served immutable for a year) and the files from `client/public` (served for an hour) |
+
+The build output must exist at runtime, next to the server, in the same
 container image. A start without it logs `client build missing` and answers
 every page with the JSON 404. Vite is a build-time dependency only; in
 production nothing imports it.
+
+### Development workflow
+
+```sh
+npm run dev      # Express on :5000, with Vite embedded in middleware mode
+```
+
+One process serves the API and the pages from source, with hot reloading on the
+same origin and port, so there is no client dev server, no proxy and no CORS
+setup (`CLIENT_ORIGIN` defaults to the server's own origin). A production
+build is only needed to test what Coolify runs: `npm run build && npm start`.
+`npm run typecheck` generates the route types and runs `tsc` over the client.
 
 Deploys are triggered from the Coolify dashboard (or its API). The GitHub
 Actions workflow that redeployed on every push was removed, so whether a push
@@ -36,8 +57,8 @@ cannot run without:
 
 ```
 NODE_ENV=production
-TRUST_PROXY=1                  # Traefik is the single hop. See env.trustProxy.
-JWT_SECRET=                    # openssl rand -base64 48
+TRUST_PROXY=1                  # Traefik is the single hop (2 with Cloudflare in front). See env.trustProxy.
+JWT_SECRET=                    # openssl rand -base64 48 (boot refuses without it; now only the fallback root for CONFIG_SECRET)
 PUBLIC_URL=https://growthscholar.in
 CLIENT_ORIGIN=https://growthscholar.in
 
@@ -66,6 +87,14 @@ rate limiting all key on `req.ip`. Behind an unacknowledged proxy every visitor
 shares the proxy's IP and therefore one bucket, and the first five failed logins
 lock out the world. Set it to the real hop count and no higher — extra hops are
 client-spoofable through `X-Forwarded-For`.
+
+The hop count is **1** without Cloudflare (Traefik to Express) and **2** with it
+(Cloudflare to Traefik to Express). `TRUST_PROXY=2` only yields the real client
+IP if Traefik is configured to trust Cloudflare's forwarded header; otherwise
+set `CF_PROXIED=1`, which keys the rate limiters on `CF-Connecting-IP`. That
+header is spoofable by anyone who can reach the origin directly, so
+`CF_PROXIED` requires restricting origin ingress (ports 80/443) to Cloudflare's
+published IP ranges. Both options are in [cloudflare.md](./cloudflare.md).
 
 **Rate-limit store.** The seven rate limiters (login, register, password reset
 per IP and per email, checkout, blog comments, community reports) keep their
@@ -118,6 +147,14 @@ Postgres `LISTEN/NOTIFY` (`gs_invalidate`, on `BOSS_DATABASE_URL` or else
 configured, because the local-disk media fallback is not shared between
 instances.
 
+**Background jobs and the edge cache.** Mail, payment side effects, sitemap
+rebuilds and Cloudflare purges run on a pg-boss queue inside the Express
+process. `BOSS_DATABASE_URL` (a session-capable connection, never the :6543
+pooler; defaults to `DIRECT_DATABASE_URL`) and `BOSS_ENABLED=0` (run every job
+inline) configure it; `CF_ZONE_ID` and `CF_API_TOKEN` enable the Cloudflare
+purge after admin content changes and are no-ops when blank. See
+[jobs.md](./jobs.md).
+
 ## Schema changes
 
 ```sh
@@ -136,6 +173,10 @@ relay server. Keep the SPF, DKIM and DMARC records from
 [email-dns.md](./email-dns.md) — without them Resend delivers only to the
 account owner, and every buyer email (including the access link they paid for)
 silently goes nowhere.
+
+Once the zone moves to Cloudflare, DNS is edited there instead of at Hostinger,
+and the mail records must stay DNS-only (grey cloud). See
+[cloudflare.md](./cloudflare.md).
 
 ## Backups
 
@@ -169,6 +210,26 @@ NODE_ENV=production npm --prefix server run seed:demo                # must refu
 
 Then walk the money path by hand: browse → checkout at ₹1 → approve in admin →
 confirm the email arrives at an external address → sign in → play a lesson.
+
+### Smoke suite
+
+The read-only Playwright suite in `e2e/` checks the same things by machine, and
+is the check to run both sides of a deploy (what it covers, the env overrides and
+the one-time `npx playwright install chromium` are in the README under
+*Smoke tests*):
+
+```sh
+# Before the deploy: locally, against the TEST Supabase project (never production)
+npm run e2e
+
+# After the deploy: against the live site. Starts no server and writes nothing.
+BASE_URL=https://growthscholar.in npm run e2e:prod
+```
+
+It can later be wired as a Coolify post-deployment command running the second
+line; that needs the Playwright browser in the image it runs in. **No GitHub
+Actions workflow exists today and none is added for this suite**: deploys are
+triggered from Coolify, as above, so the run is manual until that hook is set.
 
 ## Rollback
 

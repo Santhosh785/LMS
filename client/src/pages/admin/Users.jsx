@@ -13,7 +13,6 @@ import {
   TextField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 
 /**
@@ -31,7 +30,6 @@ const fmt = (d) =>
     : '—'
 
 export default function Users() {
-  useDocumentTitle('Users | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const { user: me } = useAuth()

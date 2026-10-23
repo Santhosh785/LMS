@@ -3,8 +3,9 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, apiError, apiFieldErrors } from '../../api/client.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Button, ErrorNote, Loading, TextField } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import BrandLogo from '../../components/BrandLogo.jsx'
+
+const MISSING_TOKEN = 'This link is missing its token. Request a new one below.'
 
 /**
  * Serves both halves of the same mechanism: a learner resetting a forgotten
@@ -13,15 +14,18 @@ import BrandLogo from '../../components/BrandLogo.jsx'
  * copy does, keyed on whether the account has ever had a password.
  */
 export default function ResetPassword() {
-  useDocumentTitle('Choose a password | Growth Scholar')
   const [params] = useSearchParams()
   const token = params.get('token') || ''
   const navigate = useNavigate()
   const { adoptSession } = useAuth()
 
-  const [checking, setChecking] = useState(true)
+  // The server renders this page too, but never checks the token: the first
+  // HTML is the "checking" state (or, with no token at all, the missing-token
+  // message), and the hydrated render starts from the same state, so the two
+  // agree. Only the effect below asks the API about the link.
+  const [checking, setChecking] = useState(() => Boolean(token))
   const [account, setAccount] = useState(null)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState(() => (token ? null : MISSING_TOKEN))
   const [fields, setFields] = useState({})
   const [busy, setBusy] = useState(false)
 
@@ -29,7 +33,7 @@ export default function ResetPassword() {
   // password twice is the most annoying possible order to learn it.
   useEffect(() => {
     if (!token) {
-      setError('This link is missing its token. Request a new one below.')
+      setError(MISSING_TOKEN)
       setChecking(false)
       return
     }
@@ -75,9 +79,7 @@ export default function ResetPassword() {
       <div className="w-full max-w-md rounded-xl2 border border-line bg-white p-8 shadow-soft mx-560:p-6">
         <BrandLogo width={140} height={88} className="mb-5 h-11 w-auto rounded-sm2" />
 
-        {checking ? (
-          <Loading label="Checking your link…" />
-        ) : !account ? (
+        {!checking && !account ? (
           <>
             <h1 className="text-[1.5rem]">This link no longer works</h1>
             <p className="mt-2 text-[0.9rem] leading-relaxed text-muted">
@@ -96,36 +98,47 @@ export default function ResetPassword() {
           </>
         ) : (
           <>
+            {/*
+              The form shell is what the server renders: the fields are there,
+              disabled, while the link is checked after hydration. The account
+              email only ever arrives from that check.
+            */}
             <h1 className="text-[1.5rem]">Choose a password</h1>
-            <p className="mt-1 break-words text-[0.9rem] text-muted">
-              For <span className="font-semibold text-brand-deep">{account.email}</span>
-            </p>
+            {checking ? (
+              <Loading label="Checking your link…" />
+            ) : (
+              <p className="mt-1 break-words text-[0.9rem] text-muted">
+                For <span className="font-semibold text-brand-deep">{account.email}</span>
+              </p>
+            )}
 
-            <form onSubmit={onSubmit} className="mt-6 grid gap-4">
-              <TextField
-                name="password"
-                type="password"
-                label="New password"
-                autoComplete="new-password"
-                hint="At least 8 characters"
-                minLength={8}
-                autoFocus
-                required
-                error={fields.password}
-              />
-              <TextField
-                name="confirm"
-                type="password"
-                label="Confirm password"
-                autoComplete="new-password"
-                minLength={8}
-                required
-                error={fields.confirm}
-              />
-              <ErrorNote error={error} />
-              <Button type="submit" block disabled={busy}>
-                {busy ? 'Saving…' : 'Save password and sign in'}
-              </Button>
+            <form onSubmit={onSubmit} className="mt-6">
+              <fieldset disabled={checking} className="grid gap-4">
+                <TextField
+                  name="password"
+                  type="password"
+                  label="New password"
+                  autoComplete="new-password"
+                  hint="At least 8 characters"
+                  minLength={8}
+                  autoFocus
+                  required
+                  error={fields.password}
+                />
+                <TextField
+                  name="confirm"
+                  type="password"
+                  label="Confirm password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  error={fields.confirm}
+                />
+                <ErrorNote error={error} />
+                <Button type="submit" block disabled={busy}>
+                  {busy ? 'Saving…' : 'Save password and sign in'}
+                </Button>
+              </fieldset>
             </form>
           </>
         )}

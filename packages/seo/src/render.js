@@ -1,6 +1,6 @@
 /**
- * Renderers: SeoMeta -> head HTML string (Express stopgap / SSR) or
- * React Router `meta()` descriptors (client navigation).
+ * Renderers: SeoMeta -> head HTML string or
+ * React Router `meta()` descriptors.
  */
 
 import { escapeHtml, text } from './format.js'

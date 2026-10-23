@@ -15,11 +15,9 @@ import {
   useToast,
 } from '../../components/ui/index.jsx'
 import { DataTable, PageHead } from '../../components/admin/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /* --------------------------------- Points --------------------------------- */
 export function GamificationPoints() {
-  useDocumentTitle('Points — Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [rules, setRules] = useState([])
@@ -130,7 +128,6 @@ const TONES = {
 }
 
 export function GamificationBadges() {
-  useDocumentTitle('Badges — Growth Scholar Admin')
   const toast = useToast()
   const [creating, setCreating] = useState(false)
   const [automation, setAutomation] = useState(false)
@@ -279,7 +276,6 @@ export function GamificationBadges() {
 
 /* ------------------------------ Leaderboard ------------------------------- */
 export function GamificationLeaderboard() {
-  useDocumentTitle('Leaderboard — Growth Scholar Admin')
   const [period, setPeriod] = useState('week')
 
   const { data, isPending } = useQuery({
@@ -346,7 +342,6 @@ export function GamificationLeaderboard() {
 
 /* ------------------------------- Settings --------------------------------- */
 export function GamificationSettings() {
-  useDocumentTitle('Gamification settings — Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [form, setForm] = useState(null)

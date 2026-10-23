@@ -13,7 +13,6 @@ import {
   TextField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import {
   CTA_KEYS,
   DEFAULT_CTAS,
@@ -39,7 +38,6 @@ const TABS = [
 const byKey = (rows = []) => Object.fromEntries(rows.map((r) => [r.key, r]))
 
 export default function Programs() {
-  useDocumentTitle('Programs | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
 

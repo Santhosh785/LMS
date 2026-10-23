@@ -13,7 +13,6 @@ import {
   SelectField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * Admin for the Resources section — playbooks and Claude skills on one screen,
@@ -68,7 +67,6 @@ const textToPairs = (text, a, b) =>
     })
 
 export default function Resources() {
-  useDocumentTitle('Resources | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState('playbooks')

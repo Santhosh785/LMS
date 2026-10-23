@@ -5,7 +5,7 @@
  * homepage matches the delivered design exactly and so the next redesign drop
  * can be re-copied over it without replaying a translation. It depends only on
  * the :root tokens declared in src/index.css, and is scoped under .home-lm —
- * the body class the static build set and useBodyClass() reproduces.
+ * the body class the static build set and the route's `handle.bodyClass` reproduces.
  *
  * Anything that needs to differ from the drop belongs in a later-loaded
  * override, not in this file.

@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { Button, cn, EmptyState, Loading, useToast } from '../../components/ui/index.jsx'
 import { PageHead } from '../../components/student/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const TABS = [
   { id: 'upcoming', label: 'Upcoming' },
@@ -14,7 +13,6 @@ const TABS = [
 const fmt = (d) => new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
 
 export default function Live() {
-  useDocumentTitle('Live & Workshops | Growth Scholar')
   const [tab, setTab] = useState('upcoming')
   const queryClient = useQueryClient()
   const toast = useToast()

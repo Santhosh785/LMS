@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { env } from '../config/env.js'
 import { HttpError } from './error.js'
-import { findUserById } from '../db/repos/users.js'
+import { authSessionExists, findUserById } from '../db/repos/users.js'
 import { supabaseForRequest } from '../services/supabaseAdmin.js'
 
 /**
@@ -107,12 +107,22 @@ export async function attachUser(req, res, next) {
     // password last changed is refused. Measured from the sign-in itself
     // (`amr[].timestamp`), not `iat` — a refresh mints a new access token with a
     // fresh `iat` but keeps the original sign-in time, so an attacker's stolen
-    // session cannot outlive a reset just by refreshing. Seconds; one second of
-    // slack so the session issued by the reset itself is not caught.
-    const changedAt = user?.passwordChangedAt
+    // session cannot outlive a reset just by refreshing.
+    //
+    // Supabase stamps whole seconds, so a session stamped S signed in somewhere
+    // in [S, S+1). If that second ended by the change, it is refused. Stamped
+    // in the change's own second, it may be the old session or the one
+    // the reset just issued, and the time cannot tell them apart. Supabase ended
+    // every session when the password changed, so ask it whether this one
+    // survived.
+    const changedAtMs = user?.passwordChangedAt ? new Date(user.passwordChangedAt).getTime() : 0
     const signedInAt = sessionStartedAt(payload)
-    if (changedAt && signedInAt && signedInAt * 1000 < new Date(changedAt).getTime() - 1000) {
-      return next()
+    if (changedAtMs && signedInAt) {
+      const signedInMs = signedInAt * 1000
+      if (signedInMs + 1000 <= changedAtMs) return next()
+      if (signedInMs <= changedAtMs && !(await authSessionExists(payload.session_id))) {
+        return next()
+      }
     }
 
     // A suspension bites on the next request, not at the next sign-in.

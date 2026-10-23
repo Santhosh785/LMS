@@ -30,13 +30,11 @@ import {
   TypeCard,
 } from '../../components/admin/index.jsx'
 import { funnelTabs } from '../../data/nav.js'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 
 /* ------------------------------ All funnels ------------------------------- */
 export function FunnelsList() {
-  useDocumentTitle('Funnels — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const { data, isPending } = useAdminList('funnels', { limit: 200 })
@@ -101,7 +99,6 @@ export function FunnelsList() {
 
 /* ----------------------------- Create funnel ------------------------------ */
 export function FunnelCreate() {
-  useDocumentTitle('Create funnel — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const save = useAdminSave('funnels')
@@ -186,9 +183,6 @@ export function FunnelCreate() {
 export function FunnelEditor() {
   const { id } = useParams()
   const { data: funnel, isPending } = useAdminOne('funnels', id)
-  useDocumentTitle(
-    funnel ? `${funnel.name} — Growth Scholar Admin` : 'Funnel — Growth Scholar Admin',
-  )
 
   if (isPending) return <Loading />
   if (!funnel) return <p className="py-16 text-center text-muted-admin">Funnel not found.</p>
@@ -457,8 +451,6 @@ export function FunnelLeads() {
     queryFn: async () =>
       (await api.get(scoped ? `/admin/funnels/${id}/leads` : '/admin/funnels/leads')).data,
   })
-
-  useDocumentTitle('Funnel leads — Growth Scholar Admin')
 
   return (
     <>

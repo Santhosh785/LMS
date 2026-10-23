@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../../api/client.js'
-import useDocumentTitle from '../../../hooks/useDocumentTitle.js'
 import {
   ConfirmDialog,
   fmtDateTime,
@@ -56,7 +55,6 @@ function postStates(post, view) {
 }
 
 export default function Posts() {
-  useDocumentTitle('Posts | Growth Scholar Blog')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const notices = useNotices()

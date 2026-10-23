@@ -1,76 +1,25 @@
 import { Router } from 'express'
-import {
-  and,
-  arrayContains,
-  count,
-  desc,
-  eq,
-  ilike,
-  inArray,
-  isNotNull,
-  isNull,
-  ne,
-  or,
-} from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { asyncHandler, HttpError } from '../middleware/error.js'
 import { db, withMongoId } from '../db/index.js'
-import { blogComments, blogPosts, media } from '../db/schema/index.js'
-import {
-  findPublicPostBySlug,
-  listColumns,
-  publicPostWhere,
-  withoutColumns,
-} from '../db/repos/blog.js'
+import { blogComments, blogPosts } from '../db/schema/index.js'
+import { findPublicPostBySlug, findPublicPostPage, listPublicPosts } from '../db/repos/blog.js'
 import { blogCommentLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
 
-const escapeLike = (q) => q.replace(/[\\%_]/g, (c) => `\\${c}`)
-
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const clauses = [publicPostWhere()]
-    // "latest" is the catch-all tab in the original category rail
-    if (req.query.category && req.query.category !== 'latest') {
-      clauses.push(eq(blogPosts.category, req.query.category))
-    }
-    if (req.query.tag) clauses.push(arrayContains(blogPosts.tags, [String(req.query.tag)]))
-    if (req.query.q?.trim()) {
-      const pattern = `%${escapeLike(req.query.q.trim())}%`
-      clauses.push(or(ilike(blogPosts.title, pattern), ilike(blogPosts.excerpt, pattern)))
-    }
-    const where = and(...clauses)
-    const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 100)
-    const page = Math.max(Number(req.query.page) || 1, 1)
-    const list = listColumns()
-    const [items, [{ total }], featured, categories] = await Promise.all([
-      db
-        .select(list)
-        .from(blogPosts)
-        .where(where)
-        .orderBy(desc(blogPosts.publishedAt))
-        .offset((page - 1) * limit)
-        .limit(limit),
-      db.select({ total: count() }).from(blogPosts).where(where),
-      db
-        .select(list)
-        .from(blogPosts)
-        .where(and(publicPostWhere(), eq(blogPosts.featured, true)))
-        .orderBy(desc(blogPosts.publishedAt)),
-      db
-        .selectDistinct({ category: blogPosts.category })
-        .from(blogPosts)
-        .where(and(publicPostWhere(), isNotNull(blogPosts.category))),
-    ])
-    res.json({
-      items: withMongoId(items),
-      total,
-      page,
-      pages: Math.max(1, Math.ceil(total / limit)),
-      featured: withMongoId(featured),
-      categories: categories.map((c) => c.category).filter(Boolean),
-    })
+    res.json(
+      await listPublicPosts({
+        category: req.query.category,
+        tag: req.query.tag,
+        q: req.query.q,
+        page: req.query.page,
+        limit: req.query.limit,
+      }),
+    )
   }),
 )
 
@@ -125,72 +74,12 @@ router.post(
   }),
 )
 
-/**
- * Attaches a `srcset` to every image that came from the Media Library.
- *
- * The derivatives live on the Media row, not on the post, so that regenerating
- * them flows through to published articles instead of leaving them pointing at
- * URLs that no longer exist. That means one lookup here, at read time, rather
- * than a copy of today's URLs baked into every post body.
- */
-async function withImageSources(post) {
-  const ids = [post.imageMediaId, ...(post.body || []).map((block) => block.mediaId)]
-    .filter(Boolean)
-    .map(String)
-    .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
-  if (!ids.length) return post
-
-  const rows = await db
-    .select({
-      id: media.id,
-      url: media.url,
-      width: media.width,
-      height: media.height,
-      sizes: media.sizes,
-    })
-    .from(media)
-    .where(inArray(media.id, ids))
-  const byId = new Map(rows.map((row) => [String(row.id), row]))
-
-  // Widest last: a browser picks the first candidate that satisfies `sizes`.
-  const srcsetFor = (row) =>
-    [...(row.sizes || []), { url: row.url, width: row.width }]
-      .filter((variant) => variant.url && variant.width)
-      .sort((a, b) => a.width - b.width)
-      .map((variant) => `${variant.url} ${variant.width}w`)
-      .join(', ') || ''
-
-  const cover = post.imageMediaId && byId.get(String(post.imageMediaId))
-  return {
-    ...post,
-    ...(cover
-      ? { imageSrcset: srcsetFor(cover), imageWidth: cover.width, imageHeight: cover.height }
-      : {}),
-    body: (post.body || []).map((block) => {
-      const row = block.mediaId && byId.get(String(block.mediaId))
-      return row ? { ...block, srcset: srcsetFor(row) } : block
-    }),
-  }
-}
-
 router.get(
   '/:slug',
   asyncHandler(async (req, res) => {
-    const found = await findPublicPostBySlug(req.params.slug, withoutColumns(['revisions']))
-    if (!found) throw new HttpError(404, 'Article not found')
-    const post = await withImageSources(withMongoId(found))
-    const related = await db
-      .select(withoutColumns(['body', 'revisions']))
-      .from(blogPosts)
-      .where(
-        and(
-          ne(blogPosts.id, post.id),
-          found.category ? eq(blogPosts.category, found.category) : isNull(blogPosts.category),
-          publicPostWhere(),
-        ),
-      )
-      .limit(3)
-    res.json({ post, related: withMongoId(related) })
+    const page = await findPublicPostPage(req.params.slug)
+    if (!page) throw new HttpError(404, 'Article not found')
+    res.json(page)
   }),
 )
 

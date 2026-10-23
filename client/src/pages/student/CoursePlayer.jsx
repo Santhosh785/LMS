@@ -8,12 +8,11 @@ import LessonPlayer from '../../components/student/LessonPlayer.jsx'
 import BrandLogo from '../../components/BrandLogo.jsx'
 import CurriculumList from '../../components/student/Curriculum.jsx'
 import { formatTotal, lessonLength, toSeconds } from '../../components/student/curriculum.js'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * The course player: an immersive, full-height layout — video stage, a
  * collapsible "Course content" sidebar, and tabs under the video. It renders
- * outside the student dashboard shell (see App.jsx) so the video gets the
+ * outside the student dashboard shell (see routes.ts) so the video gets the
  * width a learner actually watches at.
  *
  * Below 1040px there is no room for a sidebar, so the same curriculum becomes
@@ -55,10 +54,6 @@ export default function CoursePlayer() {
     queryKey: ['enrollment', slug],
     queryFn: async () => (await api.get(`/enrollments/course/${slug}`)).data,
   })
-
-  useDocumentTitle(
-    data?.course ? `${data.course.title} | Growth Scholar` : 'Course | Growth Scholar',
-  )
 
   const flat = useMemo(() => {
     if (!data?.course) return []

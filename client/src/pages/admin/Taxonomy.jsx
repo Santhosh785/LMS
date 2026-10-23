@@ -17,7 +17,6 @@ import {
   ToggleField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * Categories, tags and the rest of the term registry.
@@ -49,7 +48,6 @@ const BLANK = {
 }
 
 export default function Taxonomy() {
-  useDocumentTitle('Taxonomy | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
 

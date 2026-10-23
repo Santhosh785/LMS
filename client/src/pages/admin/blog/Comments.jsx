@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../../api/client.js'
-import useDocumentTitle from '../../../hooks/useDocumentTitle.js'
 import {
   ConfirmDialog,
   fmtDateTime,
@@ -33,7 +32,6 @@ const VIEWS = [
 ]
 
 export default function Comments() {
-  useDocumentTitle('Comments | Growth Scholar Blog')
   const queryClient = useQueryClient()
   const notices = useNotices()
   const [searchParams, setSearchParams] = useSearchParams()

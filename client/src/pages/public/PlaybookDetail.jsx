@@ -1,43 +1,34 @@
-import { Link, useParams } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api, apiError } from '../../api/client.js'
-import { Button, cn, Loading } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
+import { isRouteErrorResponse, Link, useLoaderData, useRouteError } from 'react-router'
+import { Button, cn } from '../../components/ui/index.jsx'
+import RouteErrorView from '../../components/RouteErrorView'
 
 /**
- * /resources/playbooks/:slug — a single mentor playbook.
+ * /resources/playbooks/:slug — a single mentor playbook, server-rendered from
+ * the route loader. An unknown slug is a 404 the error boundary below renders.
  *
  * The sidebar contents is generated from the stored sections rather than
  * duplicated, so a section added in admin appears in both places at once.
  */
 
-export default function PlaybookDetail() {
-  const { slug } = useParams()
-  const {
-    data: playbook,
-    isPending,
-    error,
-  } = useQuery({
-    queryKey: ['playbook', slug],
-    queryFn: async () => (await api.get(`/resources/playbooks/${slug}`)).data,
-  })
-
-  useDocumentTitle(playbook ? `${playbook.title} | Growth Scholar` : 'Playbook | Growth Scholar')
-  useBodyClass('gs-redesign')
-
-  if (isPending) return <Loading />
-  if (error) {
-    return (
-      <div className="px-5 py-20 text-center">
-        <h1 className="text-[1.5rem]">Playbook not found</h1>
-        <p className="mt-2 text-muted">{apiError(error)}</p>
-        <Button to="/resources/playbooks" variant="outline" className="mt-5">
-          All playbooks
-        </Button>
-      </div>
-    )
+/** The route's error boundary: a 404 keeps the page's own copy and its link back to the index. */
+export function ErrorBoundary() {
+  const error = useRouteError()
+  if (!isRouteErrorResponse(error) || error.status !== 404) {
+    return <RouteErrorView scope="route" />
   }
+  return (
+    <div className="px-5 py-20 text-center">
+      <h1 className="text-[1.5rem]">Playbook not found</h1>
+      <p className="mt-2 text-muted">{error.data?.message || 'Playbook not found'}</p>
+      <Button to="/resources/playbooks" variant="outline" className="mt-5">
+        All playbooks
+      </Button>
+    </div>
+  )
+}
+
+export default function PlaybookDetail() {
+  const { playbook } = useLoaderData()
 
   const sections = playbook.sections || []
 

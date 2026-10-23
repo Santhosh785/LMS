@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Link, useLoaderData } from 'react-router'
 import LegalPage, {
   Bullets,
   Callout,
@@ -7,12 +7,12 @@ import LegalPage, {
   Section,
 } from '../../components/public/LegalPage.jsx'
 import { policyTerms } from '../../data/legal.js'
-import useBusiness from '../../hooks/useBusiness.js'
 
 export default function Refund() {
-  const business = useBusiness()
+  const { business } = useLoaderData()
   return (
     <LegalPage
+      business={business}
       title="Refund and Cancellation Policy"
       intro="Growth Scholar sells digital course access, not physical products. All sales are final once access is granted. This policy explains the few cases where we do refund, how to ask, and how long it takes to reach you."
     >

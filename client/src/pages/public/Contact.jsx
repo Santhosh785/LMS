@@ -1,6 +1,5 @@
-import { Link } from 'react-router'
+import { Link, useLoaderData } from 'react-router'
 import LegalPage, { Bullets, Field, Mail, Section } from '../../components/public/LegalPage.jsx'
-import useBusiness from '../../hooks/useBusiness.js'
 
 function DetailRow({ label, children }) {
   return (
@@ -14,9 +13,10 @@ function DetailRow({ label, children }) {
 }
 
 export default function Contact() {
-  const business = useBusiness()
+  const { business } = useLoaderData()
   return (
     <LegalPage
+      business={business}
       title="Contact Us"
       intro="Questions before you buy, trouble with a payment, or anything about your course access — here is how to reach a human at Growth Scholar."
     >

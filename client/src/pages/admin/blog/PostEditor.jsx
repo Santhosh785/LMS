@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../../api/client.js'
-import useDocumentTitle from '../../../hooks/useDocumentTitle.js'
 import { insertLink, plainText, toggleMarker } from '../../../lib/richText.jsx'
 import {
   AutoTextarea,
@@ -147,8 +146,6 @@ export default function PostEditor() {
     setPost(next)
     setSavedSnapshot(JSON.stringify(next))
   }, [loaded.data])
-
-  useDocumentTitle(`${post.title || 'Add New Post'} | Growth Scholar Blog`)
 
   const snack = useCallback((message, action) => {
     const key = Math.random().toString(36).slice(2)

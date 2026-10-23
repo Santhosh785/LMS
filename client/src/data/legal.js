@@ -34,6 +34,27 @@ export const business = {
 }
 
 /**
+ * The business identity with the admin settings layered over the defaults
+ * above. Admin wins; this file supplies only what admin has no field for yet.
+ * Pure, so the legal pages' loaders resolve it on the server from the same
+ * site config the client hook (hooks/useBusiness.js) reads.
+ *
+ * @param {{ branding?: { brandName?: string }, help?: { supportEmail?: string, salesEmail?: string, hours?: string, helpCenterUrl?: string } } | null | undefined} siteConfig
+ */
+export function businessFrom(siteConfig) {
+  const branding = siteConfig?.branding || {}
+  const help = siteConfig?.help || {}
+  return {
+    ...business,
+    brandName: branding.brandName || business.brandName,
+    supportEmail: help.supportEmail || business.supportEmail,
+    salesEmail: help.salesEmail || business.salesEmail,
+    supportHours: help.hours || business.supportHours,
+    helpCenterUrl: help.helpCenterUrl || '',
+  }
+}
+
+/**
  * The commercial terms that change the meaning of the refund and delivery
  * policies. All null until the owner confirms them — see the note above.
  */

@@ -1,32 +1,28 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { api } from '../../api/client.js'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLoaderData, useLocation, useNavigation, useSearchParams } from 'react-router'
 import { sortLabels } from '../../data/nav.js'
-import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
+import { cn, EmptyState } from '../../components/ui/index.jsx'
 import useFilterGroups from '../../hooks/useFilterGroups.js'
+import { exploreSearch, exploreState, MAX_LIMIT, PAGE_SIZE } from '../../lib/courseListing.js'
 
 /**
  * /courses — the 2026 redesign's explore page (.explore-page).
  *
- * The filtering is unchanged: same URL contract, same server-side query, same
- * "Paid is pre-selected when the URL carries no facet" quirk, same 9-per-page
- * View-more step. Only the markup moved, onto the drop's classes so the
- * vendored styles/redesign/explore.css applies unchanged.
+ * Server-rendered from the route loader (routes/public/courses.ts): the first
+ * HTML already carries the cards, the result count, the chips and the sidebar.
+ * The URL is the state. Every filter, sort, search or chip change replaces the
+ * search params, the loader runs again and the new slice arrives while the old
+ * one stays on screen; "View more" bumps `limit`, so a shared URL renders the
+ * same number of cards cold. Same URL contract, same "Paid is pre-selected
+ * when the URL carries no facet" quirk (lib/courseListing.js), same 9-card
+ * step as before.
  */
 
-const PAGE_SIZE = 9
-
+/** Fixed locale, so the server and the browser format a price identically. */
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`
 
-/** Reads a comma-list param into an array. */
-const readList = (params, key) =>
-  (params.get(key) || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+/** Replace, never push, and keep the reader where they are on the page. */
+const NAV = { replace: true, preventScrollReset: true }
 
 /**
  * The drop paints card artwork with `.media-bg.seo`, while the database stores
@@ -115,83 +111,62 @@ export function ExploreCard({ course }) {
 }
 
 export default function Courses() {
-  useDocumentTitle('Explore Courses | Growth Scholar')
-  useBodyClass('gs-redesign explore-page--convert')
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE)
+  const { items, total, facets, state } = useLoaderData()
+  const [, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  const navigation = useNavigation()
+  // Client-only UI state: both start closed, on the server and in the browser.
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
-  const [search, setSearch] = useState(searchParams.get('q') || '')
+  const sortWrap = useRef(null)
+  // Seeded from the loader's `q`, never from browser state.
+  const [search, setSearch] = useState(state.q)
 
-  const sort = searchParams.get('sort') || 'popularity'
-  // Assembled from the published taxonomy plus the fixed facets — see the hook.
-  const filterGroups = useFilterGroups()
-
-  /**
-   * The original defaulted "Paid" to checked when the URL carried no facet at
-   * all; the server applies the same rule, so the sidebar has to reflect it.
+  /*
+   * While a filter change is in flight the URL has not committed yet, so the
+   * checkboxes and chips follow the pending URL (through the same function the
+   * loader uses) and the cards stay the previous ones until the new slice
+   * lands. Idle — including the hydration render — this is the loader's state.
    */
-  const hasFacet = ['price', 'type', 'topic', 'lang', 'category', 'tag'].some((k) =>
-    searchParams.get(k),
-  )
-  const selected = useMemo(() => {
-    const map = Object.fromEntries(filterGroups.map((g) => [g.key, readList(searchParams, g.key)]))
-    if (!hasFacet && !map.price?.length) map.price = ['paid']
-    return map
-  }, [searchParams, hasFacet, filterGroups])
+  const pending =
+    navigation.location && navigation.location.pathname === location.pathname
+      ? exploreState(new URLSearchParams(navigation.location.search))
+      : null
+  const view = pending || state
+  const { selected, sort, q } = view
+  const loading = Boolean(pending)
 
-  // debounce the search box so typing doesn't fire a request per keystroke
-  const [debouncedSearch, setDebouncedSearch] = useState(search)
+  // Topic and language values from the facets lookup, the rest from the
+  // published taxonomy and the fixed groups — see the hook.
+  const filterGroups = useFilterGroups(facets)
+
+  /** Writes a selection to the URL; it drops limit/skip, so the count resets to 9. */
+  const commit = (next, nextSearch = search, nextSort = sort) =>
+    setSearchParams(exploreSearch(next, nextSearch, nextSort), NAV)
+
+  // The search box writes `q` 250 ms after the last keystroke. The ref always
+  // holds this render's selection, so the timer commits the latest one without
+  // restarting whenever a filter changes.
+  const commitSearch = useRef(null)
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    commitSearch.current = (text) => commit(selected, text)
+  })
+  useEffect(() => {
+    if (search.trim() === q) return undefined
+    const t = setTimeout(() => commitSearch.current?.(search), 250)
     return () => clearTimeout(t)
-  }, [search])
-
-  // Extracted to a variable because a call expression in a dependency array
-  // cannot be checked statically — the linter has to take it on trust, which is
-  // how a dependency quietly stops being tracked after a refactor.
-  const searchParamsKey = searchParams.toString()
-  useEffect(() => {
-    setVisibleLimit(PAGE_SIZE)
-  }, [searchParamsKey, debouncedSearch])
+  }, [search, q])
 
   useEffect(() => {
-    const onDocClick = () => setSortOpen(false)
+    // React's root listener now sits on the document itself (the whole
+    // document is hydrated), so stopPropagation inside the menu cannot keep a
+    // click from reaching this one; a click inside the menu is ignored instead.
+    const onDocClick = (e) => {
+      if (!sortWrap.current?.contains(e.target)) setSortOpen(false)
+    }
     document.addEventListener('click', onDocClick)
     return () => document.removeEventListener('click', onDocClick)
   }, [])
-
-  const queryParams = {
-    ...Object.fromEntries(
-      Object.entries(selected)
-        .filter(([, v]) => v.length)
-        .map(([k, v]) => [k, v.join(',')]),
-    ),
-    sort,
-    ...(debouncedSearch.trim() ? { q: debouncedSearch.trim() } : {}),
-    limit: visibleLimit,
-  }
-
-  const { data, isPending } = useQuery({
-    queryKey: ['courses', queryParams],
-    queryFn: async () => (await api.get('/courses', { params: queryParams })).data,
-    placeholderData: keepPreviousData,
-  })
-
-  const items = data?.items || []
-  const total = data?.total ?? 0
-
-  /** Writes the current selection back to the URL, same contract as before. */
-  const commit = (next, nextSearch = search, nextSort = sort) => {
-    const params = new URLSearchParams()
-    for (const group of filterGroups) {
-      const values = next[group.key] || []
-      if (values.length) params.set(group.key, values.join(','))
-    }
-    params.set('sort', nextSort || 'popularity')
-    if (nextSearch.trim()) params.set('q', nextSearch.trim())
-    setSearchParams(params, { replace: true })
-  }
 
   const toggleFilter = (group, value) => {
     const current = selected[group.key] || []
@@ -206,10 +181,22 @@ export default function Courses() {
     commit(next)
   }
 
+  /** Back to the no-facet default: Paid, popularity, no search. */
   const reset = () => {
     setSearch('')
-    commit({ price: ['paid'] }, '', 'popularity')
+    setSearchParams(new URLSearchParams(), NAV)
   }
+
+  /** Nine more cards: a bigger `limit`, so the URL stays shareable. */
+  const viewMore = () =>
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev)
+      params.set('limit', String(Math.min(state.limit + PAGE_SIZE, MAX_LIMIT)))
+      return params
+    }, NAV)
+  // Absent once every match is on screen — or at the listing's 100-card cap,
+  // where a bigger `limit` would not add a card.
+  const canViewMore = total > state.skip + items.length && state.limit < MAX_LIMIT
 
   /* -------------------------------- chips -------------------------------- */
   const chips = [{ key: 'sort', label: `Sort by - ${sortLabels[sort] || 'Popularity'}` }]
@@ -219,7 +206,7 @@ export default function Courses() {
       chips.push({ key: group.key, value, label: opt?.label || value })
     }
   }
-  if (debouncedSearch.trim()) chips.push({ key: 'q', label: `“${debouncedSearch.trim()}”` })
+  if (q) chips.push({ key: 'q', label: `“${q}”` })
 
   const removeChip = (chip) => {
     if (chip.key === 'sort') return commit(selected, search, 'popularity')
@@ -281,14 +268,14 @@ export default function Courses() {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onBlur={() => commit(selected, search)}
+              onBlur={() => search.trim() !== q && commit(selected, search)}
               placeholder="Search"
               aria-label="Search courses"
             />
             <span aria-hidden="true">⌕</span>
           </form>
 
-          <div className="sort-wrap" onClick={(e) => e.stopPropagation()}>
+          <div className="sort-wrap" ref={sortWrap}>
             <button
               className="sort-btn"
               type="button"
@@ -336,9 +323,8 @@ export default function Courses() {
             </button>
           </div>
           {/*
-            A taxonomy-backed group with nothing published in it renders as an
-            empty accordion, so it is dropped rather than shown — that is also
-            the pre-load state before /api/config resolves.
+            A group with no values renders as an empty accordion, so it is
+            dropped rather than shown.
           */}
           {filterGroups
             .filter((group) => group.options.length > 0)
@@ -375,14 +361,10 @@ export default function Courses() {
           </div>
 
           <p className="result-count">
-            {total === 0
-              ? 'No courses found'
-              : `Showing ${Math.min(visibleLimit, total)} of ${total} courses`}
+            {total === 0 ? 'No courses found' : `Showing ${items.length} of ${total} courses`}
           </p>
 
-          {isPending && !items.length ? (
-            <Loading />
-          ) : items.length === 0 ? (
+          {items.length === 0 ? (
             <EmptyState
               icon="🔍"
               title="No courses match those filters"
@@ -394,20 +376,16 @@ export default function Courses() {
               }
             />
           ) : (
-            <div className="course-grid">
+            <div className="course-grid" aria-busy={loading || undefined}>
               {items.map((course) => (
                 <ExploreCard key={course._id} course={course} />
               ))}
             </div>
           )}
 
-          {total > visibleLimit && (
+          {canViewMore && (
             <div className="view-more">
-              <button
-                className="btn btn-outline btn-lg"
-                type="button"
-                onClick={() => setVisibleLimit((v) => v + PAGE_SIZE)}
-              >
+              <button className="btn btn-outline btn-lg" type="button" onClick={viewMore}>
                 View more courses
               </button>
             </div>

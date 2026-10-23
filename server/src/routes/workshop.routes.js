@@ -7,25 +7,15 @@ import { db, withMongoId } from '../db/index.js'
 import { isUuid } from '../db/coerce.js'
 import { workshopRegistrations, workshops } from '../db/schema/index.js'
 import { queueMail } from '../jobs/mail.js'
+import { listWorkshops } from '../db/repos/workshops.js'
 
 const router = Router()
 
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const clauses = []
-    if (req.query.mode) clauses.push(eq(workshops.mode, String(req.query.mode)))
-    if (req.query.language) clauses.push(eq(workshops.language, String(req.query.language)))
-    const items = await db
-      .select()
-      .from(workshops)
-      .where(clauses.length ? and(...clauses) : undefined)
-      // Mongo sorted missing values first; Postgres puts NULL last by default.
-      .orderBy(
-        sql`${workshops.language} asc nulls first`,
-        sql`${workshops.startsAt} asc nulls first`,
-      )
-    res.json({ items: withMongoId(items) })
+    const items = await listWorkshops({ mode: req.query.mode, language: req.query.language })
+    res.json({ items })
   }),
 )
 

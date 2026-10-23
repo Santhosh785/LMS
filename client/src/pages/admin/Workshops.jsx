@@ -12,7 +12,6 @@ import {
   ToggleField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * Workshops and their registrants.
@@ -28,7 +27,6 @@ const fmt = (d) =>
     : '—'
 
 export default function Workshops() {
-  useDocumentTitle('Workshops | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [openWorkshop, setOpenWorkshop] = useState(null)

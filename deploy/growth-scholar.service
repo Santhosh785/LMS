@@ -10,7 +10,7 @@
 # keep alive; choose PM2 for `pm2 logs` and zero-downtime reload.
 
 [Unit]
-Description=Growth Scholar API and SPA
+Description=Growth Scholar API and server-rendered web app
 Documentation=file:///opt/growth-scholar/docs/deploy.md
 After=network-online.target
 Wants=network-online.target

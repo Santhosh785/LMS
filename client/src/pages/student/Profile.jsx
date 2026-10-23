@@ -11,10 +11,8 @@ import {
   useToast,
 } from '../../components/ui/index.jsx'
 import { PageHead } from '../../components/student/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 export default function Profile() {
-  useDocumentTitle('Profile | Growth Scholar')
   const { user, updateProfile } = useAuth()
   const features = useFeatures()
   const toast = useToast()

@@ -1,43 +1,35 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api, apiError } from '../../api/client.js'
-import { Button, Loading } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
+import { isRouteErrorResponse, Link, useLoaderData, useRouteError } from 'react-router'
+import { Button } from '../../components/ui/index.jsx'
+import RouteErrorView from '../../components/RouteErrorView'
 
-/** /resources/claude-skills/:slug — a single skill. */
+/**
+ * /resources/claude-skills/:slug — a single skill, server-rendered from the
+ * route loader. An unknown slug is a 404 the error boundary below renders.
+ */
 
 const COPY_RESET_MS = 2200
 
-export default function SkillDetail() {
-  const { slug } = useParams()
-  const [copied, setCopied] = useState(false)
-
-  const {
-    data: skill,
-    isPending,
-    error,
-  } = useQuery({
-    queryKey: ['claude-skill', slug],
-    queryFn: async () => (await api.get(`/resources/skills/${slug}`)).data,
-  })
-
-  useDocumentTitle(skill ? `${skill.title} | Growth Scholar` : 'Skill | Growth Scholar')
-  useBodyClass('gs-redesign')
-
-  if (isPending) return <Loading />
-  if (error) {
-    return (
-      <div className="px-5 py-20 text-center">
-        <h1 className="text-[1.5rem]">Skill not found</h1>
-        <p className="mt-2 text-muted">{apiError(error)}</p>
-        <Button to="/resources/claude-skills" variant="outline" className="mt-5">
-          All skills
-        </Button>
-      </div>
-    )
+/** The route's error boundary: a 404 keeps the page's own copy and its link back to the index. */
+export function ErrorBoundary() {
+  const error = useRouteError()
+  if (!isRouteErrorResponse(error) || error.status !== 404) {
+    return <RouteErrorView scope="route" />
   }
+  return (
+    <div className="px-5 py-20 text-center">
+      <h1 className="text-[1.5rem]">Skill not found</h1>
+      <p className="mt-2 text-muted">{error.data?.message || 'Skill not found'}</p>
+      <Button to="/resources/claude-skills" variant="outline" className="mt-5">
+        All skills
+      </Button>
+    </div>
+  )
+}
+
+export default function SkillDetail() {
+  const { skill } = useLoaderData()
+  const [copied, setCopied] = useState(false)
 
   /** Same instruction text the drop copied to the clipboard. */
   const onCopy = async () => {

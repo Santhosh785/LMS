@@ -53,6 +53,65 @@ tests. Never point it at production. Concurrent runs are serialised by an
 advisory lock; use `npm --prefix server run db:lock -- <cmd>` for any other ad-hoc
 command that writes to the shared dev project.
 
+### Smoke tests (Playwright)
+
+`e2e/` is a read-only Playwright suite for the public site. It never creates a
+row, never signs in as a student or an admin, and never pays. It checks:
+
+- **SEO** (raw server HTML and headers, no browser): title, description,
+  canonical and Organization JSON-LD on `/`; Course, BlogPosting and Event
+  JSON-LD on a course, a blog post and a workshop; the discovered pages in
+  `/sitemap.xml`; a `Sitemap:` line in `/robots.txt`; a 404 with `noindex` for an
+  unknown course; a 301 for a legacy `.html` path; no admin markup in the
+  `/admin` document; a JSON 404 for `/api/*`; an immutable cache header on a
+  hashed asset; `private, no-store` on the login page and the API when a (dummy)
+  session cookie is sent.
+- **Enrol**: open a paid course, click Enrol, land on `/checkout/<slug>` with the
+  price and a UPI or Razorpay control showing. It stops there; the page is
+  blocked from sending any non-GET request.
+- **Auth shell**: the email and password fields are in the `/login` server HTML,
+  and a logged-out visit to `/student` ends on `/login`.
+- **Hydration**: `/`, a course page and a blog post load in a real browser with
+  no hydration or markup-mismatch console errors.
+
+```sh
+# one-time, per machine: download the browser Playwright drives
+npx playwright install chromium
+
+# before a deploy: build, start the app on :3000 against the TEST project, seed
+# the catalogue, run the suite
+npm run e2e
+
+# after a deploy: the same specs against the live site; starts no server
+BASE_URL=https://growthscholar.in npm run e2e:prod
+```
+
+`npm run e2e` takes the same guard as the server tests: it refuses to run unless
+`SUPABASE_PROJECT_REF` equals `TEST_SUPABASE_PROJECT_REF`, because it seeds that
+database (`seed:sample`: the content seed, then publishing the draft courses) and
+serves it. It ignores `BASE_URL`. `E2E_SKIP_SEED=1` skips the seed when the
+content is already published. Playwright builds the client and starts the
+production server itself, with mail, Sentry, Cloudflare purges and background
+jobs switched off.
+
+Slugs are not hardcoded. The suite takes the first course (paid), workshop and
+blog post from the public API, and each can be pinned:
+
+| Variable            | Overrides                                                                     |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `E2E_COURSE_SLUG`   | the course used by the SEO, enrol and hydration specs (must be a paid course) |
+| `E2E_WORKSHOP_SLUG` | the workshop used by the SEO spec                                             |
+| `E2E_BLOG_SLUG`     | the blog post used by the SEO and hydration specs                             |
+| `E2E_BRAND`         | the brand the home page title must contain (default `Growth Scholar`)         |
+
+If discovery finds nothing and no override is set, the run fails naming the
+missing content type.
+
+The suite can later run as a Coolify post-deployment command
+(`BASE_URL=https://growthscholar.in npm run e2e:prod`, from an image that has the
+Playwright browser). No GitHub Actions workflow exists today, and none is added
+for this suite. See [docs/deploy.md](docs/deploy.md#verify-after-a-deploy).
+
 ### Migrating data from MongoDB
 
 `npm --prefix server run etl` copies a MongoDB database (`MONGO_URI`) into the
@@ -63,10 +122,10 @@ before running it against production.
 
 ### Seeded accounts
 
-| Role | Email |
-|---|---|
-| Student | `priya.sharma@email.com` |
-| Admin / creator | `team@growthscholar.in` |
+| Role            | Email                    |
+| --------------- | ------------------------ |
+| Student         | `priya.sharma@email.com` |
+| Admin / creator | `team@growthscholar.in`  |
 
 **The password is whatever you put in `SEED_PASSWORD`.** It is not printed here,
 not printed by the seeder, and not hard-coded anywhere — the shared value that
@@ -82,18 +141,109 @@ SEED_PASSWORD="1234567890"
 
 ### The two halves of the seeder
 
-| Command | What it does |
-|---|---|
-| `npm run seed` | **Content.** Upserts courses, programs, workshops, posts, channels, practice items, badges and settings by natural key. Deletes nothing. Never touches accounts, enrollments, payments or certificates. Safe against production, repeatedly. |
-| `npm --prefix server run seed:demo` | **Demo data.** DESTRUCTIVE — wipes accounts, enrollments, transactions, customers, leads and community content, then rebuilds the fabricated dataset. Refuses to run under `NODE_ENV=production`. |
+| Command                               | What it does                                                                                                                                                                                                                                                                            |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run seed`                        | **Content.** Upserts courses, programs, workshops, posts, channels, practice items, badges and settings by natural key. Deletes nothing. Never touches accounts, enrollments, payments or certificates. Safe against production, repeatedly.                                            |
+| `npm --prefix server run seed:demo`   | **Demo data.** DESTRUCTIVE — wipes accounts, enrollments, transactions, customers, leads and community content, then rebuilds the fabricated dataset. Refuses to run under `NODE_ENV=production`.                                                                                       |
 | `npm --prefix server run seed:sample` | **Preview.** Content, then publishes it. The content seed creates courses as Draft (nothing has video attached), so a fresh database renders an empty catalogue — this is the switch that makes the public site look like a site. Non-destructive; refuses under `NODE_ENV=production`. |
-| `npm --prefix server run seed:all` | content, then demo — a full local dataset. |
-| `npm --prefix server run seed:help` | the full usage, including the flags. |
+| `npm --prefix server run seed:all`    | content, then demo — a full local dataset.                                                                                                                                                                                                                                              |
+| `npm --prefix server run seed:help`   | the full usage, including the flags.                                                                                                                                                                                                                                                    |
 
 Pass `-- --keep-users` to a demo seed to keep existing accounts.
 
 Going live is a different sequence — `seed:admin`, `seed:prepare` and
 `seed:audit`. See [docs/going-live-content.md](docs/going-live-content.md).
+
+---
+
+## Architecture
+
+**One Express process serves everything on one origin**: the JSON API under
+`/api`, and the web app, which React Router 7 (framework mode, `ssr: true`)
+renders on the server. There is no separate client server in production or in
+development, so the auth cookie stays same-site and there is no CORS setup.
+
+- **Build.** `npm run build` runs `react-router build` and writes
+  `client/build/server/index.js` (the server bundle Express imports at boot) and
+  `client/build/client/` (the browser assets Express serves). Vite is a
+  build-time and development dependency only.
+- **Development.** `npm run dev` starts Express, which embeds Vite in
+  middleware mode (HMR shares the app's port), so the pages hot-reload from
+  source against the same origin as the API.
+- **Mount order** (`server/src/index.js`): security headers and the CSP nonce →
+  body and cookie parsing → `attachUser` → the `/api` routers → media uploads →
+  legacy `.html` redirects → `/sitemap.xml` and `/robots.txt` →
+  `middleware/reactRouter.js` (every other request) → the JSON 404. `/api/*` is
+  passed through the page handler, so an unmatched API call gets JSON, never a
+  page of HTML. Nothing from the client build is mounted under `NODE_ENV=test`.
+
+### Server-rendered versus client-only routes
+
+The route table is `client/src/routes.ts`; each route is a thin module under
+`client/src/routes/` that wraps a page under `client/src/pages/`.
+
+| Routes                                                                                                                                                                                                                                                                                                                                                                        | Rendering                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every route under the public layout except checkout — `/`, `/about`, `/courses`, `/courses/category`, `/courses/:slug`, `/programs/:slug`, `/programs/apply`, `/programs/fit-call`, `/workshops`, `/workshops/:slug`, `/blog`, `/blog/:slug`, `/resources/*`, `/login`, `/signup`, `/forgot-password`, `/reset-password`, the legal pages, `/contact`, and the not-found page | **SSR.** A route `loader` reads from the repos in the load context, the HTML arrives complete, and the route's own `meta()` writes the head (title, description, canonical, Open Graph, JSON-LD) through `@gs/seo`. Interactive parts (forms, the enrol button, comments) are TanStack Query / axios calls from the browser after hydration. |
+| `/checkout/:slug`                                                                                                                                                                                                                                                                                                                                                             | **Client-only** body inside the server-rendered public chrome.                                                                                                                                                                                                                                                                               |
+| `/student/*` (including the full-screen course player), `/community/*`, `/admin/*`                                                                                                                                                                                                                                                                                            | **Client-only.** The server renders a fallback block; the browser renders the page once the client loader has run. They sit behind `ProtectedRoute` and fetch with TanStack Query and axios.                                                                                                                                                 |
+
+A route with no `meta()` of its own gets the root loader's head, which comes
+from `resolveSeo` (`server/src/services/seo.js`, the URL-to-meta resolver; it
+also supplies the document's status code, e.g. 404 for an unknown slug). The
+client-only routes export a `meta()` with their title and a `noindex` robots
+tag (`client/src/lib/clientMeta.ts`). The `<body>` class that scopes each
+redesigned page's stylesheet comes from the route's `handle.bodyClass`, applied
+in `root.tsx`.
+
+### The load context
+
+Every loader receives `context`, built per request by `getLoadContext` in
+`server/src/middleware/reactRouter.js` (typed in
+`client/src/types/load-context.d.ts`):
+
+| Field         | What it is                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `repos`       | the repository modules under `server/src/db/repos`, so a loader queries the database directly instead of calling the API              |
+| `user`        | the signed-in user in the shape `GET /api/auth/me` returns, or `null`                                                                 |
+| `siteConfig`  | the cached `GET /api/config` payload (branding, menu, help, taxonomy, feature flags); default branding if the database is unreachable |
+| `seo.resolve` | `resolveSeo(pathname, searchParams)`                                                                                                  |
+| `nonce`       | this response's CSP nonce, for the inline scripts React Router emits                                                                  |
+
+### Background jobs
+
+Transactional mail, payment fulfilment side effects, sitemap regeneration and
+Cloudflare cache purges run on a [pg-boss](docs/jobs.md) queue that lives in the
+same Postgres (`pgboss` schema) and is worked inside the Express process — no
+Redis, no second service. `BOSS_ENABLED=0` runs every job inline instead. See
+[docs/jobs.md](docs/jobs.md).
+
+### Caches
+
+| Cache                                                                 | Where                                                                                            | Lifetime and invalidation                                                                                                                                                                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Site config (`GET /api/config`, and `siteConfig` in the load context) | in process                                                                                       | 60 s TTL; cleared on every settings or taxonomy write, and on every instance over Postgres `LISTEN/NOTIFY` (`gs_invalidate`)                                                                                 |
+| Runtime config (admin-entered integration values)                     | in process                                                                                       | same TTL and the same channel                                                                                                                                                                                |
+| Sitemap                                                               | in process                                                                                       | 10 min; dropped on every instance by the `regenerate-sitemap` job, which also runs on a six-hourly cron                                                                                                      |
+| Rate-limit counters                                                   | Postgres (`rate_limit` schema)                                                                   | shared by all instances; `RATE_LIMIT_STORE=memory` keeps them per process                                                                                                                                    |
+| Rendered pages                                                        | HTTP `Cache-Control` from the loaders (`publicCache` in `server/src/middleware/cacheControl.js`) | anonymous visitors get `public, s-maxage=<n>, stale-while-revalidate=86400`; a signed-in visitor gets `private, no-store`. Login, signup, forgot-password and reset-password are always `private, no-store`. |
+| API responses                                                         | none                                                                                             | every `/api` response is `no-store`, except `GET /api/config` (`public, s-maxage=60`)                                                                                                                        |
+| Cloudflare edge                                                       | Cloudflare                                                                                       | the `purge-cloudflare-cache` job purges the affected URLs when an admin changes a course, program, workshop, post, setting or taxonomy term                                                                  |
+| Static assets                                                         | browser                                                                                          | `/assets/*` (fingerprinted) is immutable for a year; other files in `client/public` for an hour                                                                                                              |
+
+### Environment variables added with the SSR work
+
+All are optional and documented in `server/.env.example`.
+
+| Variable            | Purpose                                                                                                                                                                                                                                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BOSS_DATABASE_URL` | Session-capable Postgres connection for pg-boss (direct `:5432` or the session-mode pooler, never `:6543`). Defaults to `DIRECT_DATABASE_URL`. The cache-invalidation listener uses it too when set.                                                                                                                         |
+| `BOSS_ENABLED`      | `0` runs every job inline instead of on the queue. On otherwise, and always off under test.                                                                                                                                                                                                                                  |
+| `RATE_LIMIT_STORE`  | `postgres` or `memory`. Unset: `postgres` in production when `DATABASE_URL` is set, `memory` otherwise.                                                                                                                                                                                                                      |
+| `REPLICAS`          | How many instances run (default 1). Above 1 the server refuses to start without Bunny Storage configured.                                                                                                                                                                                                                    |
+| `CF_ZONE_ID`        | Cloudflare zone whose cache is purged after content changes. Blank: the purge job does nothing.                                                                                                                                                                                                                              |
+| `CF_API_TOKEN`      | Cloudflare API token with Zone > Cache Purge on that zone.                                                                                                                                                                                                                                                                   |
+| `CF_PROXIED`        | Optional. `1` or `true` when the site is behind Cloudflare: every rate limiter keys on the `CF-Connecting-IP` header (falling back to the client IP, IPv6 by subnet). Requires restricting origin ingress to Cloudflare's IP ranges; see [docs/cloudflare.md](docs/cloudflare.md). With Cloudflare also set `TRUST_PROXY=2`. |
 
 ---
 
@@ -104,28 +254,42 @@ growth-scholar-mern/
 ├── server/
 │   └── src/
 │       ├── index.js              express app, route mounting
-│       ├── config/               env + database connection check
+│       ├── config/               env, database connection, observability, replica guard
 │       ├── db/                   Drizzle schema, client, and repos that
 │       │                         assemble rows into the API's document shape
 │       ├── routes/               public, student, community
 │       │   └── admin/            the guarded /api/admin tree
-│       ├── middleware/           auth (Supabase session cookies), errors, validation
+│       ├── middleware/           auth (Supabase session cookies), errors, validation,
+│       │                         rate limiting, security headers, cache control,
+│       │                         legacy redirects, reactRouter.js (the page handler)
+│       ├── services/             site config, SEO resolver, sitemap, queue,
+│       │                         invalidation, payments, media, runtime config
+│       ├── jobs/                 pg-boss job definitions (mail, fulfilment,
+│       │                         sitemap, Cloudflare purge)
+│       ├── mail/                 transactional templates and sender
 │       ├── seed/                 seed.js + data/ transcribed from the static HTML
 │       └── utils/                csv helpers, generic CRUD router
+├── packages/
+│   └── seo/                      @gs/seo: page meta, JSON-LD and meta() descriptors
+├── e2e/                          read-only Playwright smoke suite (tests/, fixtures/, scripts/)
 └── client/
     ├── react-router.config.ts    framework mode, ssr: true
     └── src/
-        ├── root.tsx              the document, providers, SEO meta from the root loader
+        ├── root.tsx              the document, providers, fallback SEO meta from the root loader
         ├── routes.ts             the route table (legacy .html redirects live in the server)
-        ├── routes/               one thin module per route, wrapping the pages
+        ├── routes/               one thin module per route: loader, meta, handle
         ├── entry.client.tsx      hydration
         ├── entry.server.tsx      streaming render
         ├── index.css             tailwind + the decorative gradients
         ├── layouts/              Public / Student / Community / Admin shells
         ├── components/           ui kit, plus public/ student/ community/ admin/
         ├── pages/                one folder per area
+        ├── lib/                  loader helpers (*.server.ts), SEO and listing helpers
         ├── api/                  axios client + admin query hooks
-        ├── context/              AuthContext
+        ├── hooks/                small UI hooks
+        ├── context/              AuthContext, SiteConfigContext
+        ├── styles/               the vendored redesign stylesheets
+        ├── types/                load-context and server-module declarations
         └── data/                 nav trees, filter options, page furniture
 ```
 
@@ -133,19 +297,19 @@ growth-scholar-mern/
 
 ## What maps to what
 
-| Static site | This app |
-|---|---|
-| `index.html` | `/` |
-| `courses/index.html` | `/courses` — filtering now runs server-side, same URL params |
-| `courses/marketing.html` | `/courses/category` |
-| `courses/seo.html` | `/courses/:slug` |
-| `programs/complete-growth-marketing.html` | `/programs/:slug` |
-| `workshops/*.html` | `/workshops`, `/workshops/:slug` |
-| `blog/*.html` | `/blog`, `/blog/:slug` |
-| `student/*.html` (8 pages) | `/student/*` — now behind auth |
-| `community/*.html` (3 pages) | `/community/*` — now behind auth |
-| `admin/*.html` (34 pages) | `/admin/*` — now behind an admin role |
-| — | `/login`, `/signup` (new; the static site had no auth) |
+| Static site                               | This app                                                     |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| `index.html`                              | `/`                                                          |
+| `courses/index.html`                      | `/courses` — filtering now runs server-side, same URL params |
+| `courses/marketing.html`                  | `/courses/category`                                          |
+| `courses/seo.html`                        | `/courses/:slug`                                             |
+| `programs/complete-growth-marketing.html` | `/programs/:slug`                                            |
+| `workshops/*.html`                        | `/workshops`, `/workshops/:slug`                             |
+| `blog/*.html`                             | `/blog`, `/blog/:slug`                                       |
+| `student/*.html` (8 pages)                | `/student/*` — now behind auth                               |
+| `community/*.html` (3 pages)              | `/community/*` — now behind auth                             |
+| `admin/*.html` (34 pages)                 | `/admin/*` — now behind an admin role                        |
+| —                                         | `/login`, `/signup` (new; the static site had no auth)       |
 
 Old `.html` paths redirect to their new routes, so existing links keep working.
 
@@ -168,26 +332,40 @@ content scanner never sees it and would otherwise tree-shake the rule away.
 ## API
 
 Everything is under `/api`. Public reads are open; writes and the admin tree
-are guarded by a JWT in an httpOnly `sameSite=lax` cookie.
+need a session. **Auth is Supabase Auth, proxied by Express**: the browser never
+talks to Supabase. `/auth/login` and `/auth/register` sign the user in with
+Supabase and store the session in two httpOnly `sameSite=lax` cookies (the
+short-lived access token and the refresh token). The access token is verified on
+each request against the project's published JWKS, an expired one is renewed
+from the refresh cookie in place, and a password reset or suspension takes
+effect on the next request. The same session is what the page loaders see as
+`context.user`.
 
 ```
 GET  /config                                     # branding, menu, help, taxonomy, feature flags
 GET  /showcase                                   # the homepage rails, from tags flagged showAsRail
 POST /auth/register  /auth/login  /auth/logout    GET /auth/me   PATCH /auth/me
+POST /auth/forgot-password  /auth/reset-password   GET /auth/reset-password/:token
+GET  /health
 GET  /courses?price&type&topic&lang&category&tag&rating&duration&sort&q&limit
 GET  /courses/:slug   /courses/facets
 GET  /programs/:slug  /workshops  /workshops/:slug  /blog  /blog/:slug
-POST /leads           /workshops/:id/register
+POST /leads           /workshops/:id/register  /blog/:slug/comments
+GET  /blog/:slug/comments  /courses/:slug/preview/:lessonId
+GET  /resources/playbooks  /resources/playbooks/:slug  /resources/skills  /resources/skills/:slug
+POST /resources/notify  /applications  /fit-calls
+GET  /checkout/:slug      POST /checkout/upi  /checkout/razorpay/order  /checkout/razorpay/callback
+POST /webhooks/razorpay  /webhooks/bunny
 
 # student — requires a session
-GET  /me/dashboard /me/enrollments /me/certificates /me/achievements /me/practice
+GET  /me/dashboard /me/enrollments /me/certificates /me/achievements /me/practice /me/bookings
 POST /enrollments    PATCH /enrollments/:id/progress
-GET  /enrollments/course/:slug
+GET  /enrollments/course/:slug  /enrollments/course/:slug/playback/:lessonId
 GET  /live           POST /live/:id/book
 
 # community — requires a session
 GET  /channels  /feed  /channels/:slug/posts  /posts/:id/comments
-POST /posts  /posts/:id/like  /posts/:id/comments
+POST /posts  /posts/:id/like  /posts/:id/comments  /reports  /blocks
 
 # admin — requires role=admin on every route
 GET   /admin/stats
@@ -211,6 +389,9 @@ CRUD  /admin/workshops   GET /admin/workshops/{summary,registrations,registratio
       PUT|DELETE /admin/workshops/registrations/:id
 GET   /admin/integrations   PUT /admin/integrations/{features,payments,mail,video,business}
       POST /admin/integrations/{razorpay,mail,bunny}/test
+CRUD  /admin/playbooks  /admin/skills   # resources
+GET   /admin/applications  /admin/fit-calls   # flagship intake inboxes
+CRUD  /admin/blog        /admin/media   # posts, comments, terms, media library
 CRUD  /admin/users       POST /admin/users/:id/{suspend,reactivate,send-reset}
       GET /admin/users/export   DELETE /admin/users/:id?force=true
 CRUD  /admin/taxonomy    GET /admin/taxonomy/taxonomies   GET /admin/taxonomy/:id/usage
@@ -239,10 +420,12 @@ to repoint every document referencing it — which `services/taxonomy.js` owns a
 until you pick a replacement or explicitly confirm stripping it.
 
 `GET /api/config` returns branding, menu visibility, support contacts, the
-published taxonomy and the feature flags in one payload. The client reads it
-once at boot through `context/SiteConfigContext.jsx`, so editing a setting or a
-term changes the live site with no rebuild. The server caches the payload in
-process and invalidates it on every settings or taxonomy write.
+published taxonomy and the feature flags in one payload. The root
+loader reads the same payload from the load context and hands it to
+`context/SiteConfigContext.jsx`, so the server-rendered HTML already carries it
+and editing a setting or a term changes the live site with no rebuild. The server
+caches the payload in process and invalidates it on every settings or taxonomy
+write (see [Caches](#caches)).
 
 ### Homepage rails and program page copy
 
@@ -282,12 +465,12 @@ decrements `registeredCount`, since the public page shows seats from it.
 **Users.** There was no user list, role change or suspension, and admins existed
 only via `seed:admin`. `/admin/users` covers all of it. Two guards run through
 the routes: nobody may change their own role or suspend themselves, and the last
-*active* admin cannot be demoted, suspended or deleted — otherwise one click
+_active_ admin cannot be demoted, suspended or deleted — otherwise one click
 locks everyone out of the panel.
 
-Suspension is checked in `attachUser`, not just at login: the auth cookie lasts
-seven days, so a login-only check would leave a suspended account working for
-the rest of the week. Deleting an account with enrolments requires
+Suspension is checked in `attachUser`, not just at login: the refresh cookie
+lasts 30 days, so a login-only check would leave a suspended account working for
+the rest of the month. Deleting an account with enrolments requires
 `?force=true`; suspending keeps the purchase history.
 
 ### Configuration: admin vs environment
@@ -325,16 +508,16 @@ still the fallback key for secrets stored before `CONFIG_SECRET` was set),
 
 Three modules have finished UI and no behaviour behind it, so they ship hidden:
 
-| Flag | Hides | Why it is off |
-|---|---|---|
-| `FEATURE_FUNNELS` | `/admin/funnels/*`, `/api/admin/funnels/*` | no public `/f/*` pages exist, so every view and lead figure is invented |
-| `FEATURE_EMAIL` | `/admin/email/*`, `/api/admin/email/*` | no mail transport: "Send" marks a campaign sent and mails no one |
-| `FEATURE_GAMIFICATION` | `/admin/gamification/*`, `/student/achievements`, `/api/admin/gamification/*`, `/api/me/achievements`, the seeds/streak tiles | nothing awards seeds, so a real learner sits at 0 forever |
+| Flag                   | Hides                                                                                                                         | Why it is off                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `FEATURE_FUNNELS`      | `/admin/funnels/*`, `/api/admin/funnels/*`                                                                                    | no public `/f/*` pages exist, so every view and lead figure is invented |
+| `FEATURE_EMAIL`        | `/admin/email/*`, `/api/admin/email/*`                                                                                        | no mail transport: "Send" marks a campaign sent and mails no one        |
+| `FEATURE_GAMIFICATION` | `/admin/gamification/*`, `/student/achievements`, `/api/admin/gamification/*`, `/api/me/achievements`, the seeds/streak tiles | nothing awards seeds, so a real learner sits at 0 forever               |
 
 Set a flag to `1` in `server/.env` and restart: the admin nav entries, the
 client routes and the API all come back. Nothing is deleted — the server reads
 the flags in `config/env.js`, enforces them in `middleware/features.js`, and the
-browser reads them once from `GET /api/config` (`context/FeatureContext.jsx`).
+browser gets them from the site config in the root loader (`context/SiteConfigContext.jsx`).
 
 ---
 
@@ -357,18 +540,21 @@ browser reads them once from `GET /api/config` (`context/FeatureContext.jsx`).
 
 ## Scripts
 
-| Command | What it does |
-|---|---|
-| `npm run install:all` | install root + server + client |
-| `npm run dev` | Express on :5000, serving the client from source through embedded Vite |
-| `npm run seed` | publish catalogue content — idempotent, deletes nothing |
-| `npm run build` | `react-router build`: the client and server bundles into `client/build` |
-| `npm run typecheck` | generate the route types and run `tsc` over the client |
-| `npm start` | run Express, which server-renders the client from `client/build` on the same origin |
-| `npm test` | build the client, then run the money-path test suite |
-| `npm run lint` | ESLint over both packages |
-| `npm run format` | Prettier over both packages |
-| `npm run check` | lint + format check + tests |
+| Command               | What it does                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `npm run install:all` | install root + server + client                                                                                |
+| `npm run dev`         | Express on :5000, serving the client from source through embedded Vite                                        |
+| `npm run seed`        | publish catalogue content — idempotent, deletes nothing                                                       |
+| `npm run build`       | `react-router build`: the client and server bundles into `client/build`                                       |
+| `npm run typecheck`   | generate the route types and run `tsc` over the client and the e2e suite                                      |
+| `npm start`           | run Express, which server-renders the client from `client/build` on the same origin                           |
+| `npm test`            | build the client, then run the server test suite (needs a disposable database, see Tests)                     |
+| `npm run lint`        | ESLint over both packages                                                                                     |
+| `npm run format`      | Prettier over both packages                                                                                   |
+| `npm run test:server` | the server test suite alone, without building the client                                                      |
+| `npm run e2e`         | build, start and seed the app against the test project, then run the Playwright smoke suite (see Smoke tests) |
+| `npm run e2e:prod`    | the same suite against `BASE_URL`; starts nothing                                                             |
+| `npm run check`       | lint + format check + tests                                                                                   |
 
 Deployment, email DNS, Bunny, Razorpay, mobile QA and observability each have a
 runbook in [docs/](docs/).

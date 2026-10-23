@@ -1,5 +1,5 @@
 /**
- * PM2 process definition for the Growth Scholar API + SPA — for self-hosting on
+ * PM2 process definition for the Growth Scholar API and server-rendered web app — for self-hosting on
  * a plain VPS only. Production runs on Coolify and does not use this file; see
  * docs/deploy.md.
  *

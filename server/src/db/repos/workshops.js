@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { db, withMongoId } from '../index.js'
 import { workshops } from '../schema/index.js'
 
@@ -46,6 +46,44 @@ export async function findWorkshopBySlug(slug) {
 }
 
 /**
+ * The public workshop order — language, then start date, missing values first
+ * (as Mongo sorted them; Postgres would put NULL last by default). Shared by
+ * the full list and the home page's card preview so the two cannot drift.
+ */
+const publicOrder = () => [
+  sql`${workshops.language} asc nulls first`,
+  sql`${workshops.startsAt} asc nulls first`,
+]
+
+/**
+ * The first `limit` workshops in the order GET /api/workshops lists them
+ * (language, then start date, missing values first, as Mongo sorted them),
+ * with only the columns a workshop card renders. The home page previews the
+ * first three; it reads them here rather than over HTTP and without the rest
+ * of the row (landing copy, capacity, host).
+ */
+export function listWorkshopCards(limit) {
+  return (
+    db
+      .select({
+        slug: workshops.slug,
+        title: workshops.title,
+        language: workshops.language,
+        mode: workshops.mode,
+        venue: workshops.venue,
+        durationLabel: workshops.durationLabel,
+        image: workshops.image,
+        bannerClass: workshops.bannerClass,
+        priceNew: workshops.priceNew,
+      })
+      .from(workshops)
+      // id breaks ties so the preview is stable between requests.
+      .orderBy(...publicOrder(), asc(workshops.id))
+      .limit(limit)
+  )
+}
+
+/**
  * `{ slug, updatedAt }` for every workshop — the sitemap's input. Workshops have
  * no visibility column, so every row is public.
  */
@@ -54,4 +92,21 @@ export function listWorkshopSlugs() {
     .select({ slug: workshops.slug, updatedAt: workshops.updatedAt })
     .from(workshops)
     .orderBy(asc(workshops.slug))
+}
+
+/**
+ * The public workshop list — GET /api/workshops and the server-rendered
+ * /workshops page read the same rows. `mode` and `language` filter when given;
+ * order is publicOrder(). Document-shaped (`_id`).
+ */
+export async function listWorkshops({ mode, language } = {}) {
+  const clauses = []
+  if (mode) clauses.push(eq(workshops.mode, String(mode)))
+  if (language) clauses.push(eq(workshops.language, String(language)))
+  const rows = await db
+    .select()
+    .from(workshops)
+    .where(clauses.length ? and(...clauses) : undefined)
+    .orderBy(...publicOrder())
+  return withMongoId(rows)
 }

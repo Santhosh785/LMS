@@ -1,11 +1,11 @@
-import { Link } from 'react-router'
+import { Link, useLoaderData } from 'react-router'
 import LegalPage, { Bullets, Field, Mail, Section } from '../../components/public/LegalPage.jsx'
-import useBusiness from '../../hooks/useBusiness.js'
 
 export default function Privacy() {
-  const business = useBusiness()
+  const { business } = useLoaderData()
   return (
     <LegalPage
+      business={business}
       title="Privacy Policy"
       intro="This policy explains what personal information Growth Scholar collects when you browse the site, book a mentor call or buy a course, how we use it, who we share it with, and the choices you have."
     >

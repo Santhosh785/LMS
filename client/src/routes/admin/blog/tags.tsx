@@ -1,4 +1,7 @@
+import { privateMeta } from '../../../lib/clientMeta'
 import Terms from '../../../pages/admin/blog/Terms.jsx'
+
+export const meta = privateMeta('Tags | Growth Scholar Blog')
 
 export default function Tags() {
   return (
