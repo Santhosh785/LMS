@@ -202,10 +202,7 @@ export default function About() {
             </p>
           </div>
           <div>
-            <div
-              className="about-section-head"
-              style={{ textAlign: 'left', margin: '0 0 1.5rem' }}
-            >
+            <div className="about-section-head" style={{ textAlign: 'left', margin: '0 0 1.5rem' }}>
               <h2 id="why-heading">Learning marketing ≠ doing marketing</h2>
               <p style={{ textAlign: 'left' }}>
                 When it’s time to run a real account, the questions change — which campaign first,

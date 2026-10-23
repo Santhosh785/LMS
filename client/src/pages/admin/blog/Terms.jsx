@@ -40,7 +40,8 @@ export default function Terms({ taxonomy, title, singular, help }) {
   const terms = useQuery({
     queryKey: ['admin', 'taxonomy', taxonomy, search],
     queryFn: async () =>
-      (await api.get('/admin/taxonomy', { params: { taxonomy, ...(search ? { q: search } : {}) } })).data,
+      (await api.get('/admin/taxonomy', { params: { taxonomy, ...(search ? { q: search } : {}) } }))
+        .data,
   })
 
   const refresh = () => {
@@ -124,8 +125,8 @@ export default function Terms({ taxonomy, title, singular, help }) {
             <p>{help}</p>
             <h5>Renaming</h5>
             <p>
-              Renaming a term rewrites every post that carries it, so the archive and the posts never drift apart. The
-              old URL keeps working through the term&apos;s former slugs.
+              Renaming a term rewrites every post that carries it, so the archive and the posts
+              never drift apart. The old URL keeps working through the term&apos;s former slugs.
             </p>
           </>
         }
@@ -158,7 +159,11 @@ export default function Terms({ taxonomy, title, singular, help }) {
           >
             {[
               ['name', 'Name', `The name is how it appears on your site.`],
-              ['slug', 'Slug', 'The “slug” is the URL-friendly version of the name. Leave blank to generate it.'],
+              [
+                'slug',
+                'Slug',
+                'The “slug” is the URL-friendly version of the name. Leave blank to generate it.',
+              ],
             ].map(([key, label, hint]) => (
               <label key={key} style={{ display: 'grid', gap: 4, marginBottom: 14 }}>
                 <span style={{ fontWeight: 600, fontSize: 13 }}>
@@ -193,7 +198,11 @@ export default function Terms({ taxonomy, title, singular, help }) {
             </label>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button type="submit" className="wp-button wp-button-primary" disabled={create.isPending || update.isPending}>
+              <button
+                type="submit"
+                className="wp-button wp-button-primary"
+                disabled={create.isPending || update.isPending}
+              >
                 {editing ? 'Update' : `Add New ${singular}`}
               </button>
               {editing && (
@@ -294,14 +303,20 @@ export default function Terms({ taxonomy, title, singular, help }) {
                         aria-label={`Select ${term.name}`}
                         onChange={() =>
                           setSelected((rows) =>
-                            rows.includes(term._id) ? rows.filter((row) => row !== term._id) : [...rows, term._id],
+                            rows.includes(term._id)
+                              ? rows.filter((row) => row !== term._id)
+                              : [...rows, term._id],
                           )
                         }
                       />
                     </th>
                     <td className="column-title">
                       <strong>
-                        <button type="button" className="row-title" onClick={() => setEditing(term)}>
+                        <button
+                          type="button"
+                          className="row-title"
+                          onClick={() => setEditing(term)}
+                        >
                           {term.icon ? `${term.icon} ` : ''}
                           {term.name}
                         </button>
@@ -310,7 +325,11 @@ export default function Terms({ taxonomy, title, singular, help }) {
                         actions={[
                           { label: 'Edit', onClick: () => setEditing(term) },
                           { label: 'Delete', destructive: true, onClick: () => deleteTerm(term) },
-                          { label: 'View', href: `/blog?category=${encodeURIComponent(term.name)}`, external: true },
+                          {
+                            label: 'View',
+                            href: `/blog?category=${encodeURIComponent(term.name)}`,
+                            external: true,
+                          },
                         ]}
                       />
                     </td>
@@ -326,7 +345,13 @@ export default function Terms({ taxonomy, title, singular, help }) {
           </table>
 
           <div className="wp-tablenav">
-            <Pagination page={page} pages={pages} total={items.length} onPage={setPage} noun="item" />
+            <Pagination
+              page={page}
+              pages={pages}
+              total={items.length}
+              onPage={setPage}
+              noun="item"
+            />
           </div>
         </div>
       </div>

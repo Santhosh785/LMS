@@ -137,15 +137,7 @@ export const growthValues = [
   },
 ]
 
-export const loopSteps = [
-  'Problem',
-  'Learn',
-  'Apply',
-  'Measure',
-  'Improve',
-  'Connect',
-  'Grow',
-]
+export const loopSteps = ['Problem', 'Learn', 'Apply', 'Measure', 'Improve', 'Connect', 'Grow']
 
 export const approach = [
   {

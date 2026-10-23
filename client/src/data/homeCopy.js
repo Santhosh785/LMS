@@ -10,10 +10,7 @@
 
 export const hero = {
   badge: 'Growth Scholar · Live implementation',
-  titleLines: [
-    'The growth marketing programme',
-    'where you build real campaigns & funnels',
-  ],
+  titleLines: ['The growth marketing programme', 'where you build real campaigns & funnels'],
   lede: 'Close the gap between knowing marketing and growing a business — ship campaigns, funnels, and measurement that move leads, revenue, and confidence, not just watchlists and certificates.',
   languages: [
     { label: 'த Tamil', muted: false },

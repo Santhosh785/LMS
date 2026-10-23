@@ -20,12 +20,17 @@ export default function Dashboard() {
 
   const posts = useQuery({
     queryKey: ['admin', 'blog', 'dashboard-posts'],
-    queryFn: async () => (await api.get('/admin/blog', { params: { perPage: 5, orderby: 'modified' } })).data,
+    queryFn: async () =>
+      (await api.get('/admin/blog', { params: { perPage: 5, orderby: 'modified' } })).data,
   })
   const scheduled = useQuery({
     queryKey: ['admin', 'blog', 'dashboard-scheduled'],
     queryFn: async () =>
-      (await api.get('/admin/blog', { params: { status: 'Scheduled', perPage: 5, orderby: 'date', order: 'asc' } })).data,
+      (
+        await api.get('/admin/blog', {
+          params: { status: 'Scheduled', perPage: 5, orderby: 'date', order: 'asc' },
+        })
+      ).data,
   })
   const comments = useQuery({
     queryKey: ['admin', 'blog', 'dashboard-comments'],
@@ -80,8 +85,8 @@ export default function Dashboard() {
       {commentCounts.Pending > 0 && (
         <div className="wp-notice wp-notice-warning">
           <p>
-            {commentCounts.Pending} comment{commentCounts.Pending === 1 ? '' : 's'} awaiting moderation.{' '}
-            <Link to="/admin/blog/comments?status=Pending">Moderate now</Link>
+            {commentCounts.Pending} comment{commentCounts.Pending === 1 ? '' : 's'} awaiting
+            moderation. <Link to="/admin/blog/comments?status=Pending">Moderate now</Link>
           </p>
         </div>
       )}
@@ -139,7 +144,9 @@ export default function Dashboard() {
               {comments.data.items.map((comment) => (
                 <li key={comment._id}>
                   <strong>{comment.name}</strong>{' '}
-                  <span style={{ color: '#646970' }}>on {comment.postId?.title || 'a deleted post'}</span>
+                  <span style={{ color: '#646970' }}>
+                    on {comment.postId?.title || 'a deleted post'}
+                  </span>
                   <p style={{ margin: '2px 0 0', color: '#50575e' }}>
                     {comment.body.slice(0, 120)}
                     {comment.body.length > 120 ? '…' : ''}

@@ -124,7 +124,11 @@ export default function Applications() {
         </div>
       ),
     },
-    { key: 'trackPreference', label: 'Track', render: (a) => TRACK_LABEL[a.trackPreference] || '—' },
+    {
+      key: 'trackPreference',
+      label: 'Track',
+      render: (a) => TRACK_LABEL[a.trackPreference] || '—',
+    },
     {
       key: 'status',
       label: 'Status',
@@ -164,7 +168,10 @@ export default function Applications() {
         title="Flagship applications"
         subtitle="Submissions from /programs/apply. Ten seats per batch — every essay is read."
         actions={
-          <Button variant="outline" onClick={() => downloadCsv('/admin/applications/export', params)}>
+          <Button
+            variant="outline"
+            onClick={() => downloadCsv('/admin/applications/export', params)}
+          >
             Export CSV
           </Button>
         }

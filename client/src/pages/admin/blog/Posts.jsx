@@ -47,7 +47,8 @@ const ALL_COLUMNS = [
 /** The "— Draft", "— Password protected" suffixes WordPress puts after a title. */
 function postStates(post, view) {
   const states = []
-  if (post.status !== 'Published' && post.status !== view && post.status !== 'Trash') states.push(post.status)
+  if (post.status !== 'Published' && post.status !== view && post.status !== 'Trash')
+    states.push(post.status)
   if (post.featured) states.push('Sticky')
   if (post.visibility === 'Password') states.push('Password protected')
   if (post.visibility === 'Private') states.push('Private')
@@ -63,7 +64,13 @@ export default function Posts() {
   const [view, setView] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useScreenOption('posts-per-page', 20)
-  const [columns, setColumns] = useScreenOption('posts-columns', ['author', 'categories', 'tags', 'comments', 'date'])
+  const [columns, setColumns] = useScreenOption('posts-columns', [
+    'author',
+    'categories',
+    'tags',
+    'comments',
+    'date',
+  ])
   const [orderby, setOrderby] = useState('date')
   const [order, setOrder] = useState('desc')
   const [search, setSearch] = useState('')
@@ -94,7 +101,8 @@ export default function Posts() {
   })
   const categories = useQuery({
     queryKey: ['admin', 'taxonomy', 'blog-category'],
-    queryFn: async () => (await api.get('/admin/taxonomy', { params: { taxonomy: 'blog-category' } })).data,
+    queryFn: async () =>
+      (await api.get('/admin/taxonomy', { params: { taxonomy: 'blog-category' } })).data,
   })
   const tags = useQuery({
     queryKey: ['admin', 'taxonomy', 'tag'],
@@ -114,7 +122,12 @@ export default function Posts() {
       setSelected([])
       setBulkEditing(false)
       setBulkAction('')
-      const verb = { trash: 'moved to the Trash', restore: 'restored', delete: 'permanently deleted', edit: 'updated' }[payload.action]
+      const verb = {
+        trash: 'moved to the Trash',
+        restore: 'restored',
+        delete: 'permanently deleted',
+        edit: 'updated',
+      }[payload.action]
       notices.notify(`${result.affected} post${result.affected === 1 ? '' : 's'} ${verb}.`)
     },
     onError: fail,
@@ -132,7 +145,11 @@ export default function Posts() {
         return
       }
       notices.notify(
-        { trash: '1 post moved to the Trash.', restore: '1 post restored from the Trash.', delete: '1 post permanently deleted.' }[action],
+        {
+          trash: '1 post moved to the Trash.',
+          restore: '1 post restored from the Trash.',
+          delete: '1 post permanently deleted.',
+        }[action],
       )
     },
     onError: fail,
@@ -150,7 +167,9 @@ export default function Posts() {
     mutationFn: async () => (await api.post('/admin/blog/empty-trash')).data,
     onSuccess: (result) => {
       refresh()
-      notices.notify(`${result.affected} post${result.affected === 1 ? '' : 's'} permanently deleted.`)
+      notices.notify(
+        `${result.affected} post${result.affected === 1 ? '' : 's'} permanently deleted.`,
+      )
     },
     onError: fail,
   })
@@ -162,7 +181,8 @@ export default function Posts() {
   const shown = useMemo(() => ALL_COLUMNS.filter(([key]) => columns.includes(key)), [columns])
 
   const toggleAll = () => setSelected(allChecked ? [] : items.map((post) => post._id))
-  const toggleOne = (id) => setSelected((rows) => (rows.includes(id) ? rows.filter((row) => row !== id) : [...rows, id]))
+  const toggleOne = (id) =>
+    setSelected((rows) => (rows.includes(id) ? rows.filter((row) => row !== id) : [...rows, id]))
   const resetPage = (fn) => (value) => {
     setPage(1)
     fn(value)
@@ -197,7 +217,11 @@ export default function Posts() {
                     type="checkbox"
                     checked={columns.includes(key)}
                     onChange={() =>
-                      setColumns(columns.includes(key) ? columns.filter((c) => c !== key) : [...columns, key])
+                      setColumns(
+                        columns.includes(key)
+                          ? columns.filter((c) => c !== key)
+                          : [...columns, key],
+                      )
                     }
                   />
                   {label}
@@ -225,14 +249,15 @@ export default function Posts() {
           <>
             <h5>Overview</h5>
             <p>
-              This screen lists every post. Hover a row to reveal its actions: <strong>Edit</strong> opens the block
-              editor, <strong>Quick Edit</strong> changes the common fields without leaving the list, and{' '}
-              <strong>Trash</strong> is reversible until you empty the Trash.
+              This screen lists every post. Hover a row to reveal its actions: <strong>Edit</strong>{' '}
+              opens the block editor, <strong>Quick Edit</strong> changes the common fields without
+              leaving the list, and <strong>Trash</strong> is reversible until you empty the Trash.
             </p>
             <h5>Bulk actions</h5>
             <p>
-              Tick rows, choose an action, then press Apply. <strong>Edit</strong> opens an inline panel that changes
-              category, tags, status or comment settings on every selected post at once.
+              Tick rows, choose an action, then press Apply. <strong>Edit</strong> opens an inline
+              panel that changes category, tags, status or comment settings on every selected post
+              at once.
             </p>
           </>
         }
@@ -278,7 +303,11 @@ export default function Posts() {
           <label className="wp-screen-reader-text" htmlFor="bulk-action">
             Select bulk action
           </label>
-          <select id="bulk-action" value={bulkAction} onChange={(event) => setBulkAction(event.target.value)}>
+          <select
+            id="bulk-action"
+            value={bulkAction}
+            onChange={(event) => setBulkAction(event.target.value)}
+          >
             <option value="">Bulk actions</option>
             {inTrash ? (
               <>
@@ -380,7 +409,12 @@ export default function Posts() {
         <thead>
           <tr>
             <td className="check-column">
-              <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Select all posts" />
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={toggleAll}
+                aria-label="Select all posts"
+              />
             </td>
             <SortableTh
               column="title"
@@ -409,7 +443,11 @@ export default function Posts() {
                 />
               ) : (
                 <th key={key} scope="col" className={`column-${key}`}>
-                  {key === 'comments' ? <Icon name="comments" size={16} aria-label="Comments" /> : label}
+                  {key === 'comments' ? (
+                    <Icon name="comments" size={16} aria-label="Comments" />
+                  ) : (
+                    label
+                  )}
                 </th>
               ),
             )}
@@ -457,7 +495,11 @@ export default function Posts() {
                       {inTrash ? (
                         <span style={{ fontSize: 14 }}>{post.title}</span>
                       ) : (
-                        <button type="button" className="row-title" onClick={() => navigate(`/admin/blog/post/${post._id}`)}>
+                        <button
+                          type="button"
+                          className="row-title"
+                          onClick={() => navigate(`/admin/blog/post/${post._id}`)}
+                        >
                           {post.title}
                         </button>
                       )}
@@ -472,7 +514,11 @@ export default function Posts() {
                       actions={
                         inTrash
                           ? [
-                              { label: 'Restore', onClick: () => rowAction.mutate({ id: post._id, action: 'restore' }) },
+                              {
+                                label: 'Restore',
+                                onClick: () =>
+                                  rowAction.mutate({ id: post._id, action: 'restore' }),
+                              },
                               {
                                 label: 'Delete permanently',
                                 destructive: true,
@@ -482,12 +528,16 @@ export default function Posts() {
                                     message: `Permanently delete “${post.title}”? This cannot be undone.`,
                                     confirmLabel: 'Delete permanently',
                                     destructive: true,
-                                    onConfirm: () => rowAction.mutate({ id: post._id, action: 'delete' }),
+                                    onConfirm: () =>
+                                      rowAction.mutate({ id: post._id, action: 'delete' }),
                                   }),
                               },
                             ]
                           : [
-                              { label: 'Edit', onClick: () => navigate(`/admin/blog/post/${post._id}`) },
+                              {
+                                label: 'Edit',
+                                onClick: () => navigate(`/admin/blog/post/${post._id}`),
+                              },
                               {
                                 label: 'Quick Edit',
                                 onClick: () =>
@@ -507,7 +557,11 @@ export default function Posts() {
                                 href: `/blog/${post.slug}`,
                                 external: true,
                               },
-                              { label: 'Duplicate', onClick: () => rowAction.mutate({ id: post._id, action: 'duplicate' }) },
+                              {
+                                label: 'Duplicate',
+                                onClick: () =>
+                                  rowAction.mutate({ id: post._id, action: 'duplicate' }),
+                              },
                             ]
                       }
                     />
@@ -526,9 +580,19 @@ export default function Posts() {
                       {key === 'date' && (
                         <>
                           <span style={{ display: 'block' }}>
-                            {post.status === 'Scheduled' ? 'Scheduled' : post.status === 'Published' ? 'Published' : 'Last Modified'}
+                            {post.status === 'Scheduled'
+                              ? 'Scheduled'
+                              : post.status === 'Published'
+                                ? 'Published'
+                                : 'Last Modified'}
                           </span>
-                          <span>{fmtDateTime(post.status === 'Published' || post.status === 'Scheduled' ? post.publishedAt : post.updatedAt)}</span>
+                          <span>
+                            {fmtDateTime(
+                              post.status === 'Published' || post.status === 'Scheduled'
+                                ? post.publishedAt
+                                : post.updatedAt,
+                            )}
+                          </span>
                         </>
                       )}
                     </td>
@@ -541,7 +605,12 @@ export default function Posts() {
         <tfoot>
           <tr>
             <td className="check-column">
-              <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Select all posts" />
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={toggleAll}
+                aria-label="Select all posts"
+              />
             </td>
             <th scope="col" className="column-title">
               Title
@@ -557,7 +626,11 @@ export default function Posts() {
 
       <div className="wp-tablenav">
         <div className="wp-alignleft">
-          <select value={bulkAction} onChange={(event) => setBulkAction(event.target.value)} aria-label="Select bulk action">
+          <select
+            value={bulkAction}
+            onChange={(event) => setBulkAction(event.target.value)}
+            aria-label="Select bulk action"
+          >
             <option value="">Bulk actions</option>
             {inTrash ? (
               <>
@@ -626,23 +699,39 @@ function QuickEdit({ post, colSpan, categories, allTags, onChange, onCancel, onS
             <div className="wp-quick-edit-grid">
               <label>
                 Title
-                <input type="text" value={post.title || ''} onChange={(event) => set('title', event.target.value)} />
+                <input
+                  type="text"
+                  value={post.title || ''}
+                  onChange={(event) => set('title', event.target.value)}
+                />
               </label>
               <label>
                 Slug
-                <input type="text" value={post.slug || ''} onChange={(event) => set('slug', event.target.value)} />
+                <input
+                  type="text"
+                  value={post.slug || ''}
+                  onChange={(event) => set('slug', event.target.value)}
+                />
               </label>
               <label>
                 Date
                 <input
                   type="datetime-local"
                   value={toLocalInput(post.publishedAt)}
-                  onChange={(event) => set('publishedAt', event.target.value ? new Date(event.target.value).toISOString() : null)}
+                  onChange={(event) =>
+                    set(
+                      'publishedAt',
+                      event.target.value ? new Date(event.target.value).toISOString() : null,
+                    )
+                  }
                 />
               </label>
               <label>
                 Category
-                <select value={post.category || ''} onChange={(event) => set('category', event.target.value)}>
+                <select
+                  value={post.category || ''}
+                  onChange={(event) => set('category', event.target.value)}
+                >
                   <option value="">— No category —</option>
                   {categories.map((term) => (
                     <option key={term._id} value={term.name}>
@@ -660,7 +749,10 @@ function QuickEdit({ post, colSpan, categories, allTags, onChange, onCancel, onS
                   onChange={(event) =>
                     set(
                       'tags',
-                      event.target.value.split(',').map((tag) => tag.trim()).filter(Boolean),
+                      event.target.value
+                        .split(',')
+                        .map((tag) => tag.trim())
+                        .filter(Boolean),
                     )
                   }
                 />
@@ -672,7 +764,10 @@ function QuickEdit({ post, colSpan, categories, allTags, onChange, onCancel, onS
               </label>
               <label>
                 Status
-                <select value={post.status || 'Draft'} onChange={(event) => set('status', event.target.value)}>
+                <select
+                  value={post.status || 'Draft'}
+                  onChange={(event) => set('status', event.target.value)}
+                >
                   <option>Draft</option>
                   <option>Pending</option>
                   <option>Published</option>
@@ -681,7 +776,10 @@ function QuickEdit({ post, colSpan, categories, allTags, onChange, onCancel, onS
               </label>
               <label>
                 Visibility
-                <select value={post.visibility || 'Public'} onChange={(event) => set('visibility', event.target.value)}>
+                <select
+                  value={post.visibility || 'Public'}
+                  onChange={(event) => set('visibility', event.target.value)}
+                >
                   <option>Public</option>
                   <option>Private</option>
                   <option>Password</option>
@@ -690,7 +788,11 @@ function QuickEdit({ post, colSpan, categories, allTags, onChange, onCancel, onS
               {post.visibility === 'Password' && (
                 <label>
                   Password
-                  <input type="text" value={post.password || ''} onChange={(event) => set('password', event.target.value)} />
+                  <input
+                    type="text"
+                    value={post.password || ''}
+                    onChange={(event) => set('password', event.target.value)}
+                  />
                 </label>
               )}
               <label className="inline">
@@ -702,7 +804,11 @@ function QuickEdit({ post, colSpan, categories, allTags, onChange, onCancel, onS
                 Allow comments
               </label>
               <label className="inline">
-                <input type="checkbox" checked={Boolean(post.featured)} onChange={(event) => set('featured', event.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={Boolean(post.featured)}
+                  onChange={(event) => set('featured', event.target.checked)}
+                />
                 Make this post sticky
               </label>
             </div>
@@ -711,7 +817,12 @@ function QuickEdit({ post, colSpan, categories, allTags, onChange, onCancel, onS
             <button type="button" className="wp-button" onClick={onCancel}>
               Cancel
             </button>
-            <button type="button" className="wp-button wp-button-primary" onClick={onSave} disabled={saving}>
+            <button
+              type="button"
+              className="wp-button wp-button-primary"
+              onClick={onSave}
+              disabled={saving}
+            >
               {saving ? 'Updating…' : 'Update'}
             </button>
             {saving && <Spinner />}
@@ -725,14 +836,28 @@ function QuickEdit({ post, colSpan, categories, allTags, onChange, onCancel, onS
 /* -------------------------------- bulk edit ------------------------------- */
 
 function BulkEdit({ count, titles, categories, onCancel, onApply, saving }) {
-  const [values, setValues] = useState({ status: '', category: '', addTags: '', allowComments: '', sticky: '' })
+  const [values, setValues] = useState({
+    status: '',
+    category: '',
+    addTags: '',
+    allowComments: '',
+    sticky: '',
+  })
   const set = (key, value) => setValues((current) => ({ ...current, [key]: value }))
   return (
-    <div className="wp-quick-edit" style={{ border: '1px solid #c3c4c7', borderBottom: 0, background: '#fff' }}>
+    <div
+      className="wp-quick-edit"
+      style={{ border: '1px solid #c3c4c7', borderBottom: 0, background: '#fff' }}
+    >
       <div className="wp-quick-edit-inner">
         <fieldset>
-          <legend>Bulk Edit — {count} post{count === 1 ? '' : 's'}</legend>
-          <div className="editor-token-list" style={{ marginBottom: 12, border: '1px solid #dcdcde' }}>
+          <legend>
+            Bulk Edit — {count} post{count === 1 ? '' : 's'}
+          </legend>
+          <div
+            className="editor-token-list"
+            style={{ marginBottom: 12, border: '1px solid #dcdcde' }}
+          >
             {titles.map((title) => (
               <span key={title} className="editor-token">
                 {title}
@@ -742,7 +867,10 @@ function BulkEdit({ count, titles, categories, onCancel, onApply, saving }) {
           <div className="wp-quick-edit-grid">
             <label>
               Category
-              <select value={values.category} onChange={(event) => set('category', event.target.value)}>
+              <select
+                value={values.category}
+                onChange={(event) => set('category', event.target.value)}
+              >
                 <option value="">— No change —</option>
                 {categories.map((term) => (
                   <option key={term._id} value={term.name}>
@@ -753,7 +881,11 @@ function BulkEdit({ count, titles, categories, onCancel, onApply, saving }) {
             </label>
             <label>
               Add tags (comma separated)
-              <input type="text" value={values.addTags} onChange={(event) => set('addTags', event.target.value)} />
+              <input
+                type="text"
+                value={values.addTags}
+                onChange={(event) => set('addTags', event.target.value)}
+              />
             </label>
             <label>
               Status
@@ -767,7 +899,10 @@ function BulkEdit({ count, titles, categories, onCancel, onApply, saving }) {
             </label>
             <label>
               Comments
-              <select value={values.allowComments} onChange={(event) => set('allowComments', event.target.value)}>
+              <select
+                value={values.allowComments}
+                onChange={(event) => set('allowComments', event.target.value)}
+              >
                 <option value="">— No change —</option>
                 <option value="open">Allow</option>
                 <option value="closed">Do not allow</option>
@@ -794,7 +929,10 @@ function BulkEdit({ count, titles, categories, onCancel, onApply, saving }) {
             onClick={() =>
               onApply({
                 ...values,
-                addTags: values.addTags.split(',').map((tag) => tag.trim()).filter(Boolean),
+                addTags: values.addTags
+                  .split(',')
+                  .map((tag) => tag.trim())
+                  .filter(Boolean),
               })
             }
           >

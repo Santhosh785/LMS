@@ -167,7 +167,9 @@ export default function Home() {
           <ul className="lm-lang-strip" aria-label="Launch language">
             {hero.languages.map((l) => (
               <li key={l.label}>
-                <span className={cn('lm-lang-tag', l.muted && 'lm-lang-tag--muted')}>{l.label}</span>
+                <span className={cn('lm-lang-tag', l.muted && 'lm-lang-tag--muted')}>
+                  {l.label}
+                </span>
               </li>
             ))}
           </ul>

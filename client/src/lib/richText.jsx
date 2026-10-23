@@ -24,8 +24,7 @@ export const MARKERS = {
 }
 
 // Ordered so the two-character markers win over the one-character ones.
-const TOKEN =
-  /(\*\*[^*]+?\*\*)|(~~[^~]+?~~)|(`[^`]+?`)|(\*[^*\n]+?\*)|(\[[^\]\n]+?\]\([^)\s]+?\))/
+const TOKEN = /(\*\*[^*]+?\*\*)|(~~[^~]+?~~)|(`[^`]+?`)|(\*[^*\n]+?\*)|(\[[^\]\n]+?\]\([^)\s]+?\))/
 
 /**
  * Only http(s) and same-origin links survive. `javascript:` and `data:` URLs are
@@ -188,7 +187,11 @@ export function toggleMarker(value, start, end, marker) {
   const selected = value.slice(start, end)
   const after = value.slice(end)
 
-  if (selected.startsWith(open) && selected.endsWith(close) && selected.length > open.length + close.length) {
+  if (
+    selected.startsWith(open) &&
+    selected.endsWith(close) &&
+    selected.length > open.length + close.length
+  ) {
     const inner = selected.slice(open.length, -close.length)
     return { value: before + inner + after, start, end: start + inner.length }
   }

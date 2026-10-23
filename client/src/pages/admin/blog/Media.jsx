@@ -108,12 +108,15 @@ export function MediaLibrary() {
   })
 
   const bulkDelete = useMutation({
-    mutationFn: async (ids) => (await api.post('/admin/media/bulk', { ids, action: 'delete' })).data,
+    mutationFn: async (ids) =>
+      (await api.post('/admin/media/bulk', { ids, action: 'delete' })).data,
     onSuccess: (result) => {
       refresh()
       setSelected([])
       setDetails(null)
-      notices.notify(`${result.affected} item${result.affected === 1 ? '' : 's'} permanently deleted.`)
+      notices.notify(
+        `${result.affected} item${result.affected === 1 ? '' : 's'} permanently deleted.`,
+      )
     },
     onError: fail,
   })
@@ -148,7 +151,11 @@ export function MediaLibrary() {
     >
       <div className="wp-heading-row">
         <h1 className="wp-heading-inline">Media Library</h1>
-        <button type="button" className="wp-button wp-page-title-action" onClick={() => fileInput.current?.click()}>
+        <button
+          type="button"
+          className="wp-button wp-page-title-action"
+          onClick={() => fileInput.current?.click()}
+        >
           Add New Media File
         </button>
       </div>
@@ -177,7 +184,9 @@ export function MediaLibrary() {
               type="button"
               className="wp-button"
               aria-pressed={mode === 'grid'}
-              style={mode === 'grid' ? { background: '#f0f0f1', borderColor: '#0a4b78' } : undefined}
+              style={
+                mode === 'grid' ? { background: '#f0f0f1', borderColor: '#0a4b78' } : undefined
+              }
               aria-label="Grid view"
               onClick={() => setMode('grid')}
             >
@@ -187,7 +196,9 @@ export function MediaLibrary() {
               type="button"
               className="wp-button"
               aria-pressed={mode === 'list'}
-              style={mode === 'list' ? { background: '#f0f0f1', borderColor: '#0a4b78' } : undefined}
+              style={
+                mode === 'list' ? { background: '#f0f0f1', borderColor: '#0a4b78' } : undefined
+              }
               aria-label="List view"
               onClick={() => setMode('list')}
             >
@@ -219,7 +230,9 @@ export function MediaLibrary() {
               Delete permanently ({selected.length})
             </button>
           )}
-          {(library.isFetching || upload.isPending) && <Spinner label={upload.isPending ? 'Uploading…' : undefined} />}
+          {(library.isFetching || upload.isPending) && (
+            <Spinner label={upload.isPending ? 'Uploading…' : undefined} />
+          )}
         </div>
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
           <input
@@ -235,7 +248,11 @@ export function MediaLibrary() {
           />
           <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span className="wp-screen-reader-text">Items per page</span>
-            <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value))} aria-label="Items per page">
+            <select
+              value={perPage}
+              onChange={(event) => setPerPage(Number(event.target.value))}
+              aria-label="Items per page"
+            >
               {[20, 40, 80, 120].map((value) => (
                 <option key={value} value={value}>
                   {value} / page
@@ -254,14 +271,23 @@ export function MediaLibrary() {
         <div className="wp-dropzone">
           <Icon name="media" size={36} style={{ fill: '#8c8f94' }} />
           <h2 style={{ fontSize: 18, fontWeight: 400 }}>No media items found</h2>
-          <button type="button" className="wp-button wp-button-primary" onClick={() => fileInput.current?.click()}>
+          <button
+            type="button"
+            className="wp-button wp-button-primary"
+            onClick={() => fileInput.current?.click()}
+          >
             Select Files
           </button>
         </div>
       ) : mode === 'grid' ? (
         <div className="wp-media-grid">
           {items.map((media) => (
-            <button key={media._id} type="button" className="wp-attachment" onClick={() => setDetails(media)}>
+            <button
+              key={media._id}
+              type="button"
+              className="wp-attachment"
+              onClick={() => setDetails(media)}
+            >
               <img src={media.url} alt={media.altText || media.originalName} loading="lazy" />
               <span className="wp-attachment-filename">{media.title || media.originalName}</span>
             </button>
@@ -276,7 +302,9 @@ export function MediaLibrary() {
                   type="checkbox"
                   aria-label="Select all media"
                   checked={selected.length === items.length && items.length > 0}
-                  onChange={() => setSelected(selected.length === items.length ? [] : items.map((m) => m._id))}
+                  onChange={() =>
+                    setSelected(selected.length === items.length ? [] : items.map((m) => m._id))
+                  }
                 />
               </td>
               <th scope="col" className="column-thumbnail" style={{ width: 80 }}>
@@ -310,7 +338,9 @@ export function MediaLibrary() {
                     checked={selected.includes(media._id)}
                     onChange={() =>
                       setSelected((rows) =>
-                        rows.includes(media._id) ? rows.filter((row) => row !== media._id) : [...rows, media._id],
+                        rows.includes(media._id)
+                          ? rows.filter((row) => row !== media._id)
+                          : [...rows, media._id],
                       )
                     }
                   />
@@ -329,7 +359,9 @@ export function MediaLibrary() {
                       {media.title || media.originalName}
                     </button>
                   </strong>
-                  <p style={{ margin: '2px 0 0', color: '#646970', fontSize: 13 }}>{media.originalName}</p>
+                  <p style={{ margin: '2px 0 0', color: '#646970', fontSize: 13 }}>
+                    {media.originalName}
+                  </p>
                   <RowActions
                     actions={[
                       { label: 'Edit', onClick: () => setDetails(media) },
@@ -423,8 +455,8 @@ function StorageNotice({ storage, migrating, onMigrate }) {
       <div className="wp-notice wp-notice-warning">
         <p>
           New uploads go to Bunny Storage, but <strong>{storage.local}</strong> earlier file
-          {storage.local === 1 ? ' is' : 's are'} still on this server&rsquo;s disk, where a redeploy
-          can remove {storage.local === 1 ? 'it' : 'them'}.{' '}
+          {storage.local === 1 ? ' is' : 's are'} still on this server&rsquo;s disk, where a
+          redeploy can remove {storage.local === 1 ? 'it' : 'them'}.{' '}
           <button
             type="button"
             className="wp-button wp-button-small"
@@ -512,13 +544,23 @@ function AttachmentDetails({ media, onChange, onClose, onSave, saving, onDelete 
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="wp-button-link wp-button-link-delete" style={{ marginRight: 'auto' }} onClick={onDelete}>
+          <button
+            type="button"
+            className="wp-button-link wp-button-link-delete"
+            style={{ marginRight: 'auto' }}
+            onClick={onDelete}
+          >
             Delete permanently
           </button>
           <button type="button" className="wp-button" onClick={onClose}>
             Close
           </button>
-          <button type="button" className="wp-button wp-button-primary" onClick={onSave} disabled={saving}>
+          <button
+            type="button"
+            className="wp-button wp-button-primary"
+            onClick={onSave}
+            disabled={saving}
+          >
             {saving ? 'Saving…' : 'Save changes'}
           </button>
         </>
@@ -526,7 +568,11 @@ function AttachmentDetails({ media, onChange, onClose, onSave, saving, onDelete 
     >
       <div className="wp-media-frame-body">
         <div style={{ padding: 16, display: 'grid', placeItems: 'center', background: '#f0f0f1' }}>
-          <img src={media.url} alt={media.altText || ''} style={{ maxWidth: '100%', maxHeight: '55vh', objectFit: 'contain' }} />
+          <img
+            src={media.url}
+            alt={media.altText || ''}
+            style={{ maxWidth: '100%', maxHeight: '55vh', objectFit: 'contain' }}
+          />
         </div>
         <aside className="wp-media-sidebar">
           <div className="wp-attachment-details" style={{ paddingTop: 16 }}>
@@ -567,7 +613,11 @@ function AttachmentDetails({ media, onChange, onClose, onSave, saving, onDelete 
               <label key={key}>
                 {label}
                 {kind === 'input' ? (
-                  <input type="text" value={media[key] || ''} onChange={(event) => onChange({ ...media, [key]: event.target.value })} />
+                  <input
+                    type="text"
+                    value={media[key] || ''}
+                    onChange={(event) => onChange({ ...media, [key]: event.target.value })}
+                  />
                 ) : (
                   <textarea
                     rows={key === 'altText' ? 2 : 3}
@@ -579,12 +629,19 @@ function AttachmentDetails({ media, onChange, onClose, onSave, saving, onDelete 
             ))}
             <label>
               File URL
-              <input type="text" readOnly value={media.url} onFocus={(event) => event.target.select()} />
+              <input
+                type="text"
+                readOnly
+                value={media.url}
+                onFocus={(event) => event.target.select()}
+              />
             </label>
             <button
               type="button"
               className="wp-button wp-button-small"
-              onClick={() => navigator.clipboard?.writeText(`${window.location.origin}${media.url}`)}
+              onClick={() =>
+                navigator.clipboard?.writeText(`${window.location.origin}${media.url}`)
+              }
             >
               Copy URL to clipboard
             </button>
@@ -653,7 +710,11 @@ export function MediaUpload() {
         <Icon name="upload" size={40} style={{ fill: '#8c8f94' }} />
         <h2 style={{ fontSize: 22, fontWeight: 400 }}>Drop files to upload</h2>
         <p style={{ color: '#646970', margin: 0 }}>or</p>
-        <button type="button" className="wp-button wp-button-large" onClick={() => fileInput.current?.click()}>
+        <button
+          type="button"
+          className="wp-button wp-button-large"
+          onClick={() => fileInput.current?.click()}
+        >
           Select Files
         </button>
         <p style={{ color: '#646970', fontSize: 12, margin: 0 }}>
@@ -664,7 +725,9 @@ export function MediaUpload() {
 
       {done.length > 0 && (
         <>
-          <h2 style={{ fontSize: 14, fontWeight: 600, margin: '24px 0 10px' }}>Uploaded in this session</h2>
+          <h2 style={{ fontSize: 14, fontWeight: 600, margin: '24px 0 10px' }}>
+            Uploaded in this session
+          </h2>
           <div className="wp-media-grid">
             {done.map((media) => (
               <button

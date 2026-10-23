@@ -59,7 +59,9 @@ let warnedRegion = ''
  * anything is worse, but it says so once.
  */
 function regionPrefix(raw) {
-  const value = String(raw || '').trim().toLowerCase()
+  const value = String(raw || '')
+    .trim()
+    .toLowerCase()
   if (!value) return ''
   if (value in REGION_ALIASES) return REGION_ALIASES[value]
   if (REGION_CODES.has(value)) return value
@@ -111,7 +113,10 @@ const endpoint = (objectPath = '') =>
  * may paste the hostname with or without a scheme.
  */
 export function publicUrl(objectPath) {
-  const host = String(cfg.bunnyStorage.host || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  const host = String(cfg.bunnyStorage.host || '')
+    .trim()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/+$/, '')
   if (!host) return ''
   return `https://${host}/${objectPath.split('/').map(encodeURIComponent).join('/')}`
 }
@@ -126,7 +131,11 @@ export function publicUrl(objectPath) {
  * attacker-chosen filename never reaches a path.
  */
 export function objectPathFor(originalName, now = new Date()) {
-  const ext = path.extname(String(originalName || '')).toLowerCase().replace(/[^a-z0-9.]/g, '').slice(0, 10)
+  const ext = path
+    .extname(String(originalName || ''))
+    .toLowerCase()
+    .replace(/[^a-z0-9.]/g, '')
+    .slice(0, 10)
   const year = now.getUTCFullYear()
   const month = String(now.getUTCMonth() + 1).padStart(2, '0')
   return `blog/${year}/${month}/${crypto.randomUUID()}${ext || '.bin'}`
@@ -134,7 +143,9 @@ export function objectPathFor(originalName, now = new Date()) {
 
 function assertConfigured() {
   if (!isBunnyStorageConfigured()) {
-    throw new Error('Bunny Storage is not configured (zone, password and CDN hostname are required)')
+    throw new Error(
+      'Bunny Storage is not configured (zone, password and CDN hostname are required)',
+    )
   }
 }
 
@@ -202,7 +213,8 @@ export async function testConnection() {
     headers: { AccessKey: cfg.bunnyStorage.password, accept: 'application/json' },
   })
   if (res.status === 401) throw new Error('Bunny rejected the storage password')
-  if (res.status === 404) throw new Error(`No storage zone named “${cfg.bunnyStorage.zone}” in this region`)
+  if (res.status === 404)
+    throw new Error(`No storage zone named “${cfg.bunnyStorage.zone}” in this region`)
   if (!res.ok) throw new Error(`Bunny Storage returned ${res.status}`)
   const items = await res.json().catch(() => [])
   return { files: Array.isArray(items) ? items.length : 0 }

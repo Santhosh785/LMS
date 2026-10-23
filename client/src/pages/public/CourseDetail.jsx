@@ -228,11 +228,7 @@ export default function CourseDetail() {
               />
             ) : (
               <div
-                className={cn(
-                  'course-buy-media',
-                  course.thumbClass,
-                  thumbTone(course.thumbClass),
-                )}
+                className={cn('course-buy-media', course.thumbClass, thumbTone(course.thumbClass))}
               >
                 {course.mediaLabel || course.title}
               </div>

@@ -45,9 +45,8 @@ export default function PlaybookDetail() {
     <div className="res-page">
       <div className="pb-detail-wrap">
         <p className="res-crumb">
-          <Link to="/">Home</Link> <span>›</span>{' '}
-          <Link to="/resources/playbooks">Playbooks</Link> <span>›</span>{' '}
-          {playbook.cardTitle || playbook.title}
+          <Link to="/">Home</Link> <span>›</span> <Link to="/resources/playbooks">Playbooks</Link>{' '}
+          <span>›</span> {playbook.cardTitle || playbook.title}
         </p>
 
         <header className={cn('pb-detail-hero', playbook.heroClass)}>

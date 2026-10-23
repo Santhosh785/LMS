@@ -15,20 +15,118 @@ import { Icon } from './wp.jsx'
  */
 
 export const BLOCK_LIBRARY = [
-  { name: 'p', title: 'Paragraph', icon: 'paragraph', category: 'text', keywords: 'text copy write', description: 'Start with the basic building block of all narrative.' },
-  { name: 'h2', title: 'Heading', icon: 'heading', category: 'text', keywords: 'title subtitle h2', description: 'Introduce new sections and organise content to help readers.' },
-  { name: 'h3', title: 'Subheading', icon: 'heading', category: 'text', keywords: 'title h3', description: 'A second-level heading inside a section.' },
-  { name: 'h4', title: 'Small heading', icon: 'heading', category: 'text', keywords: 'title h4', description: 'A third-level heading for short groupings.' },
-  { name: 'ul', title: 'List', icon: 'list', category: 'text', keywords: 'bullet points ul', description: 'Create a bulleted list.' },
-  { name: 'ol', title: 'Numbered list', icon: 'listNumbered', category: 'text', keywords: 'ordered steps ol', description: 'Create a numbered list of steps.' },
-  { name: 'quote', title: 'Quote', icon: 'quote', category: 'text', keywords: 'blockquote citation', description: 'Give quoted text visual emphasis.' },
-  { name: 'code', title: 'Code', icon: 'code', category: 'text', keywords: 'snippet preformatted', description: 'Display code snippets that respect your spacing.' },
-  { name: 'table', title: 'Table', icon: 'table', category: 'text', keywords: 'rows columns grid', description: 'Create structured content in rows and columns.' },
-  { name: 'callout', title: 'Callout', icon: 'callout', category: 'design', keywords: 'notice highlight tip box', description: 'Highlight a takeaway with an optional checklist.' },
-  { name: 'image', title: 'Image', icon: 'image', category: 'media', keywords: 'photo picture img media', description: 'Insert an image to make a visual statement.' },
-  { name: 'embed', title: 'Embed', icon: 'embed', category: 'media', keywords: 'video youtube vimeo iframe', description: 'Embed a YouTube or Vimeo video.' },
-  { name: 'separator', title: 'Separator', icon: 'separator', category: 'design', keywords: 'divider hr rule line', description: 'Create a break between ideas or sections.' },
-  { name: 'button', title: 'Button', icon: 'button', category: 'design', keywords: 'link cta call to action', description: 'Prompt visitors to take action with a styled link.' },
+  {
+    name: 'p',
+    title: 'Paragraph',
+    icon: 'paragraph',
+    category: 'text',
+    keywords: 'text copy write',
+    description: 'Start with the basic building block of all narrative.',
+  },
+  {
+    name: 'h2',
+    title: 'Heading',
+    icon: 'heading',
+    category: 'text',
+    keywords: 'title subtitle h2',
+    description: 'Introduce new sections and organise content to help readers.',
+  },
+  {
+    name: 'h3',
+    title: 'Subheading',
+    icon: 'heading',
+    category: 'text',
+    keywords: 'title h3',
+    description: 'A second-level heading inside a section.',
+  },
+  {
+    name: 'h4',
+    title: 'Small heading',
+    icon: 'heading',
+    category: 'text',
+    keywords: 'title h4',
+    description: 'A third-level heading for short groupings.',
+  },
+  {
+    name: 'ul',
+    title: 'List',
+    icon: 'list',
+    category: 'text',
+    keywords: 'bullet points ul',
+    description: 'Create a bulleted list.',
+  },
+  {
+    name: 'ol',
+    title: 'Numbered list',
+    icon: 'listNumbered',
+    category: 'text',
+    keywords: 'ordered steps ol',
+    description: 'Create a numbered list of steps.',
+  },
+  {
+    name: 'quote',
+    title: 'Quote',
+    icon: 'quote',
+    category: 'text',
+    keywords: 'blockquote citation',
+    description: 'Give quoted text visual emphasis.',
+  },
+  {
+    name: 'code',
+    title: 'Code',
+    icon: 'code',
+    category: 'text',
+    keywords: 'snippet preformatted',
+    description: 'Display code snippets that respect your spacing.',
+  },
+  {
+    name: 'table',
+    title: 'Table',
+    icon: 'table',
+    category: 'text',
+    keywords: 'rows columns grid',
+    description: 'Create structured content in rows and columns.',
+  },
+  {
+    name: 'callout',
+    title: 'Callout',
+    icon: 'callout',
+    category: 'design',
+    keywords: 'notice highlight tip box',
+    description: 'Highlight a takeaway with an optional checklist.',
+  },
+  {
+    name: 'image',
+    title: 'Image',
+    icon: 'image',
+    category: 'media',
+    keywords: 'photo picture img media',
+    description: 'Insert an image to make a visual statement.',
+  },
+  {
+    name: 'embed',
+    title: 'Embed',
+    icon: 'embed',
+    category: 'media',
+    keywords: 'video youtube vimeo iframe',
+    description: 'Embed a YouTube or Vimeo video.',
+  },
+  {
+    name: 'separator',
+    title: 'Separator',
+    icon: 'separator',
+    category: 'design',
+    keywords: 'divider hr rule line',
+    description: 'Create a break between ideas or sections.',
+  },
+  {
+    name: 'button',
+    title: 'Button',
+    icon: 'button',
+    category: 'design',
+    keywords: 'link cta call to action',
+    description: 'Prompt visitors to take action with a styled link.',
+  },
 ]
 
 export const BLOCK_CATEGORIES = [
@@ -60,7 +158,11 @@ export const newBlock = (type = 'p') => {
   return block
 }
 
-export const linesToItems = (value) => value.split('\n').map((line) => line.trim()).filter(Boolean)
+export const linesToItems = (value) =>
+  value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
 
 /* --------------------------- auto-growing textarea ------------------------ */
 
@@ -103,7 +205,12 @@ export const RichTextarea = forwardRef(function RichTextarea({ value, className,
         {highlightMarkers(value)}
         {'\n'}
       </div>
-      <AutoTextarea ref={ref} value={value} className={`${className} editor-rich-input`} {...rest} />
+      <AutoTextarea
+        ref={ref}
+        value={value}
+        className={`${className} editor-rich-input`}
+        {...rest}
+      />
     </div>
   )
 })
@@ -134,7 +241,9 @@ export function BlockEdit({ block, index, onChange, onKeys, inputRef, onOpenMedi
           {...common}
           className={`editor-block-input is-${block.type}`}
           value={block.text || ''}
-          placeholder={block.type === 'h2' ? 'Heading' : block.type === 'h3' ? 'Subheading' : 'Small heading'}
+          placeholder={
+            block.type === 'h2' ? 'Heading' : block.type === 'h3' ? 'Subheading' : 'Small heading'
+          }
           onChange={(event) => patch({ text: event.target.value })}
         />
       )
@@ -149,9 +258,13 @@ export function BlockEdit({ block, index, onChange, onKeys, inputRef, onOpenMedi
             value={(block.items || []).join('\n')}
             placeholder={`Write a ${block.type === 'ul' ? 'list' : 'numbered list'} item, one per line…`}
             onChange={(event) => patch({ items: event.target.value.split('\n') })}
-            onBlur={() => patch({ items: (block.items || []).map((item) => item.trim()).filter(Boolean) })}
+            onBlur={() =>
+              patch({ items: (block.items || []).map((item) => item.trim()).filter(Boolean) })
+            }
           />
-          <p className="editor-hint">Each line becomes one {block.type === 'ul' ? 'bullet' : 'numbered'} item.</p>
+          <p className="editor-hint">
+            Each line becomes one {block.type === 'ul' ? 'bullet' : 'numbered'} item.
+          </p>
         </div>
       )
 
@@ -190,7 +303,9 @@ export function BlockEdit({ block, index, onChange, onKeys, inputRef, onOpenMedi
             value={(block.items || []).join('\n')}
             placeholder="Optional checklist, one item per line…"
             onChange={(event) => patch({ items: event.target.value.split('\n') })}
-            onBlur={() => patch({ items: (block.items || []).map((item) => item.trim()).filter(Boolean) })}
+            onBlur={() =>
+              patch({ items: (block.items || []).map((item) => item.trim()).filter(Boolean) })
+            }
           />
         </div>
       )
@@ -212,7 +327,9 @@ export function BlockEdit({ block, index, onChange, onKeys, inputRef, onOpenMedi
 
     case 'image':
       return block.url ? (
-        <figure className={`editor-block-figure ${block.align ? `editor-align-${block.align}` : ''}`}>
+        <figure
+          className={`editor-block-figure ${block.align ? `editor-align-${block.align}` : ''}`}
+        >
           <img src={block.url} alt={block.alt || ''} />
           <input
             className="editor-block-caption"
@@ -228,7 +345,11 @@ export function BlockEdit({ block, index, onChange, onKeys, inputRef, onOpenMedi
           <p className="editor-hint" style={{ margin: 0 }}>
             Upload an image or pick one from the Media Library.
           </p>
-          <button type="button" className="wp-button wp-button-primary" onClick={() => onOpenMedia(index)}>
+          <button
+            type="button"
+            className="wp-button wp-button-primary"
+            onClick={() => onOpenMedia(index)}
+          >
             Media Library
           </button>
         </div>
@@ -251,8 +372,14 @@ export function BlockEdit({ block, index, onChange, onKeys, inputRef, onOpenMedi
           >
             <Icon name="embed" size={32} style={{ fill: '#1e1e1e' }} />
             <strong style={{ fontSize: 14 }}>{parsed.provider} video</strong>
-            <span style={{ fontSize: 12, color: '#757575', wordBreak: 'break-all' }}>{block.url}</span>
-            <button type="button" className="wp-button wp-button-small" onClick={() => patch({ url: '' })}>
+            <span style={{ fontSize: 12, color: '#757575', wordBreak: 'break-all' }}>
+              {block.url}
+            </span>
+            <button
+              type="button"
+              className="wp-button wp-button-small"
+              onClick={() => patch({ url: '' })}
+            >
               Replace
             </button>
           </div>
@@ -272,17 +399,29 @@ export function BlockEdit({ block, index, onChange, onKeys, inputRef, onOpenMedi
           </p>
           <div style={{ display: 'flex', gap: 6, width: '100%', maxWidth: 380 }}>
             <input
-              style={{ flex: 1, minHeight: 32, padding: '4px 8px', border: '1px solid #949494', borderRadius: 2 }}
+              style={{
+                flex: 1,
+                minHeight: 32,
+                padding: '4px 8px',
+                border: '1px solid #949494',
+                borderRadius: 2,
+              }}
               defaultValue={block.url || ''}
               placeholder="https://www.youtube.com/watch?v=…"
               onBlur={(event) => patch({ url: event.target.value })}
-              onKeyDown={(event) => event.key === 'Enter' && patch({ url: event.currentTarget.value })}
+              onKeyDown={(event) =>
+                event.key === 'Enter' && patch({ url: event.currentTarget.value })
+              }
             />
             <button type="button" className="wp-button wp-button-primary">
               Embed
             </button>
           </div>
-          {block.url && <p className="editor-hint" style={{ color: '#b32d2e' }}>That link is not a YouTube or Vimeo video.</p>}
+          {block.url && (
+            <p className="editor-hint" style={{ color: '#b32d2e' }}>
+              That link is not a YouTube or Vimeo video.
+            </p>
+          )}
         </div>
       )
     }
@@ -374,7 +513,17 @@ function ImageSizePicker({ block, onChange }) {
   if (!block.mediaId) return null
   const options = [
     ...(data?.sizes || []).map((size) => ({ ...size, label: SIZE_LABELS[size.name] || size.name })),
-    ...(data ? [{ name: 'full', label: 'Full Size', url: data.url, width: data.width, height: data.height }] : []),
+    ...(data
+      ? [
+          {
+            name: 'full',
+            label: 'Full Size',
+            url: data.url,
+            width: data.width,
+            height: data.height,
+          },
+        ]
+      : []),
   ]
   if (options.length < 2) return null
   const current = options.find((option) => option.url === block.url)?.name || 'full'
@@ -465,7 +614,11 @@ export function BlockSettings({ block, onChange, onOpenMedia, index }) {
             <p className="editor-hint">Leave empty if the image is purely decorative.</p>
             <label className="editor-field">
               <span>Link to</span>
-              <input type="url" value={block.href || ''} onChange={(event) => patch({ href: event.target.value })} />
+              <input
+                type="url"
+                value={block.href || ''}
+                onChange={(event) => patch({ href: event.target.value })}
+              />
             </label>
           </div>
         </div>
@@ -485,7 +638,10 @@ export function BlockSettings({ block, onChange, onOpenMedia, index }) {
             </label>
             <label className="editor-field">
               <span>Style</span>
-              <select value={block.style || 'fill'} onChange={(event) => patch({ style: event.target.value })}>
+              <select
+                value={block.style || 'fill'}
+                onChange={(event) => patch({ style: event.target.value })}
+              >
                 <option value="fill">Fill</option>
                 <option value="outline">Outline</option>
               </select>
@@ -527,7 +683,12 @@ export function BlockSettings({ block, onChange, onOpenMedia, index }) {
                 type="button"
                 className="wp-button wp-button-small"
                 onClick={() =>
-                  patch({ rows: [...(block.rows || []), { cells: Array(block.rows?.[0]?.cells.length || 3).fill('') }] })
+                  patch({
+                    rows: [
+                      ...(block.rows || []),
+                      { cells: Array(block.rows?.[0]?.cells.length || 3).fill('') },
+                    ],
+                  })
                 }
               >
                 + Row
@@ -535,7 +696,9 @@ export function BlockSettings({ block, onChange, onOpenMedia, index }) {
               <button
                 type="button"
                 className="wp-button wp-button-small"
-                onClick={() => patch({ rows: (block.rows || []).map((row) => ({ cells: [...row.cells, ''] })) })}
+                onClick={() =>
+                  patch({ rows: (block.rows || []).map((row) => ({ cells: [...row.cells, ''] })) })
+                }
               >
                 + Column
               </button>
@@ -551,7 +714,11 @@ export function BlockSettings({ block, onChange, onOpenMedia, index }) {
                 type="button"
                 className="wp-button wp-button-small"
                 disabled={(block.rows?.[0]?.cells.length || 0) <= 1}
-                onClick={() => patch({ rows: (block.rows || []).map((row) => ({ cells: row.cells.slice(0, -1) })) })}
+                onClick={() =>
+                  patch({
+                    rows: (block.rows || []).map((row) => ({ cells: row.cells.slice(0, -1) })),
+                  })
+                }
               >
                 − Column
               </button>
@@ -578,7 +745,11 @@ export function BlockSettings({ block, onChange, onOpenMedia, index }) {
         <div className="editor-panel">
           <label className="editor-field">
             <span>Video URL</span>
-            <input type="url" value={block.url || ''} onChange={(event) => patch({ url: event.target.value })} />
+            <input
+              type="url"
+              value={block.url || ''}
+              onChange={(event) => patch({ url: event.target.value })}
+            />
           </label>
           <p className="editor-hint" style={{ marginTop: 8 }}>
             YouTube and Vimeo links are supported.

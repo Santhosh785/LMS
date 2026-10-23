@@ -139,8 +139,8 @@ export default function FitCall() {
       <main className="pa-shell">
         <div className="pa-top">
           <p className="pa-breadcrumb">
-            <Link to="/">Home</Link> → <Link to="/programs/complete-growth-marketing">Flagship</Link>{' '}
-            → Fit call
+            <Link to="/">Home</Link> →{' '}
+            <Link to="/programs/complete-growth-marketing">Flagship</Link> → Fit call
           </p>
           <h1>Book your 15-min fit call</h1>
           <p className="lede">
@@ -170,7 +170,13 @@ export default function FitCall() {
                     {[
                       { name: 'fullName', label: 'Full name', type: 'text', ac: 'name' },
                       { name: 'email', label: 'Email', type: 'email', ac: 'email' },
-                      { name: 'phone', label: 'WhatsApp number', type: 'tel', ac: 'tel', ph: '+91 …' },
+                      {
+                        name: 'phone',
+                        label: 'WhatsApp number',
+                        type: 'tel',
+                        ac: 'tel',
+                        ph: '+91 …',
+                      },
                     ].map((f) => (
                       <div className="pa-field" key={f.name}>
                         <label htmlFor={f.name}>{f.label}</label>
@@ -250,7 +256,13 @@ export default function FitCall() {
                 <fieldset className="pa-fieldset">
                   <legend>Schedule preference (IST)</legend>
                   <div className="pa-grid full">
-                    <Sel name="preferredWeek" label="Preferred date range" value={v.preferredWeek} error={errors.preferredWeek} onChange={set} />
+                    <Sel
+                      name="preferredWeek"
+                      label="Preferred date range"
+                      value={v.preferredWeek}
+                      error={errors.preferredWeek}
+                      onChange={set}
+                    />
                     <div className="pa-field">
                       <label htmlFor="timezone">If outside India, your timezone</label>
                       <input
@@ -302,9 +314,27 @@ export default function FitCall() {
                 <fieldset className="pa-fieldset">
                   <legend>Fit questions</legend>
                   <div className="pa-grid full">
-                    <Sel name="currentStatus" label="Current role" value={v.currentStatus} error={errors.currentStatus} onChange={set} />
-                    <Sel name="weeklyHours" label="Realistic weekly hours for Flagship" value={v.weeklyHours} error={errors.weeklyHours} onChange={set} />
-                    <Sel name="biggestBlocker" label="Biggest blocker to joining?" value={v.biggestBlocker} error={errors.biggestBlocker} onChange={set} />
+                    <Sel
+                      name="currentStatus"
+                      label="Current role"
+                      value={v.currentStatus}
+                      error={errors.currentStatus}
+                      onChange={set}
+                    />
+                    <Sel
+                      name="weeklyHours"
+                      label="Realistic weekly hours for Flagship"
+                      value={v.weeklyHours}
+                      error={errors.weeklyHours}
+                      onChange={set}
+                    />
+                    <Sel
+                      name="biggestBlocker"
+                      label="Biggest blocker to joining?"
+                      value={v.biggestBlocker}
+                      error={errors.biggestBlocker}
+                      onChange={set}
+                    />
                     <div className="pa-field">
                       <label htmlFor="referralSource">How did you hear about us?</label>
                       <input

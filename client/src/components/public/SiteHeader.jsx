@@ -109,7 +109,10 @@ export default function SiteHeader() {
         <BrandLogo width={160} height={100} className="h-12 w-auto rounded-[10px]" />
       </Link>
 
-      <nav className="flex items-center justify-center gap-[0.05rem] mx-960:hidden" aria-label="Primary">
+      <nav
+        className="flex items-center justify-center gap-[0.05rem] mx-960:hidden"
+        aria-label="Primary"
+      >
         {nav.map((item) => {
           if (!item.menu) {
             return (

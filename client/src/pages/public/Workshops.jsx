@@ -176,8 +176,7 @@ export default function Workshops() {
           </p>
           <h1 className="ws-page-title">Live workshops</h1>
           <p className="ws-hero-deck">
-            Short, high-energy live builds with mentors. Leave with templates you can run this
-            week.
+            Short, high-energy live builds with mentors. Leave with templates you can run this week.
           </p>
           <div className="ws-hero-chips" aria-label="Launch language">
             <span>த Tamil</span>
@@ -214,7 +213,11 @@ export default function Workshops() {
             <Loading />
           ) : (
             groups.map((group) => (
-              <section className="ws-section" key={group.key} aria-labelledby={group.key.toLowerCase()}>
+              <section
+                className="ws-section"
+                key={group.key}
+                aria-labelledby={group.key.toLowerCase()}
+              >
                 <div className="ws-section-head">
                   <h2 id={group.key.toLowerCase()}>
                     <span className="spark" aria-hidden="true">

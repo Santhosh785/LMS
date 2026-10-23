@@ -445,9 +445,7 @@ export default function ProgramDetail() {
                 {inr(pricing.amount)}
                 {pricing.taxNote && <span className="tax">{pricing.taxNote}</span>}
               </p>
-              {pricing.scholarship && (
-                <p className="prog-pricing-scholar">{pricing.scholarship}</p>
-              )}
+              {pricing.scholarship && <p className="prog-pricing-scholar">{pricing.scholarship}</p>}
               {pricing.duration && <p className="prog-pricing-duration">{pricing.duration}</p>}
               {pricing.status && <p className="prog-pricing-status">{pricing.status}</p>}
               {pricing.slots && <p className="prog-pricing-slots">{pricing.slots}</p>}
@@ -455,10 +453,7 @@ export default function ProgramDetail() {
                 <Cta to={cta('pricingApply').to} className="prog-btn-primary">
                   {cta('pricingApply').label}
                 </Cta>
-                <Cta
-                  to={cta('pricingFitCall').to}
-                  className="prog-btn-secondary prog-btn-on-gold"
-                >
+                <Cta to={cta('pricingFitCall').to} className="prog-btn-secondary prog-btn-on-gold">
                   {cta('pricingFitCall').label}
                 </Cta>
               </div>

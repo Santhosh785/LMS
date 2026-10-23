@@ -274,7 +274,10 @@ export const programs = [
         variant: 'owner',
         goal: 'Leave able to direct your growth engine and evaluate anyone you hire — not necessarily push every button yourself.',
         modules: [
-          { code: 'A1', body: 'Your business as the case study — re-apply Weeks 1–6 to your numbers' },
+          {
+            code: 'A1',
+            body: 'Your business as the case study — re-apply Weeks 1–6 to your numbers',
+          },
           { code: 'A2', body: 'Build vs buy vs direct — brief, hire, spot AI-native talent' },
           { code: 'A3', body: 'Venture & compliance basics — GST, invoicing, vendor red flags' },
           { code: 'A4', body: 'ROI, attribution & budget allocation — where the next rupee goes' },
@@ -291,8 +294,14 @@ export const programs = [
         modules: [
           { code: 'B1', body: 'Sales & ethical persuasion — RASNA, CRM, AI discovery prep' },
           { code: 'B2', body: 'Personal brand & authority — LinkedIn/IG with AI content systems' },
-          { code: 'B3', body: 'Proposals, pricing & retention — AI reporting as a retention lever' },
-          { code: 'B4', body: 'Live agency floor — real ad budget or SEO/GEO mandate for a real SMB' },
+          {
+            code: 'B3',
+            body: 'Proposals, pricing & retention — AI reporting as a retention lever',
+          },
+          {
+            code: 'B4',
+            body: 'Live agency floor — real ad budget or SEO/GEO mandate for a real SMB',
+          },
         ],
         milestone:
           'Milestone (Weeks 12–14): client-ready proposal + first 30 days of real delivery — portfolio case study included.',

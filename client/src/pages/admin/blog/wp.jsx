@@ -34,7 +34,8 @@ const ICONS = {
   check: 'M9.7 16.6L5 12l-1.4 1.4 6.1 6.1L20.4 8.8 19 7.4z',
   undo: 'M18.3 11.7c-.6-.6-1.4-.9-2.3-.9H6.7l2.9-3.3-1.1-1-4.5 5 4.5 4.5 1-1-3-3H16c.5 0 .9.2 1.3.5.8.8.8 2.4 0 3.2-.4.3-.8.5-1.3.5h-3v1.5h3c.9 0 1.7-.3 2.3-.9.6-.6 1-1.4 1-2.3s-.4-1.7-1-2.3z',
   redo: 'M5.7 11.7c.6-.6 1.4-.9 2.3-.9h9.3l-2.9-3.3 1.1-1 4.5 5-4.5 4.5-1-1 3-3H8c-.5 0-.9.2-1.3.5-.8.8-.8 2.4 0 3.2.4.3.8.5 1.3.5h3v1.5H8c-.9 0-1.7-.3-2.3-.9-.6-.6-1-1.4-1-2.3s.4-1.7 1-2.3z',
-  listView: 'M4 5.5h16V7H4V5.5zM8 11.2h12v1.5H8v-1.5zm12 5.8H8v1.5h12V17zM4 11.2h2.5v1.5H4v-1.5zM6.5 17H4v1.5h2.5V17z',
+  listView:
+    'M4 5.5h16V7H4V5.5zM8 11.2h12v1.5H8v-1.5zm12 5.8H8v1.5h12V17zM4 11.2h2.5v1.5H4v-1.5zM6.5 17H4v1.5h2.5V17z',
   sidebar:
     'M18 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2zm.5 14a.5.5 0 01-.5.5h-4V5.5h4a.5.5 0 01.5.5v12z',
   search:
@@ -63,7 +64,8 @@ const ICONS = {
   list: 'M5 6.5h2v2H5v-2zm4 .2h11v1.5H9V6.7zm-4 4.3h2v2H5v-2zm4 .2h11v1.5H9v-1.5zm-4 4.3h2v2H5v-2zm4 .2h11v1.5H9v-1.5z',
   listNumbered:
     'M4.2 6h1.2v3.2h.9V5.2H4.2V6zm5 .7h11v1.5h-11V6.7zm0 4.5h11v1.5h-11v-1.5zm0 4.5h11v1.5h-11v-1.5zM4 11.2h2.4v.7l-1.5 1.7h1.6v.8H3.9v-.7l1.5-1.8H4zm.1 4.4h2.3v3.1H4.1v-.7h1.4v-.5H4.4v-.7h1.1v-.5H4.1z',
-  quote: 'M6 5h5v6.3c0 3.5-1.7 6.1-5 7.7v-2.2c1.7-1.1 2.6-2.6 2.6-4.5H6V5zm7 0h5v6.3c0 3.5-1.7 6.1-5 7.7v-2.2c1.7-1.1 2.6-2.6 2.6-4.5H13V5z',
+  quote:
+    'M6 5h5v6.3c0 3.5-1.7 6.1-5 7.7v-2.2c1.7-1.1 2.6-2.6 2.6-4.5H6V5zm7 0h5v6.3c0 3.5-1.7 6.1-5 7.7v-2.2c1.7-1.1 2.6-2.6 2.6-4.5H13V5z',
   image:
     'M19 4H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm.5 14a.5.5 0 01-.5.5H5a.5.5 0 01-.5-.5v-2.7l3.6-3.2 3.2 3.1 4.2-3.5 4 3.3V18zM8.5 8a1.6 1.6 0 100 3.2A1.6 1.6 0 008.5 8z',
   code: 'M8.4 6.1L3 12l5.4 5.9 1.2-1.1L5.1 12l4.5-4.8-1.2-1.1zm7.2 0l-1.2 1.1 4.5 4.8-4.5 4.8 1.2 1.1L21 12l-5.4-5.9z',
@@ -86,7 +88,8 @@ const ICONS = {
   alignLeft: 'M4 5.5h16V7H4V5.5zM4 10.5h10V12H4v-1.5zM4 15.5h16V17H4v-1.5z',
   alignCenter: 'M4 5.5h16V7H4V5.5zM7 10.5h10V12H7v-1.5zM4 15.5h16V17H4v-1.5z',
   alignRight: 'M4 5.5h16V7H4V5.5zM10 10.5h10V12H10v-1.5zM4 15.5h16V17H4v-1.5z',
-  fullscreen: 'M4 4h6v1.6H5.6V10H4V4zm10 0h6v6h-1.6V5.6H14V4zM4 14h1.6v4.4H10V20H4v-6zm14.4 0H20v6h-6v-1.6h4.4V14z',
+  fullscreen:
+    'M4 4h6v1.6H5.6V10H4V4zm10 0h6v6h-1.6V5.6H14V4zM4 14h1.6v4.4H10V20H4v-6zm14.4 0H20v6h-6v-1.6h4.4V14z',
   copy: 'M16 3H6a2 2 0 00-2 2v12h1.6V5A.4.4 0 016 4.6h10V3zm3 3.5H9.5a2 2 0 00-2 2V19a2 2 0 002 2H19a2 2 0 002-2V8.5a2 2 0 00-2-2zm.4 12.5a.4.4 0 01-.4.4H9.5a.4.4 0 01-.4-.4V8.5a.4.4 0 01.4-.4H19a.4.4 0 01.4.4V19z',
   reply: 'M9 5.5L3 11l6 5.5v-3.4h4.5c3 0 5.5 2.4 5.5 5.4h1.5c0-3.8-3.1-6.9-7-6.9H9V5.5z',
   spam: 'M12 3.5L3.5 8.2v7.6L12 20.5l8.5-4.7V8.2L12 3.5zm.8 12.9h-1.6v-1.6h1.6v1.6zm0-3.2h-1.6V7.6h1.6v5.6z',
@@ -114,10 +117,29 @@ export function Icon({ name, size = 24, className, ...rest }) {
 
 /* --------------------------------- format --------------------------------- */
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
 
 export const fmtDate = (value) =>
-  value ? new Date(value).toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: '2-digit' }) : '—'
+  value
+    ? new Date(value).toLocaleDateString('en-GB', {
+        year: 'numeric',
+        month: 'long',
+        day: '2-digit',
+      })
+    : '—'
 
 export const fmtDateTime = (value) =>
   value
@@ -132,7 +154,8 @@ export const toLocalInput = (value) => {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
-export const monthLabel = (key) => `${MONTHS[Number(String(key).slice(4)) - 1] || ''} ${String(key).slice(0, 4)}`
+export const monthLabel = (key) =>
+  `${MONTHS[Number(String(key).slice(4)) - 1] || ''} ${String(key).slice(0, 4)}`
 
 export function timeAgo(value) {
   if (!value) return ''
@@ -155,7 +178,9 @@ export function timeAgo(value) {
 }
 
 export const fileSize = (bytes = 0) =>
-  bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
+  bytes >= 1048576
+    ? `${(bytes / 1048576).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`
 
 /* -------------------------------- notices --------------------------------- */
 
@@ -165,12 +190,15 @@ let noticeId = 0
 export function useNotices() {
   const [notices, setNotices] = useState([])
   const dismiss = useCallback((id) => setNotices((rows) => rows.filter((row) => row.id !== id)), [])
-  const notify = useCallback((message, type = 'success') => {
-    const id = (noticeId += 1)
-    setNotices((rows) => [...rows, { id, message, type }])
-    if (type === 'success') setTimeout(() => dismiss(id), 6000)
-    return id
-  }, [dismiss])
+  const notify = useCallback(
+    (message, type = 'success') => {
+      const id = (noticeId += 1)
+      setNotices((rows) => [...rows, { id, message, type }])
+      if (type === 'success') setTimeout(() => dismiss(id), 6000)
+      return id
+    },
+    [dismiss],
+  )
 
   const node = notices.length ? (
     <div>
@@ -190,7 +218,12 @@ export function Notice({ type = 'info', children, onDismiss }) {
     <div className={`wp-notice wp-notice-${type}`}>
       <p>{children}</p>
       {onDismiss && (
-        <button type="button" className="wp-notice-dismiss" onClick={onDismiss} aria-label="Dismiss this notice">
+        <button
+          type="button"
+          className="wp-notice-dismiss"
+          onClick={onDismiss}
+          aria-label="Dismiss this notice"
+        >
           <Icon name="close" size={16} />
         </button>
       )}
@@ -266,7 +299,12 @@ export function Pagination({ page, pages, total, perPage, onPage, noun = 'item' 
           <button type="button" onClick={() => go(1)} disabled={page === 1} aria-label="First page">
             «
           </button>
-          <button type="button" onClick={() => go(page - 1)} disabled={page === 1} aria-label="Previous page">
+          <button
+            type="button"
+            onClick={() => go(page - 1)}
+            disabled={page === 1}
+            aria-label="Previous page"
+          >
             ‹
           </button>
           <span className="wp-paging-input">
@@ -278,14 +316,26 @@ export function Pagination({ page, pages, total, perPage, onPage, noun = 'item' 
               defaultValue={page}
               aria-label="Current page"
               onBlur={(event) => go(Number(event.target.value) || 1)}
-              onKeyDown={(event) => event.key === 'Enter' && go(Number(event.currentTarget.value) || 1)}
+              onKeyDown={(event) =>
+                event.key === 'Enter' && go(Number(event.currentTarget.value) || 1)
+              }
             />
             <span>of {pages}</span>
           </span>
-          <button type="button" onClick={() => go(page + 1)} disabled={page === pages} aria-label="Next page">
+          <button
+            type="button"
+            onClick={() => go(page + 1)}
+            disabled={page === pages}
+            aria-label="Next page"
+          >
             ›
           </button>
-          <button type="button" onClick={() => go(pages)} disabled={page === pages} aria-label="Last page">
+          <button
+            type="button"
+            onClick={() => go(pages)}
+            disabled={page === pages}
+            aria-label="Last page"
+          >
             »
           </button>
         </span>
@@ -305,7 +355,10 @@ export function SortableTh({ column, label, orderby, order, onSort, className, s
       style={style}
       aria-sort={active ? (order === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <button type="button" onClick={() => onSort(column, active && order === 'asc' ? 'desc' : 'asc')}>
+      <button
+        type="button"
+        onClick={() => onSort(column, active && order === 'asc' ? 'desc' : 'asc')}
+      >
         <span>{label}</span>
         <span className={`sorting-indicator ${active ? order : 'desc'}`} />
       </button>
@@ -327,7 +380,8 @@ export function ScreenMeta({ options, help }) {
             aria-expanded={open === 'options'}
             onClick={() => setOpen(open === 'options' ? '' : 'options')}
           >
-            Screen Options <Icon name={open === 'options' ? 'chevronUp' : 'chevronDown'} size={16} />
+            Screen Options{' '}
+            <Icon name={open === 'options' ? 'chevronUp' : 'chevronDown'} size={16} />
           </button>
         )}
         {help && (
@@ -355,7 +409,11 @@ export function Postbox({ title, actions, children, defaultOpen = true, classNam
     <div className={`wp-postbox ${open ? '' : 'is-closed'} ${className || ''}`}>
       <div className="wp-postbox-header" onClick={() => setOpen(!open)} role="presentation">
         <h2 className="wp-postbox-title">{title}</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={(e) => e.stopPropagation()} role="presentation">
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+          onClick={(e) => e.stopPropagation()}
+          role="presentation"
+        >
           {actions}
           <button
             type="button"
@@ -395,10 +453,20 @@ export function WpModal({ open, title, onClose, children, footer, small }) {
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose?.()}
     >
-      <div className={`wp-modal ${small ? 'wp-modal-small' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+      <div
+        className={`wp-modal ${small ? 'wp-modal-small' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         <div className="wp-modal-header">
           <h1>{title}</h1>
-          <button type="button" className="wp-modal-close" onClick={onClose} aria-label="Close dialog">
+          <button
+            type="button"
+            className="wp-modal-close"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
             <Icon name="close" size={22} />
           </button>
         </div>
@@ -410,7 +478,15 @@ export function WpModal({ open, title, onClose, children, footer, small }) {
 }
 
 /** WordPress confirms destructive actions with a plain dialog, not a toast. */
-export function ConfirmDialog({ open, title, message, confirmLabel = 'OK', onConfirm, onClose, destructive }) {
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'OK',
+  onConfirm,
+  onClose,
+  destructive,
+}) {
   return (
     <WpModal
       open={open}

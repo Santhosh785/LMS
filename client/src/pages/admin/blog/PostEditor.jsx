@@ -16,7 +16,15 @@ import {
   SPLITS_ON_ENTER,
 } from './blocks.jsx'
 import MediaFrame from './MediaFrame.jsx'
-import { ConfirmDialog, fmtDateTime, Icon, Spinner, toLocalInput, useDismissable, WpModal } from './wp.jsx'
+import {
+  ConfirmDialog,
+  fmtDateTime,
+  Icon,
+  Spinner,
+  toLocalInput,
+  useDismissable,
+  WpModal,
+} from './wp.jsx'
 import '../../../styles/wp-admin.css'
 import '../../../styles/wp-editor.css'
 
@@ -48,7 +56,14 @@ const EMPTY_POST = () => ({
   imageAlt: '',
   heroClass: 'feat-seo',
   heroLabel: '',
-  seo: { metaTitle: '', metaDescription: '', canonicalUrl: '', ogImage: '', focusKeyword: '', noIndex: false },
+  seo: {
+    metaTitle: '',
+    metaDescription: '',
+    canonicalUrl: '',
+    ogImage: '',
+    focusKeyword: '',
+    noIndex: false,
+  },
   revisions: [],
 })
 
@@ -186,12 +201,21 @@ export default function PostEditor() {
     mutationFn: async ({ patch = {}, autosave = false }) => {
       const payload = { ...post, ...patch }
       if (payload._id) {
-        return (await api.put(`/admin/blog/${payload._id}`, payload, { params: autosave ? { autosave: true } : {} })).data
+        return (
+          await api.put(`/admin/blog/${payload._id}`, payload, {
+            params: autosave ? { autosave: true } : {},
+          })
+        ).data
       }
       return (await api.post('/admin/blog', payload)).data
     },
     onSuccess: (saved, variables) => {
-      const next = { ...EMPTY_POST(), ...saved, body: saved.body?.length ? saved.body : [newBlock('p')], seo: { ...EMPTY_POST().seo, ...(saved.seo || {}) } }
+      const next = {
+        ...EMPTY_POST(),
+        ...saved,
+        body: saved.body?.length ? saved.body : [newBlock('p')],
+        seo: { ...EMPTY_POST().seo, ...(saved.seo || {}) },
+      }
       setPost(next)
       setSavedSnapshot(JSON.stringify(next))
       setSavedAt(new Date())
@@ -217,13 +241,17 @@ export default function PostEditor() {
   /* -------------------------------- blocks -------------------------------- */
 
   const body = useMemo(() => post.body || [], [post.body])
-  const setField = (key, value) => commit((current) => ({ ...current, [key]: value }), { coalesce: true })
+  const setField = (key, value) =>
+    commit((current) => ({ ...current, [key]: value }), { coalesce: true })
   const setSeo = (key, value) =>
     commit((current) => ({ ...current, seo: { ...current.seo, [key]: value } }), { coalesce: true })
 
   const updateBlock = (index, next) =>
     commit(
-      (current) => ({ ...current, body: current.body.map((block, i) => (i === index ? next : block)) }),
+      (current) => ({
+        ...current,
+        body: current.body.map((block, i) => (i === index ? next : block)),
+      }),
       { coalesce: true },
     )
 
@@ -275,7 +303,8 @@ export default function PostEditor() {
       next.items = block.items?.length ? block.items : linesToItems(block.text || '')
       next.text = ''
     }
-    if (mainField(type) === 'text' && !next.text && block.items?.length) next.text = block.items.join('\n')
+    if (mainField(type) === 'text' && !next.text && block.items?.length)
+      next.text = block.items.join('\n')
     updateBlock(index, next)
     focusBlock(index)
   }
@@ -423,10 +452,10 @@ export default function PostEditor() {
   const published = post.status === 'Published'
   const scheduled = new Date(post.publishedAt).getTime() > now
   const selectedBlock = selected !== null ? body[selected] : null
-  const canFormat = selectedBlock && !['separator', 'image', 'embed', 'table'].includes(selectedBlock.type)
+  const canFormat =
+    selectedBlock && !['separator', 'image', 'embed', 'table'].includes(selectedBlock.type)
 
-  const publishNow = () =>
-    save.mutate({ patch: { status: 'Published' }, published: true })
+  const publishNow = () => save.mutate({ patch: { status: 'Published' }, published: true })
 
   return (
     <div className="wp-editor">
@@ -652,7 +681,13 @@ export default function PostEditor() {
       </header>
 
       <div className="editor-body">
-        {leftPanel === 'inserter' && <Inserter onInsert={(type) => insertBlock(newBlock(type), selected === null ? body.length : selected + 1)} />}
+        {leftPanel === 'inserter' && (
+          <Inserter
+            onInsert={(type) =>
+              insertBlock(newBlock(type), selected === null ? body.length : selected + 1)
+            }
+          />
+        )}
         {leftPanel === 'listview' && (
           <ListView
             body={body}
@@ -694,7 +729,12 @@ export default function PostEditor() {
                     {selected === index && (
                       <>
                         <div className="editor-block-movers">
-                          <button type="button" aria-label="Move up" disabled={index === 0} onClick={() => moveBlock(index, -1)}>
+                          <button
+                            type="button"
+                            aria-label="Move up"
+                            disabled={index === 0}
+                            onClick={() => moveBlock(index, -1)}
+                          >
                             <Icon name="arrowUp" size={16} />
                           </button>
                           <button
@@ -810,7 +850,9 @@ export default function PostEditor() {
                   />
                 ) : (
                   <div className="editor-panel">
-                    <p className="editor-hint">No block selected. Click a block in the canvas to edit its settings.</p>
+                    <p className="editor-hint">
+                      No block selected. Click a block in the canvas to edit its settings.
+                    </p>
                   </div>
                 )
               ) : (
@@ -835,7 +877,9 @@ export default function PostEditor() {
                     })
                   }
                   onRestore={async (revisionId) => {
-                    const { data } = await api.post(`/admin/blog/${post._id}/revisions/${revisionId}/restore`)
+                    const { data } = await api.post(
+                      `/admin/blog/${post._id}/revisions/${revisionId}/restore`,
+                    )
                     const restored = { ...EMPTY_POST(), ...data }
                     setPost(restored)
                     setSavedSnapshot(JSON.stringify(restored))
@@ -912,13 +956,20 @@ export default function PostEditor() {
         }}
       />
 
-      <WpModal open={shortcutsOpen} title="Keyboard shortcuts" onClose={() => setShortcutsOpen(false)} small>
+      <WpModal
+        open={shortcutsOpen}
+        title="Keyboard shortcuts"
+        onClose={() => setShortcutsOpen(false)}
+        small
+      >
         <table className="wp-form-table">
           <tbody>
             {SHORTCUTS.map(([keys, what]) => (
               <tr key={keys}>
                 <th style={{ width: 170 }}>
-                  <kbd style={{ background: '#f0f0f1', padding: '2px 6px', borderRadius: 3 }}>{keys}</kbd>
+                  <kbd style={{ background: '#f0f0f1', padding: '2px 6px', borderRadius: 3 }}>
+                    {keys}
+                  </kbd>
                 </th>
                 <td>{what}</td>
               </tr>
@@ -946,7 +997,13 @@ function Dropdown({ open, onToggle, label, ariaLabel, buttonClass, children }) {
   const ref = useDismissable(() => open && onToggle())
   return (
     <div style={{ position: 'relative' }} ref={ref}>
-      <button type="button" className={buttonClass} aria-label={ariaLabel} aria-expanded={open} onClick={onToggle}>
+      <button
+        type="button"
+        className={buttonClass}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
         {label}
       </button>
       {open && <div className="editor-dropdown">{children(onToggle)}</div>}
@@ -997,7 +1054,11 @@ function Inserter({ onInsert }) {
           </div>
         )
       })}
-      {!matches.length && <p className="editor-hint" style={{ marginTop: 20 }}>No blocks found.</p>}
+      {!matches.length && (
+        <p className="editor-hint" style={{ marginTop: 20 }}>
+          No blocks found.
+        </p>
+      )}
     </aside>
   )
 }
@@ -1009,10 +1070,18 @@ function ListView({ body, selected, words, headings, onSelect, onMove }) {
   return (
     <aside className="editor-listview">
       <div className="editor-sidebar-tabs" style={{ marginBottom: 8 }}>
-        <button type="button" className={`editor-sidebar-tab ${tab === 'list' ? 'is-active' : ''}`} onClick={() => setTab('list')}>
+        <button
+          type="button"
+          className={`editor-sidebar-tab ${tab === 'list' ? 'is-active' : ''}`}
+          onClick={() => setTab('list')}
+        >
           List View
         </button>
-        <button type="button" className={`editor-sidebar-tab ${tab === 'outline' ? 'is-active' : ''}`} onClick={() => setTab('outline')}>
+        <button
+          type="button"
+          className={`editor-sidebar-tab ${tab === 'outline' ? 'is-active' : ''}`}
+          onClick={() => setTab('outline')}
+        >
           Outline
         </button>
       </div>
@@ -1026,13 +1095,28 @@ function ListView({ body, selected, words, headings, onSelect, onMove }) {
             >
               <Icon name={blockMeta(block.type).icon} size={24} />
               <span className="label">
-                {plainText(block.text) || block.items?.[0] || block.caption || blockMeta(block.type).title}
+                {plainText(block.text) ||
+                  block.items?.[0] ||
+                  block.caption ||
+                  blockMeta(block.type).title}
               </span>
             </button>
-            <button type="button" className="editor-icon-button" style={{ width: 24, height: 24 }} aria-label="Move up" onClick={() => onMove(index, -1)}>
+            <button
+              type="button"
+              className="editor-icon-button"
+              style={{ width: 24, height: 24 }}
+              aria-label="Move up"
+              onClick={() => onMove(index, -1)}
+            >
               <Icon name="arrowUp" size={14} />
             </button>
-            <button type="button" className="editor-icon-button" style={{ width: 24, height: 24 }} aria-label="Move down" onClick={() => onMove(index, 1)}>
+            <button
+              type="button"
+              className="editor-icon-button"
+              style={{ width: 24, height: 24 }}
+              aria-label="Move down"
+              onClick={() => onMove(index, 1)}
+            >
               <Icon name="arrowDown" size={14} />
             </button>
           </div>
@@ -1078,21 +1162,42 @@ function ListView({ body, selected, words, headings, onSelect, onMove }) {
 
 /* ----------------------------- block toolbar ------------------------------ */
 
-function BlockToolbar({ block, canFormat, onTransform, onFormat, onLink, onDuplicate, onInsertAfter, onRemove }) {
+function BlockToolbar({
+  block,
+  canFormat,
+  onTransform,
+  onFormat,
+  onLink,
+  onDuplicate,
+  onInsertAfter,
+  onRemove,
+}) {
   const [open, setOpen] = useState('')
   const ref = useDismissable(() => setOpen(''))
   const meta = blockMeta(block.type)
 
   return (
-    <div className="editor-block-toolbar" ref={ref} onMouseDown={(event) => event.stopPropagation()} role="toolbar" aria-label="Block tools">
+    <div
+      className="editor-block-toolbar"
+      ref={ref}
+      onMouseDown={(event) => event.stopPropagation()}
+      role="toolbar"
+      aria-label="Block tools"
+    >
       <div style={{ position: 'relative' }}>
-        <button type="button" aria-label={`Change block type; currently ${meta.title}`} onClick={() => setOpen(open === 'type' ? '' : 'type')}>
+        <button
+          type="button"
+          aria-label={`Change block type; currently ${meta.title}`}
+          onClick={() => setOpen(open === 'type' ? '' : 'type')}
+        >
           <Icon name={meta.icon} size={24} />
         </button>
         {open === 'type' && (
           <div className="editor-dropdown" style={{ left: 0, right: 'auto', minWidth: 200 }}>
             <div className="editor-dropdown-heading">Transform to</div>
-            {BLOCK_LIBRARY.filter((entry) => entry.category === 'text' || entry.name === block.type).map((entry) => (
+            {BLOCK_LIBRARY.filter(
+              (entry) => entry.category === 'text' || entry.name === block.type,
+            ).map((entry) => (
               <button
                 key={entry.name}
                 type="button"
@@ -1115,16 +1220,36 @@ function BlockToolbar({ block, canFormat, onTransform, onFormat, onLink, onDupli
       {canFormat && (
         <>
           <span className="sep" />
-          <button type="button" aria-label="Bold" style={{ fontWeight: 700 }} onClick={() => onFormat('bold')}>
+          <button
+            type="button"
+            aria-label="Bold"
+            style={{ fontWeight: 700 }}
+            onClick={() => onFormat('bold')}
+          >
             B
           </button>
-          <button type="button" aria-label="Italic" style={{ fontStyle: 'italic', fontFamily: 'Georgia, serif' }} onClick={() => onFormat('italic')}>
+          <button
+            type="button"
+            aria-label="Italic"
+            style={{ fontStyle: 'italic', fontFamily: 'Georgia, serif' }}
+            onClick={() => onFormat('italic')}
+          >
             I
           </button>
-          <button type="button" aria-label="Strikethrough" style={{ textDecoration: 'line-through' }} onClick={() => onFormat('strike')}>
+          <button
+            type="button"
+            aria-label="Strikethrough"
+            style={{ textDecoration: 'line-through' }}
+            onClick={() => onFormat('strike')}
+          >
             S
           </button>
-          <button type="button" aria-label="Inline code" style={{ fontFamily: 'monospace' }} onClick={() => onFormat('code')}>
+          <button
+            type="button"
+            aria-label="Inline code"
+            style={{ fontFamily: 'monospace' }}
+            onClick={() => onFormat('code')}
+          >
             {'</>'}
           </button>
           <button type="button" aria-label="Link" onClick={onLink}>
@@ -1135,7 +1260,11 @@ function BlockToolbar({ block, canFormat, onTransform, onFormat, onLink, onDupli
 
       <span className="sep" />
       <div style={{ position: 'relative' }}>
-        <button type="button" aria-label="More options" onClick={() => setOpen(open === 'more' ? '' : 'more')}>
+        <button
+          type="button"
+          aria-label="More options"
+          onClick={() => setOpen(open === 'more' ? '' : 'more')}
+        >
           <Icon name="more" size={24} />
         </button>
         {open === 'more' && (
@@ -1181,7 +1310,8 @@ function BlockToolbar({ block, canFormat, onTransform, onFormat, onLink, onDupli
 function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, onRestore }) {
   const categories = useQuery({
     queryKey: ['admin', 'taxonomy', 'blog-category'],
-    queryFn: async () => (await api.get('/admin/taxonomy', { params: { taxonomy: 'blog-category' } })).data,
+    queryFn: async () =>
+      (await api.get('/admin/taxonomy', { params: { taxonomy: 'blog-category' } })).data,
   })
   const tags = useQuery({
     queryKey: ['admin', 'taxonomy', 'tag'],
@@ -1227,7 +1357,11 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
         {post.visibility === 'Password' && (
           <label className="editor-field">
             <span>Password</span>
-            <input type="text" value={post.password || ''} onChange={(event) => onField('password', event.target.value)} />
+            <input
+              type="text"
+              value={post.password || ''}
+              onChange={(event) => onField('password', event.target.value)}
+            />
           </label>
         )}
         <label className="editor-field">
@@ -1235,13 +1369,24 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
           <input
             type="datetime-local"
             value={toLocalInput(post.publishedAt)}
-            onChange={(event) => onField('publishedAt', event.target.value ? new Date(event.target.value).toISOString() : null)}
+            onChange={(event) =>
+              onField(
+                'publishedAt',
+                event.target.value ? new Date(event.target.value).toISOString() : null,
+              )
+            }
           />
         </label>
-        {scheduled && <p className="editor-hint">This post goes live automatically at the time above.</p>}
+        {scheduled && (
+          <p className="editor-hint">This post goes live automatically at the time above.</p>
+        )}
         <label className="editor-field">
           <span>URL</span>
-          <input type="text" value={post.slug || ''} onChange={(event) => onField('slug', event.target.value)} />
+          <input
+            type="text"
+            value={post.slug || ''}
+            onChange={(event) => onField('slug', event.target.value)}
+          />
         </label>
         <p className="editor-hint">/blog/{post.slug || 'post-url'}</p>
         <label className="editor-field">
@@ -1265,7 +1410,12 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
           </button>
         </div>
         {post._id && (
-          <button type="button" className="wp-button-link wp-button-link-delete" style={{ textAlign: 'left' }} onClick={onTrash}>
+          <button
+            type="button"
+            className="wp-button-link wp-button-link-delete"
+            style={{ textAlign: 'left' }}
+            onClick={onTrash}
+          >
             Move to trash
           </button>
         )}
@@ -1282,13 +1432,21 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
               <button type="button" className="wp-button wp-button-small" onClick={onOpenMedia}>
                 Replace
               </button>
-              <button type="button" className="wp-button-link wp-button-link-delete" onClick={() => onField('image', '')}>
+              <button
+                type="button"
+                className="wp-button-link wp-button-link-delete"
+                onClick={() => onField('image', '')}
+              >
                 Remove
               </button>
             </div>
             <label className="editor-field">
               <span>Alt text</span>
-              <input type="text" value={post.imageAlt || ''} onChange={(event) => onField('imageAlt', event.target.value)} />
+              <input
+                type="text"
+                value={post.imageAlt || ''}
+                onChange={(event) => onField('imageAlt', event.target.value)}
+              />
             </label>
           </>
         ) : (
@@ -1299,7 +1457,11 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
             <p className="editor-hint">Without one, the article uses its gradient cover.</p>
             <label className="editor-field">
               <span>Cover label</span>
-              <input type="text" value={post.heroLabel || ''} onChange={(event) => onField('heroLabel', event.target.value)} />
+              <input
+                type="text"
+                value={post.heroLabel || ''}
+                onChange={(event) => onField('heroLabel', event.target.value)}
+              />
             </label>
           </>
         )}
@@ -1309,7 +1471,14 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
         <textarea
           rows={4}
           className="editor-field"
-          style={{ width: '100%', border: '1px solid #949494', borderRadius: 2, padding: 6, fontFamily: 'inherit', fontSize: 13 }}
+          style={{
+            width: '100%',
+            border: '1px solid #949494',
+            borderRadius: 2,
+            padding: 6,
+            fontFamily: 'inherit',
+            fontSize: 13,
+          }}
           value={post.excerpt || ''}
           placeholder="Write an excerpt (optional)"
           onChange={(event) => onField('excerpt', event.target.value)}
@@ -1345,7 +1514,9 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
               {term.name}
             </label>
           ))}
-          {!categories.data?.items?.length && <p className="editor-hint">No categories yet — add one on the Categories screen.</p>}
+          {!categories.data?.items?.length && (
+            <p className="editor-hint">No categories yet — add one on the Categories screen.</p>
+          )}
         </div>
       </Panel>
 
@@ -1354,7 +1525,16 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
           {(post.tags || []).map((tag) => (
             <span key={tag} className="editor-token">
               {tag}
-              <button type="button" aria-label={`Remove ${tag}`} onClick={() => onField('tags', post.tags.filter((t) => t !== tag))}>
+              <button
+                type="button"
+                aria-label={`Remove ${tag}`}
+                onClick={() =>
+                  onField(
+                    'tags',
+                    post.tags.filter((t) => t !== tag),
+                  )
+                }
+              >
                 ×
               </button>
             </span>
@@ -1385,20 +1565,36 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
       <Panel title="SEO">
         <label className="editor-field">
           <span>Focus keyword</span>
-          <input type="text" value={post.seo?.focusKeyword || ''} onChange={(event) => onSeo('focusKeyword', event.target.value)} />
+          <input
+            type="text"
+            value={post.seo?.focusKeyword || ''}
+            onChange={(event) => onSeo('focusKeyword', event.target.value)}
+          />
         </label>
         <label className="editor-field">
           <span>SEO title</span>
-          <input type="text" value={post.seo?.metaTitle || ''} onChange={(event) => onSeo('metaTitle', event.target.value)} />
+          <input
+            type="text"
+            value={post.seo?.metaTitle || ''}
+            onChange={(event) => onSeo('metaTitle', event.target.value)}
+          />
         </label>
         <label className="editor-field">
           <span>Meta description</span>
-          <textarea rows={3} value={post.seo?.metaDescription || ''} onChange={(event) => onSeo('metaDescription', event.target.value)} />
+          <textarea
+            rows={3}
+            value={post.seo?.metaDescription || ''}
+            onChange={(event) => onSeo('metaDescription', event.target.value)}
+          />
         </label>
         <p className="editor-hint">{(post.seo?.metaDescription || '').length}/160 characters</p>
         <label className="editor-field">
           <span>Canonical URL</span>
-          <input type="url" value={post.seo?.canonicalUrl || ''} onChange={(event) => onSeo('canonicalUrl', event.target.value)} />
+          <input
+            type="url"
+            value={post.seo?.canonicalUrl || ''}
+            onChange={(event) => onSeo('canonicalUrl', event.target.value)}
+          />
         </label>
         <div className="editor-row">
           <span>Discourage search engines</span>
@@ -1425,7 +1621,12 @@ function PostSettings({ post, words, now, onField, onSeo, onOpenMedia, onTrash, 
                   {revision.autosave ? ' · autosave' : ''}
                 </span>
               </span>
-              <button type="button" className="editor-row-button" style={{ color: '#3858e9' }} onClick={() => onRestore(revision._id)}>
+              <button
+                type="button"
+                className="editor-row-button"
+                style={{ color: '#3858e9' }}
+                onClick={() => onRestore(revision._id)}
+              >
                 Restore
               </button>
             </div>
@@ -1470,7 +1671,12 @@ function Panel({ title, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="editor-panel">
-      <button type="button" className="editor-panel-title" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button
+        type="button"
+        className="editor-panel-title"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
         {title}
         <Icon name={open ? 'chevronUp' : 'chevronDown'} size={20} />
       </button>
@@ -1487,7 +1693,13 @@ function PublishPanel({ mode, post, saving, now, onClose, onPublish, onField, on
     const url = `${window.location.origin}/blog/${post.slug}`
     return (
       <aside className="editor-publish-panel">
-        <button type="button" className="editor-icon-button" style={{ marginLeft: 'auto' }} aria-label="Close panel" onClick={onClose}>
+        <button
+          type="button"
+          className="editor-icon-button"
+          style={{ marginLeft: 'auto' }}
+          aria-label="Close panel"
+          onClick={onClose}
+        >
           <Icon name="close" size={24} />
         </button>
         <h3>{scheduled ? 'Post scheduled.' : 'Post published.'} 🎉</h3>
@@ -1513,7 +1725,12 @@ function PublishPanel({ mode, post, saving, now, onClose, onPublish, onField, on
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <a className="wp-button wp-button-primary" href={`/blog/${post.slug}`} target="_blank" rel="noreferrer">
+          <a
+            className="wp-button wp-button-primary"
+            href={`/blog/${post.slug}`}
+            target="_blank"
+            rel="noreferrer"
+          >
             View Post
           </a>
           <button type="button" className="wp-button" onClick={onClose}>
@@ -1528,7 +1745,12 @@ function PublishPanel({ mode, post, saving, now, onClose, onPublish, onField, on
     <aside className="editor-publish-panel">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h3 style={{ margin: 0 }}>Are you ready to publish?</h3>
-        <button type="button" className="editor-icon-button" aria-label="Close panel" onClick={onClose}>
+        <button
+          type="button"
+          className="editor-icon-button"
+          aria-label="Close panel"
+          onClick={onClose}
+        >
           <Icon name="close" size={24} />
         </button>
       </div>
@@ -1554,7 +1776,12 @@ function PublishPanel({ mode, post, saving, now, onClose, onPublish, onField, on
           <input
             type="datetime-local"
             value={toLocalInput(post.publishedAt)}
-            onChange={(event) => onField('publishedAt', event.target.value ? new Date(event.target.value).toISOString() : null)}
+            onChange={(event) =>
+              onField(
+                'publishedAt',
+                event.target.value ? new Date(event.target.value).toISOString() : null,
+              )
+            }
           />
         </label>
         <div className="editor-row" style={{ marginTop: 12 }}>

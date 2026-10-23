@@ -48,8 +48,15 @@ export default function AdminDashboard() {
 
   if (isPending) return <Loading />
 
-  const { kpis, series, recentTransactions, recentBroadcasts, salesBreakdown, thisMonth, overview } =
-    data
+  const {
+    kpis,
+    series,
+    recentTransactions,
+    recentBroadcasts,
+    salesBreakdown,
+    thisMonth,
+    overview,
+  } = data
 
   /** `null` when there is no prior period to compare against — no delta shown. */
   const pct = (v) => (typeof v === 'number' ? `${v >= 0 ? '+' : ''}${v}%` : undefined)

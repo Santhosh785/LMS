@@ -101,21 +101,30 @@ export default function Tools() {
           </div>
           <div className="wp-postbox-body">
             <p style={{ marginTop: 0 }}>
-              Download a JSON file with your posts, their blocks, taxonomy and SEO fields. Keep it as a backup, or
-              import it into another Growth Scholar install.
+              Download a JSON file with your posts, their blocks, taxonomy and SEO fields. Keep it
+              as a backup, or import it into another Growth Scholar install.
             </p>
             <table className="wp-form-table">
               <tbody>
                 <tr>
                   <th scope="row">Choose what to export</th>
                   <td>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <label
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}
+                    >
                       <input type="radio" checked={status === ''} onChange={() => setStatus('')} />
                       All posts (everything except the Trash)
                     </label>
                     {['Published', 'Draft', 'Scheduled'].map((value) => (
-                      <label key={value} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <input type="radio" checked={status === value} onChange={() => setStatus(value)} />
+                      <label
+                        key={value}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}
+                      >
+                        <input
+                          type="radio"
+                          checked={status === value}
+                          onChange={() => setStatus(value)}
+                        />
                         {value} posts only
                       </label>
                     ))}
@@ -123,7 +132,12 @@ export default function Tools() {
                 </tr>
               </tbody>
             </table>
-            <button type="button" className="wp-button wp-button-primary" onClick={download} disabled={exporting}>
+            <button
+              type="button"
+              className="wp-button wp-button-primary"
+              onClick={download}
+              disabled={exporting}
+            >
               {exporting ? 'Preparing…' : 'Download Export File'}
             </button>
             {exporting && <Spinner />}
@@ -148,7 +162,11 @@ export default function Tools() {
             >
               <Icon name="upload" size={32} style={{ fill: '#8c8f94' }} />
               <p style={{ margin: 0 }}>Drop a .json export file here</p>
-              <button type="button" className="wp-button" onClick={() => fileInput.current?.click()}>
+              <button
+                type="button"
+                className="wp-button"
+                onClick={() => fileInput.current?.click()}
+              >
                 Choose File
               </button>
               <input
@@ -176,21 +194,45 @@ export default function Tools() {
                     <tr>
                       <th scope="row">Existing posts</th>
                       <td>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                          <input type="radio" checked={mode === 'overwrite'} onChange={() => setMode('overwrite')} />
+                        <label
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}
+                        >
+                          <input
+                            type="radio"
+                            checked={mode === 'overwrite'}
+                            onChange={() => setMode('overwrite')}
+                          />
                           Update a post when its slug already exists
                         </label>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <input type="radio" checked={mode === 'skip'} onChange={() => setMode('skip')} />
+                          <input
+                            type="radio"
+                            checked={mode === 'skip'}
+                            onChange={() => setMode('skip')}
+                          />
                           Skip it and keep what is here
                         </label>
                       </td>
                     </tr>
                   </tbody>
                 </table>
-                <ul style={{ margin: '0 0 16px', maxHeight: 180, overflowY: 'auto', border: '1px solid #dcdcde' }}>
+                <ul
+                  style={{
+                    margin: '0 0 16px',
+                    maxHeight: 180,
+                    overflowY: 'auto',
+                    border: '1px solid #dcdcde',
+                  }}
+                >
                   {preview.posts.slice(0, 50).map((post, index) => (
-                    <li key={index} style={{ padding: '6px 10px', borderBottom: '1px solid #f0f0f1', fontSize: 13 }}>
+                    <li
+                      key={index}
+                      style={{
+                        padding: '6px 10px',
+                        borderBottom: '1px solid #f0f0f1',
+                        fontSize: 13,
+                      }}
+                    >
                       <strong>{post.title || '(no title)'}</strong>{' '}
                       <span style={{ color: '#646970' }}>— {post.status || 'Draft'}</span>
                     </li>

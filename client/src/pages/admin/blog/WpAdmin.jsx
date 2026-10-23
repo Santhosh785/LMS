@@ -40,7 +40,13 @@ const MENU = [
       { label: 'Add New Media File', to: '/admin/blog/media/new' },
     ],
   },
-  { key: 'comments', label: 'Comments', icon: 'comments', to: '/admin/blog/comments', badge: 'comments' },
+  {
+    key: 'comments',
+    label: 'Comments',
+    icon: 'comments',
+    to: '/admin/blog/comments',
+    badge: 'comments',
+  },
   {
     key: 'tools',
     label: 'Tools',
@@ -94,7 +100,8 @@ export default function WpAdmin() {
   // The comment bubble is the one number wp-admin keeps live in its chrome.
   const pending = useQuery({
     queryKey: ['admin', 'blog', 'pending-comments'],
-    queryFn: async () => (await api.get('/admin/blog/comments', { params: { status: 'Pending', perPage: 1 } })).data,
+    queryFn: async () =>
+      (await api.get('/admin/blog/comments', { params: { status: 'Pending', perPage: 1 } })).data,
     refetchInterval: 60000,
     staleTime: 30000,
   })
@@ -112,7 +119,12 @@ export default function WpAdmin() {
   return (
     <div className="wp-admin">
       <div className="wp-adminbar">
-        <AdminBarMenu id="logo" openId={openBar} setOpenId={setOpenBar} label={<Icon name="wordpress" size={20} />}>
+        <AdminBarMenu
+          id="logo"
+          openId={openBar}
+          setOpenId={setOpenBar}
+          label={<Icon name="wordpress" size={20} />}
+        >
           {(close) => (
             <>
               <Link to="/admin/blog/dashboard" onClick={close}>
@@ -154,7 +166,11 @@ export default function WpAdmin() {
           )}
         </AdminBarMenu>
 
-        <Link to="/admin/blog/comments" className="wp-adminbar-item" title={`${pendingCount} comments awaiting moderation`}>
+        <Link
+          to="/admin/blog/comments"
+          className="wp-adminbar-item"
+          title={`${pendingCount} comments awaiting moderation`}
+        >
           <Icon name="comments" size={16} />
           <span className={pendingCount ? 'wp-adminbar-count' : ''}>{pendingCount || 0}</span>
         </Link>
@@ -202,7 +218,13 @@ export default function WpAdmin() {
               </Link>
               <button
                 type="button"
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '5px 12px', color: '#c3c4c7' }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '5px 12px',
+                  color: '#c3c4c7',
+                }}
                 onClick={() => {
                   close()
                   logout()
@@ -238,7 +260,9 @@ export default function WpAdmin() {
                   {item.badge === 'comments' && pendingCount > 0 && (
                     <span className="wp-adminbar-count">{pendingCount}</span>
                   )}
-                  {item.outside && !folded && <Icon name="external" size={14} style={{ opacity: 0.5 }} />}
+                  {item.outside && !folded && (
+                    <Icon name="external" size={14} style={{ opacity: 0.5 }} />
+                  )}
                 </Link>
                 {item.children && (current || openMenu === item.key) && (
                   <div className="wp-submenu">
@@ -257,7 +281,12 @@ export default function WpAdmin() {
               </div>
             )
           })}
-          <button type="button" className="wp-collapse" onClick={() => setFolded(!folded)} aria-expanded={!folded}>
+          <button
+            type="button"
+            className="wp-collapse"
+            onClick={() => setFolded(!folded)}
+            aria-expanded={!folded}
+          >
             <Icon name={folded ? 'chevronRight' : 'chevronLeft'} size={20} />
             <span className="wp-menu-label">Collapse menu</span>
           </button>

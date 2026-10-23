@@ -11,7 +11,13 @@ import { fileSize, fmtDate, Icon, Spinner, WpModal } from './wp.jsx'
  * same modal, and an editor who has learnt it once should not meet a second,
  * slightly different one.
  */
-export default function MediaFrame({ open, title = 'Select or Upload Media', buttonLabel = 'Select', onClose, onSelect }) {
+export default function MediaFrame({
+  open,
+  title = 'Select or Upload Media',
+  buttonLabel = 'Select',
+  onClose,
+  onSelect,
+}) {
   const queryClient = useQueryClient()
   const fileInput = useRef(null)
   const [tab, setTab] = useState('library')
@@ -24,7 +30,11 @@ export default function MediaFrame({ open, title = 'Select or Upload Media', but
   const library = useQuery({
     queryKey: ['admin', 'media', { q: search, m: month }],
     queryFn: async () =>
-      (await api.get('/admin/media', { params: { ...(search ? { q: search } : {}), ...(month ? { m: month } : {}) } })).data,
+      (
+        await api.get('/admin/media', {
+          params: { ...(search ? { q: search } : {}), ...(month ? { m: month } : {}) },
+        })
+      ).data,
     enabled: open,
   })
 
@@ -147,7 +157,11 @@ export default function MediaFrame({ open, title = 'Select or Upload Media', but
           <Icon name="upload" size={36} style={{ fill: '#8c8f94' }} />
           <h2 style={{ fontSize: 20, fontWeight: 400 }}>Drop files to upload</h2>
           <p style={{ color: '#646970', margin: 0 }}>or</p>
-          <button type="button" className="wp-button wp-button-large" onClick={() => fileInput.current?.click()}>
+          <button
+            type="button"
+            className="wp-button wp-button-large"
+            onClick={() => fileInput.current?.click()}
+          >
             Select Files
           </button>
           <p style={{ color: '#646970', fontSize: 12, margin: 0 }}>
@@ -159,7 +173,11 @@ export default function MediaFrame({ open, title = 'Select or Upload Media', but
         <div className="wp-media-frame-body">
           <div className="wp-media-frame-content">
             <div className="wp-media-toolbar">
-              <select value={month} onChange={(event) => setMonth(event.target.value)} aria-label="Filter by date">
+              <select
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+                aria-label="Filter by date"
+              >
                 <option value="">All dates</option>
                 {(library.data?.months || []).map((entry) => (
                   <option key={entry.key} value={entry.key}>
@@ -209,12 +227,23 @@ export default function MediaFrame({ open, title = 'Select or Upload Media', but
           </div>
 
           <aside className="wp-media-sidebar">
-            <h2 style={{ fontSize: 14, fontWeight: 600, padding: '12px 0', borderBottom: '1px solid #ddd' }}>
+            <h2
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                padding: '12px 0',
+                borderBottom: '1px solid #ddd',
+              }}
+            >
               Attachment Details
             </h2>
             {selected ? (
               <div className="wp-attachment-details" style={{ paddingTop: 12 }}>
-                <img src={selected.url} alt="" style={{ maxHeight: 120, objectFit: 'contain', background: '#fff' }} />
+                <img
+                  src={selected.url}
+                  alt=""
+                  style={{ maxHeight: 120, objectFit: 'contain', background: '#fff' }}
+                />
                 <p style={{ margin: 0, wordBreak: 'break-all' }}>
                   <strong style={{ color: '#1d2327' }}>{selected.originalName}</strong>
                   <br />
@@ -263,7 +292,9 @@ export default function MediaFrame({ open, title = 'Select or Upload Media', but
                   <textarea
                     rows={2}
                     value={selected.description || ''}
-                    onChange={(event) => setSelected({ ...selected, description: event.target.value })}
+                    onChange={(event) =>
+                      setSelected({ ...selected, description: event.target.value })
+                    }
                   />
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 16 }}>

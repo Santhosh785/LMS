@@ -141,11 +141,7 @@ function Field({ field, value, error, onChange }) {
     return (
       <div className={cls}>
         {field.label && <label htmlFor={id}>{field.label}</label>}
-        <select
-          id={id}
-          value={value || ''}
-          onChange={(e) => onChange(field.name, e.target.value)}
-        >
+        <select id={id} value={value || ''} onChange={(e) => onChange(field.name, e.target.value)}>
           <option value="">{field.placeholder || 'Select'}</option>
           {field.options.map((o) => (
             <option key={o.value} value={o.value}>
@@ -351,13 +347,13 @@ export default function Apply() {
       <main className="pa-shell">
         <div className="pa-top">
           <p className="pa-breadcrumb">
-            <Link to="/">Home</Link> → <Link to="/programs/complete-growth-marketing">Flagship</Link>{' '}
-            → Apply
+            <Link to="/">Home</Link> →{' '}
+            <Link to="/programs/complete-growth-marketing">Flagship</Link> → Apply
           </p>
           <h1>Apply for the Flagship cohort</h1>
           <p className="lede">
-            Complete Growth Marketing · 12 weeks (owners) or 14 weeks (freelancers) · 10 seats.
-            This application covers track fit, schedule, and scholarship requests. No payment until
+            Complete Growth Marketing · 12 weeks (owners) or 14 weeks (freelancers) · 10 seats. This
+            application covers track fit, schedule, and scholarship requests. No payment until
             you’re accepted.
           </p>
           <div className="pa-meta-pills">
@@ -440,11 +436,7 @@ export default function Apply() {
                   </button>
                 )}
                 <button className="pa-btn pa-btn-primary" type="submit" disabled={submit.isPending}>
-                  {isLast
-                    ? submit.isPending
-                      ? 'Submitting…'
-                      : 'Submit application'
-                    : 'Continue'}
+                  {isLast ? (submit.isPending ? 'Submitting…' : 'Submit application') : 'Continue'}
                 </button>
               </div>
             </form>

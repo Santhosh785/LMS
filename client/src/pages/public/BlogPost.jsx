@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
-import { Button, cn, Loading, TextAreaField, TextField, useToast } from '../../components/ui/index.jsx'
+import {
+  Button,
+  cn,
+  Loading,
+  TextAreaField,
+  TextField,
+  useToast,
+} from '../../components/ui/index.jsx'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import { AskAiMetaBar, AskAiRail } from '../../components/public/AskAiBar.jsx'
 import CoverArt from '../../components/CoverArt.jsx'
@@ -44,7 +51,11 @@ function Block({ block }) {
     case 'ul':
       return (
         <>
-          {block.text && <p className="mt-4 text-[0.98rem] leading-relaxed text-muted">{renderRich(block.text)}</p>}
+          {block.text && (
+            <p className="mt-4 text-[0.98rem] leading-relaxed text-muted">
+              {renderRich(block.text)}
+            </p>
+          )}
           <ul className="mt-4 grid gap-2 text-[0.98rem] leading-relaxed text-muted">
             {block.items?.map((item, i) => (
               <li key={i} className="flex gap-2">
@@ -58,7 +69,11 @@ function Block({ block }) {
     case 'ol':
       return (
         <>
-          {block.text && <p className="mt-4 text-[0.98rem] leading-relaxed text-muted">{renderRich(block.text)}</p>}
+          {block.text && (
+            <p className="mt-4 text-[0.98rem] leading-relaxed text-muted">
+              {renderRich(block.text)}
+            </p>
+          )}
           <ol className="mt-4 grid list-decimal gap-2 pl-5 text-[0.98rem] leading-relaxed text-muted">
             {block.items?.map((item, i) => (
               <li key={i}>{renderRich(item)}</li>
@@ -71,7 +86,9 @@ function Block({ block }) {
         <blockquote className="mt-6 border-l-4 border-accent bg-white px-5 py-4 text-[1.02rem] italic text-brand-deep">
           {renderRich(block.text)}
           {block.citation && (
-            <cite className="mt-2 block text-[0.82rem] not-italic text-muted">— {block.citation}</cite>
+            <cite className="mt-2 block text-[0.82rem] not-italic text-muted">
+              — {block.citation}
+            </cite>
           )}
         </blockquote>
       )
@@ -113,7 +130,9 @@ function Block({ block }) {
             image
           )}
           {block.caption && (
-            <figcaption className="mt-2 text-center text-[0.8rem] text-muted">{renderRich(block.caption)}</figcaption>
+            <figcaption className="mt-2 text-center text-[0.8rem] text-muted">
+              {renderRich(block.caption)}
+            </figcaption>
           )}
         </figure>
       )
@@ -122,7 +141,9 @@ function Block({ block }) {
       return (
         <pre className="mt-6 overflow-x-auto rounded-lg2 bg-brand-deep px-5 py-4 text-[0.85rem] leading-relaxed text-white">
           {block.language && (
-            <span className="mb-2 block text-[0.7rem] uppercase tracking-wider text-accent">{block.language}</span>
+            <span className="mb-2 block text-[0.7rem] uppercase tracking-wider text-accent">
+              {block.language}
+            </span>
           )}
           <code>{block.text}</code>
         </pre>
@@ -158,7 +179,12 @@ function Block({ block }) {
           <table className="w-full border-collapse text-[0.92rem]">
             <tbody>
               {block.rows?.map((row, r) => (
-                <tr key={r} className={r === 0 && block.header ? 'bg-surface-mist font-semibold text-brand-deep' : ''}>
+                <tr
+                  key={r}
+                  className={
+                    r === 0 && block.header ? 'bg-surface-mist font-semibold text-brand-deep' : ''
+                  }
+                >
                   {row.cells?.map((cell, c) => (
                     <td key={c} className="border border-line px-3 py-2 align-top text-muted">
                       {renderRich(cell)}
@@ -171,7 +197,9 @@ function Block({ block }) {
         </div>
       )
     default:
-      return <p className="mt-4 text-[0.98rem] leading-relaxed text-muted">{renderRich(block.text)}</p>
+      return (
+        <p className="mt-4 text-[0.98rem] leading-relaxed text-muted">{renderRich(block.text)}</p>
+      )
   }
 }
 
@@ -207,7 +235,12 @@ function Embed({ block }) {
             aria-label={`Play the ${embed.provider} video`}
           >
             {embed.thumb && (
-              <img src={embed.thumb} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover opacity-70" />
+              <img
+                src={embed.thumb}
+                alt=""
+                loading="lazy"
+                className="absolute inset-0 h-full w-full object-cover opacity-70"
+              />
             )}
             <span className="relative grid h-14 w-14 place-items-center rounded-full bg-white/90 text-[1.1rem] text-brand-deep transition-transform duration-200 ease-gs group-hover:scale-110">
               ▶
@@ -216,7 +249,9 @@ function Embed({ block }) {
         )}
       </div>
       {block.caption && (
-        <figcaption className="mt-2 text-center text-[0.8rem] text-muted">{renderRich(block.caption)}</figcaption>
+        <figcaption className="mt-2 text-center text-[0.8rem] text-muted">
+          {renderRich(block.caption)}
+        </figcaption>
       )}
     </figure>
   )
@@ -375,7 +410,10 @@ export default function BlogPost() {
                 {copied ? '✓' : '🔗'}
               </button>
               {[
-                { label: 'WA', href: `https://wa.me/?text=${encodeURIComponent(window.location.href)}` },
+                {
+                  label: 'WA',
+                  href: `https://wa.me/?text=${encodeURIComponent(window.location.href)}`,
+                },
                 {
                   label: 'in',
                   href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`,
@@ -427,10 +465,15 @@ export default function BlogPost() {
                 {comments.data?.items?.length > 0 ? (
                   <div className="mt-5 grid gap-4">
                     {comments.data.items.map((entry) => (
-                      <article key={entry._id} className="rounded-lg2 border border-line bg-white p-4">
+                      <article
+                        key={entry._id}
+                        className="rounded-lg2 border border-line bg-white p-4"
+                      >
                         <p className="text-[0.85rem] font-semibold text-brand-deep">{entry.name}</p>
                         <p className="mt-1 text-[0.78rem] text-muted">{fmt(entry.createdAt)}</p>
-                        <p className="mt-2 whitespace-pre-wrap text-[0.92rem] leading-relaxed text-muted">{entry.body}</p>
+                        <p className="mt-2 whitespace-pre-wrap text-[0.92rem] leading-relaxed text-muted">
+                          {entry.body}
+                        </p>
                       </article>
                     ))}
                   </div>
@@ -442,7 +485,9 @@ export default function BlogPost() {
                   onSubmit={(event) => {
                     event.preventDefault()
                     const form = event.currentTarget
-                    comment.mutate(Object.fromEntries(new FormData(form)), { onSuccess: () => form.reset() })
+                    comment.mutate(Object.fromEntries(new FormData(form)), {
+                      onSuccess: () => form.reset(),
+                    })
                   }}
                 >
                   <h3 className="text-[1rem]">Leave a comment</h3>
@@ -451,7 +496,9 @@ export default function BlogPost() {
                     <TextField name="email" type="email" label="Email" required />
                   </div>
                   <TextAreaField name="body" label="Comment" rows={4} required />
-                  <p className="text-[0.75rem] text-muted">Comments are reviewed before they appear.</p>
+                  <p className="text-[0.75rem] text-muted">
+                    Comments are reviewed before they appear.
+                  </p>
                   <Button type="submit" size="sm" disabled={comment.isPending}>
                     {comment.isPending ? 'Sending…' : 'Submit comment'}
                   </Button>

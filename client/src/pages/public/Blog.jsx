@@ -20,7 +20,9 @@ const ALL_POSTS = 'Latest Articles'
 const ROTATE_MS = 8000
 
 const dateLabel = (d) =>
-  d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+  d
+    ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : ''
 
 /** The drop paints thumbnails with `.thumb.seo`; the database stores `feat-seo`. */
 const heroTone = (heroClass) => (heroClass || '').replace(/^(feat|thumb)-/, '')

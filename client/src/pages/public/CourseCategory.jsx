@@ -30,7 +30,11 @@ const readList = (params, key) =>
 
 /** The tabs over the starter carousel; each is a different ordering. */
 const STARTER_TABS = [
-  { key: 'popular', label: 'Most popular', sort: (a, b) => (b.popularity || 0) - (a.popularity || 0) },
+  {
+    key: 'popular',
+    label: 'Most popular',
+    sort: (a, b) => (b.popularity || 0) - (a.popularity || 0),
+  },
   { key: 'new', label: 'New', sort: (a, b) => (b.newestRank || 0) - (a.newestRank || 0) },
   {
     key: 'beginner',
@@ -428,7 +432,14 @@ export default function CourseCategory() {
                     {total === 0 ? 'No courses found' : `Showing ${items.length} of ${total}`}
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '0.65rem',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  }}
+                >
                   <button
                     className="cat-filter-toggle"
                     type="button"

@@ -71,11 +71,16 @@ export default function Comments() {
   const fail = (err) => notices.notify(apiError(err), 'error')
 
   const moderate = useMutation({
-    mutationFn: async ({ id, ...patch }) => (await api.put(`/admin/blog/comments/${id}`, patch)).data,
+    mutationFn: async ({ id, ...patch }) =>
+      (await api.put(`/admin/blog/comments/${id}`, patch)).data,
     onSuccess: (_result, variables) => {
       refresh()
       setEditing(null)
-      notices.notify(variables.status ? `Comment marked as ${variables.status.toLowerCase()}.` : 'Comment updated.')
+      notices.notify(
+        variables.status
+          ? `Comment marked as ${variables.status.toLowerCase()}.`
+          : 'Comment updated.',
+      )
     },
     onError: fail,
   })
@@ -90,7 +95,8 @@ export default function Comments() {
     onError: fail,
   })
   const reply = useMutation({
-    mutationFn: async ({ id, body }) => (await api.post(`/admin/blog/comments/${id}/reply`, { body })).data,
+    mutationFn: async ({ id, body }) =>
+      (await api.post(`/admin/blog/comments/${id}/reply`, { body })).data,
     onSuccess: () => {
       refresh()
       setReplyTo(null)
@@ -103,7 +109,9 @@ export default function Comments() {
     mutationFn: async () => (await api.post('/admin/blog/comments/empty-trash')).data,
     onSuccess: (result) => {
       refresh()
-      notices.notify(`${result.affected} comment${result.affected === 1 ? '' : 's'} permanently deleted.`)
+      notices.notify(
+        `${result.affected} comment${result.affected === 1 ? '' : 's'} permanently deleted.`,
+      )
     },
     onError: fail,
   })
@@ -151,9 +159,9 @@ export default function Comments() {
           <>
             <h5>Moderating comments</h5>
             <p>
-              A new comment waits as <strong>Pending</strong> and is invisible on the public article until you approve
-              it. <strong>Reply</strong> approves the comment it answers, because answering something implies accepting
-              it.
+              A new comment waits as <strong>Pending</strong> and is invisible on the public article
+              until you approve it. <strong>Reply</strong> approves the comment it answers, because
+              answering something implies accepting it.
             </p>
             <h5>Spam and Trash</h5>
             <p>Both are reversible. Only “Delete permanently” removes a comment for good.</p>
@@ -205,7 +213,11 @@ export default function Comments() {
         }}
       >
         <div className="wp-alignleft">
-          <select value={bulkAction} onChange={(event) => setBulkAction(event.target.value)} aria-label="Select bulk action">
+          <select
+            value={bulkAction}
+            onChange={(event) => setBulkAction(event.target.value)}
+            aria-label="Select bulk action"
+          >
             <option value="">Bulk actions</option>
             {inTrash ? (
               <>
@@ -296,7 +308,10 @@ export default function Comments() {
             </tr>
           ) : (
             items.map((comment) => (
-              <tr key={comment._id} style={comment.status === 'Pending' ? { background: '#fcf9e8' } : undefined}>
+              <tr
+                key={comment._id}
+                style={comment.status === 'Pending' ? { background: '#fcf9e8' } : undefined}
+              >
                 <th scope="row" className="check-column">
                   <input
                     type="checkbox"
@@ -304,7 +319,9 @@ export default function Comments() {
                     aria-label={`Select comment by ${comment.name}`}
                     onChange={() =>
                       setSelected((rows) =>
-                        rows.includes(comment._id) ? rows.filter((row) => row !== comment._id) : [...rows, comment._id],
+                        rows.includes(comment._id)
+                          ? rows.filter((row) => row !== comment._id)
+                          : [...rows, comment._id],
                       )
                     }
                   />
@@ -312,7 +329,14 @@ export default function Comments() {
                 <td>
                   <strong>{comment.name}</strong>
                   {comment.byAdmin && <span className="post-state"> — you</span>}
-                  <p style={{ margin: '2px 0 0', fontSize: 13, color: '#646970', wordBreak: 'break-all' }}>
+                  <p
+                    style={{
+                      margin: '2px 0 0',
+                      fontSize: 13,
+                      color: '#646970',
+                      wordBreak: 'break-all',
+                    }}
+                  >
                     {comment.email}
                   </p>
                   {comment.website && (
@@ -324,7 +348,11 @@ export default function Comments() {
                   )}
                 </td>
                 <td>
-                  {comment.parentId && <p style={{ margin: '0 0 4px', color: '#646970', fontSize: 13 }}>In reply to a comment</p>}
+                  {comment.parentId && (
+                    <p style={{ margin: '0 0 4px', color: '#646970', fontSize: 13 }}>
+                      In reply to a comment
+                    </p>
+                  )}
                   {editing?._id === comment._id ? (
                     <div style={{ display: 'grid', gap: 6 }}>
                       <textarea
@@ -337,21 +365,42 @@ export default function Comments() {
                         <button
                           type="button"
                           className="wp-button wp-button-primary wp-button-small"
-                          onClick={() => moderate.mutate({ id: editing._id, body: editing.body, name: editing.name })}
+                          onClick={() =>
+                            moderate.mutate({
+                              id: editing._id,
+                              body: editing.body,
+                              name: editing.name,
+                            })
+                          }
                         >
                           Update
                         </button>
-                        <button type="button" className="wp-button wp-button-small" onClick={() => setEditing(null)}>
+                        <button
+                          type="button"
+                          className="wp-button wp-button-small"
+                          onClick={() => setEditing(null)}
+                        >
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.6 }}>{comment.body}</p>
+                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.6 }}>
+                      {comment.body}
+                    </p>
                   )}
 
                   {replyTo === comment._id && (
-                    <div style={{ display: 'grid', gap: 6, marginTop: 10, padding: 10, background: '#f6f7f7', border: '1px solid #dcdcde' }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 6,
+                        marginTop: 10,
+                        padding: 10,
+                        background: '#f6f7f7',
+                        border: '1px solid #dcdcde',
+                      }}
+                    >
                       <strong style={{ fontSize: 13 }}>Reply to {comment.name}</strong>
                       <textarea
                         rows={3}
@@ -387,29 +436,50 @@ export default function Comments() {
                     actions={
                       inTrash
                         ? [
-                            { label: 'Restore', onClick: () => bulk.mutate({ ids: [comment._id], action: 'restore' }) },
+                            {
+                              label: 'Restore',
+                              onClick: () => bulk.mutate({ ids: [comment._id], action: 'restore' }),
+                            },
                             {
                               label: 'Delete permanently',
                               destructive: true,
                               onClick: () =>
                                 setConfirm({
                                   title: 'Delete permanently',
-                                  message: 'Permanently delete this comment? This cannot be undone.',
+                                  message:
+                                    'Permanently delete this comment? This cannot be undone.',
                                   confirmLabel: 'Delete permanently',
                                   destructive: true,
-                                  onConfirm: () => bulk.mutate({ ids: [comment._id], action: 'delete' }),
+                                  onConfirm: () =>
+                                    bulk.mutate({ ids: [comment._id], action: 'delete' }),
                                 }),
                             },
                           ]
                         : [
                             comment.status === 'Approved'
-                              ? { label: 'Unapprove', onClick: () => moderate.mutate({ id: comment._id, status: 'Pending' }) }
-                              : { label: 'Approve', onClick: () => moderate.mutate({ id: comment._id, status: 'Approved' }) },
+                              ? {
+                                  label: 'Unapprove',
+                                  onClick: () =>
+                                    moderate.mutate({ id: comment._id, status: 'Pending' }),
+                                }
+                              : {
+                                  label: 'Approve',
+                                  onClick: () =>
+                                    moderate.mutate({ id: comment._id, status: 'Approved' }),
+                                },
                             { label: 'Reply', onClick: () => setReplyTo(comment._id) },
                             { label: 'Edit', onClick: () => setEditing({ ...comment }) },
                             comment.status === 'Spam'
-                              ? { label: 'Not spam', onClick: () => moderate.mutate({ id: comment._id, status: 'Pending' }) }
-                              : { label: 'Spam', onClick: () => moderate.mutate({ id: comment._id, status: 'Spam' }) },
+                              ? {
+                                  label: 'Not spam',
+                                  onClick: () =>
+                                    moderate.mutate({ id: comment._id, status: 'Pending' }),
+                                }
+                              : {
+                                  label: 'Spam',
+                                  onClick: () =>
+                                    moderate.mutate({ id: comment._id, status: 'Spam' }),
+                                },
                             {
                               label: 'Trash',
                               destructive: true,
@@ -422,9 +492,16 @@ export default function Comments() {
                 <td className="column-inresponse">
                   {comment.postId ? (
                     <>
-                      <Link to={`/admin/blog/post/${comment.postId._id}`}>{comment.postId.title}</Link>
+                      <Link to={`/admin/blog/post/${comment.postId._id}`}>
+                        {comment.postId.title}
+                      </Link>
                       <p style={{ margin: '2px 0 0' }}>
-                        <a href={`/blog/${comment.postId.slug}`} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>
+                        <a
+                          href={`/blog/${comment.postId.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontSize: 13 }}
+                        >
                           View Post
                         </a>
                       </p>

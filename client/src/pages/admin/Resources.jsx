@@ -35,8 +35,24 @@ const STATUSES = [
 ]
 
 const blank = {
-  playbooks: { title: '', slug: '', tag: '', cardTitle: '', summary: '', deck: '', status: 'Draft' },
-  skills: { title: '', slug: '', category: 'seo', badge: '', icon: '✦', summary: '', status: 'Draft' },
+  playbooks: {
+    title: '',
+    slug: '',
+    tag: '',
+    cardTitle: '',
+    summary: '',
+    deck: '',
+    status: 'Draft',
+  },
+  skills: {
+    title: '',
+    slug: '',
+    category: 'seo',
+    badge: '',
+    icon: '✦',
+    summary: '',
+    status: 'Draft',
+  },
 }
 
 /** "Title :: body" per line — the shape used for both features and sections. */
@@ -109,7 +125,9 @@ export default function Resources() {
     tab === 'playbooks'
       ? { key: 'tag', label: 'Tag' }
       : { key: 'badge', label: 'Category', render: (r) => r.badge || r.category },
-    tab === 'playbooks' ? { key: 'authorName', label: 'Author' } : { key: 'worksWith', label: 'Works with' },
+    tab === 'playbooks'
+      ? { key: 'authorName', label: 'Author' }
+      : { key: 'worksWith', label: 'Works with' },
     { key: 'order', label: 'Order' },
     { key: 'status', label: 'Status', render: (r) => <StatusPill status={r.status} /> },
     {
@@ -144,7 +162,9 @@ export default function Resources() {
             onClick={() => setTab(t.key)}
             className={cn(
               'rounded-full border px-4 py-1.5 text-[0.85rem] font-semibold',
-              tab === t.key ? 'border-brand bg-brand text-white' : 'border-line bg-white text-muted',
+              tab === t.key
+                ? 'border-brand bg-brand text-white'
+                : 'border-line bg-white text-muted',
             )}
           >
             {t.label}
@@ -166,7 +186,9 @@ export default function Resources() {
       <Modal
         open={Boolean(draft)}
         onClose={() => setDraft(null)}
-        title={draft?._id ? `Edit ${draft.title}` : `New ${tab === 'playbooks' ? 'playbook' : 'skill'}`}
+        title={
+          draft?._id ? `Edit ${draft.title}` : `New ${tab === 'playbooks' ? 'playbook' : 'skill'}`
+        }
         width="max-w-3xl"
         footer={
           <>
@@ -222,7 +244,11 @@ export default function Resources() {
             {tab === 'playbooks' ? (
               <>
                 <div className="grid grid-cols-3 gap-4 mx-640:grid-cols-1">
-                  <TextField label="Tag" value={draft.tag || ''} onChange={(e) => field('tag', e.target.value)} />
+                  <TextField
+                    label="Tag"
+                    value={draft.tag || ''}
+                    onChange={(e) => field('tag', e.target.value)}
+                  />
                   <TextField
                     label="Card gradient"
                     value={draft.visualClass || ''}
@@ -235,11 +261,28 @@ export default function Resources() {
                     onChange={(e) => field('heroClass', e.target.value)}
                     hint="e.g. pb-hero-seo"
                   />
-                  <TextField label="Author" value={draft.authorName || ''} onChange={(e) => field('authorName', e.target.value)} />
-                  <TextField label="Author role" value={draft.authorRole || ''} onChange={(e) => field('authorRole', e.target.value)} />
-                  <TextField label="Initials" value={draft.initials || ''} onChange={(e) => field('initials', e.target.value)} />
+                  <TextField
+                    label="Author"
+                    value={draft.authorName || ''}
+                    onChange={(e) => field('authorName', e.target.value)}
+                  />
+                  <TextField
+                    label="Author role"
+                    value={draft.authorRole || ''}
+                    onChange={(e) => field('authorRole', e.target.value)}
+                  />
+                  <TextField
+                    label="Initials"
+                    value={draft.initials || ''}
+                    onChange={(e) => field('initials', e.target.value)}
+                  />
                 </div>
-                <TextAreaField label="Deck" rows={2} value={draft.deck || ''} onChange={(e) => field('deck', e.target.value)} />
+                <TextAreaField
+                  label="Deck"
+                  rows={2}
+                  value={draft.deck || ''}
+                  onChange={(e) => field('deck', e.target.value)}
+                />
                 <TextAreaField
                   label="Proudest achievement"
                   rows={2}
@@ -261,7 +304,10 @@ export default function Resources() {
                         // The anchor has to stay stable for the contents list.
                         id:
                           draft.sections?.[i]?.id ||
-                          s.heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+                          s.heading
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '-')
+                            .replace(/^-|-$/g, ''),
                         heading: s.heading,
                         body: [s.text],
                         items: draft.sections?.[i]?.items || [],
@@ -270,7 +316,11 @@ export default function Resources() {
                   }
                   hint="One per line, as “Heading :: body text”. The contents list is generated from these."
                 />
-                <TextField label="Tools used" value={draft.tools || ''} onChange={(e) => field('tools', e.target.value)} />
+                <TextField
+                  label="Tools used"
+                  value={draft.tools || ''}
+                  onChange={(e) => field('tools', e.target.value)}
+                />
                 <TextField
                   label="Related skill slug"
                   value={draft.relatedSkill?.slug || ''}
@@ -281,14 +331,45 @@ export default function Resources() {
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-4 mx-640:grid-cols-1">
-                  <TextField label="Category key" value={draft.category || ''} onChange={(e) => field('category', e.target.value)} hint="seo, ads, copy, funnel, analytics" />
-                  <TextField label="Badge" value={draft.badge || ''} onChange={(e) => field('badge', e.target.value)} />
-                  <TextField label="Icon" value={draft.icon || ''} onChange={(e) => field('icon', e.target.value)} />
-                  <TextField label="Works with" value={draft.worksWith || ''} onChange={(e) => field('worksWith', e.target.value)} />
-                  <TextField label="Readiness" value={draft.readiness || ''} onChange={(e) => field('readiness', e.target.value)} />
+                  <TextField
+                    label="Category key"
+                    value={draft.category || ''}
+                    onChange={(e) => field('category', e.target.value)}
+                    hint="seo, ads, copy, funnel, analytics"
+                  />
+                  <TextField
+                    label="Badge"
+                    value={draft.badge || ''}
+                    onChange={(e) => field('badge', e.target.value)}
+                  />
+                  <TextField
+                    label="Icon"
+                    value={draft.icon || ''}
+                    onChange={(e) => field('icon', e.target.value)}
+                  />
+                  <TextField
+                    label="Works with"
+                    value={draft.worksWith || ''}
+                    onChange={(e) => field('worksWith', e.target.value)}
+                  />
+                  <TextField
+                    label="Readiness"
+                    value={draft.readiness || ''}
+                    onChange={(e) => field('readiness', e.target.value)}
+                  />
                 </div>
-                <TextAreaField label="Tagline" rows={2} value={draft.tagline || ''} onChange={(e) => field('tagline', e.target.value)} />
-                <TextAreaField label="About" rows={3} value={draft.about || ''} onChange={(e) => field('about', e.target.value)} />
+                <TextAreaField
+                  label="Tagline"
+                  rows={2}
+                  value={draft.tagline || ''}
+                  onChange={(e) => field('tagline', e.target.value)}
+                />
+                <TextAreaField
+                  label="About"
+                  rows={3}
+                  value={draft.about || ''}
+                  onChange={(e) => field('about', e.target.value)}
+                />
                 <TextAreaField
                   label="What it does"
                   rows={6}

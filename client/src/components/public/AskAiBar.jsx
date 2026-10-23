@@ -40,7 +40,15 @@ export function AskAiMetaBar({ title, publishedLabel, readTime }) {
               fill="none"
               aria-hidden="true"
             >
-              <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+              <rect
+                x="3"
+                y="5"
+                width="18"
+                height="16"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
               <path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" strokeWidth="1.5" />
             </svg>
             Published: {publishedLabel}

@@ -350,9 +350,9 @@ export default function Integrations() {
           }
         >
           <p className="mb-4 text-[0.86rem] text-muted">
-            Where the blog&rsquo;s Media Library keeps its images. This is Bunny&rsquo;s file storage
-            product, separate from the Stream library above — it needs its own zone. Leave it blank
-            and images stay on the server&rsquo;s own disk, which a redeploy replaces.
+            Where the blog&rsquo;s Media Library keeps its images. This is Bunny&rsquo;s file
+            storage product, separate from the Stream library above — it needs its own zone. Leave
+            it blank and images stay on the server&rsquo;s own disk, which a redeploy replaces.
           </p>
           <div className="grid gap-4">
             <TextField

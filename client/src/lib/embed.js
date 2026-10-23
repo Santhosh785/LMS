@@ -26,7 +26,12 @@ export function embedFrom(url) {
   for (const provider of PROVIDERS) {
     const match = provider.test.exec(value)
     if (match) {
-      return { provider: provider.name, id: match[1], src: provider.src(match[1]), thumb: provider.thumb(match[1]) }
+      return {
+        provider: provider.name,
+        id: match[1],
+        src: provider.src(match[1]),
+        thumb: provider.thumb(match[1]),
+      }
     }
   }
   return null

@@ -79,7 +79,11 @@ export default function WorkshopDetail() {
 
   const landing = workshop.landing || {}
   const isFree = !workshop.priceNew
-  const claimLabel = done ? 'You’re registered ✓' : isFree ? 'Claim your free spot' : 'Reserve my seat'
+  const claimLabel = done
+    ? 'You’re registered ✓'
+    : isFree
+      ? 'Claim your free spot'
+      : 'Reserve my seat'
 
   /** A signed-in learner skips the form entirely. */
   const onClaim = () => {
@@ -141,10 +145,7 @@ export default function WorkshopDetail() {
                         : { icon: '🖥', label: 'Online' },
                     ].filter(Boolean)
                 ).map((p) => (
-                  <span
-                    className={cn('wl-pill', p.accent && 'wl-pill--accent')}
-                    key={p.label}
-                  >
+                  <span className={cn('wl-pill', p.accent && 'wl-pill--accent')} key={p.label}>
                     <span className="ico" aria-hidden="true">
                       {p.icon}
                     </span>{' '}
