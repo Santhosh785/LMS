@@ -1,5 +1,6 @@
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
+import rateLimit from 'express-rate-limit'
 import { env } from '../config/env.js'
+import { clientKey } from './clientKey.js'
 import { PostgresRateLimitStore, limiterLogger, reportStoreError } from './rateLimitStore.js'
 
 /**
@@ -42,7 +43,7 @@ const defaultStoreFor = (prefix) =>
 export const resetEmailKey = (req) =>
   String(req.body?.email || '')
     .trim()
-    .toLowerCase() || ipKeyGenerator(req.ip)
+    .toLowerCase() || clientKey(req)
 
 const tooMany = (message) => (_req, res) => res.status(429).json({ error: message })
 
@@ -64,6 +65,8 @@ export function createLimiters({
    */
   const shared = (prefix) => ({
     skip,
+    // One shared client key (CF-Connecting-IP when CF_PROXIED, else req.ip).
+    keyGenerator: clientKey,
     store: storeFor(prefix),
     passOnStoreError: true,
     logger: limiterLogger(prefix, report),
@@ -81,7 +84,7 @@ export function createLimiters({
    * guesses at another.
    *
    * Counting is per IP, which depends on `app.set('trust proxy', …)` matching the
-   * deployment — see env.trustProxy.
+   * deployment — see env.trustProxy — or on CF_PROXIED, see middleware/clientKey.js.
    */
   const authLimiter = (prefix) =>
     rateLimit({
@@ -140,7 +143,7 @@ export function createLimiters({
        * request carries no email at all (a malformed POST that never reaches
        * validation).
        *
-       * The fallback must go through `ipKeyGenerator`, not `req.ip` directly.
+       * The fallback must go through `clientKey` (and so `ipKeyGenerator`), not `req.ip` directly.
        * A raw IPv6 address is per-device, and an attacker on a /64 has billions
        * of them — express-rate-limit refuses a bare `req.ip` for exactly that
        * reason and throws ERR_ERL_KEY_GEN_IPV6, which took this endpoint down at

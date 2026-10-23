@@ -23,10 +23,10 @@ check and proxy settings are unchanged, and no new service or volume is needed.
 
 `npm run build` (`react-router build`) writes two bundles to `client/build/`:
 
-| Path | What it is |
-| --- | --- |
-| `client/build/server/index.js` | the server bundle Express imports at boot to render pages |
-| `client/build/client/` | the browser assets: `assets/` (fingerprinted, served immutable for a year) and the files from `client/public` (served for an hour) |
+| Path                           | What it is                                                                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `client/build/server/index.js` | the server bundle Express imports at boot to render pages                                                                          |
+| `client/build/client/`         | the browser assets: `assets/` (fingerprinted, served immutable for a year) and the files from `client/public` (served for an hour) |
 
 The build output must exist at runtime, next to the server, in the same
 container image. A start without it logs `client build missing` and answers
@@ -57,7 +57,7 @@ cannot run without:
 
 ```
 NODE_ENV=production
-TRUST_PROXY=1                  # Traefik is the single hop. See env.trustProxy.
+TRUST_PROXY=1                  # Traefik is the single hop (2 with Cloudflare in front). See env.trustProxy.
 JWT_SECRET=                    # openssl rand -base64 48 (boot refuses without it; now only the fallback root for CONFIG_SECRET)
 PUBLIC_URL=https://growthscholar.in
 CLIENT_ORIGIN=https://growthscholar.in
@@ -87,6 +87,14 @@ rate limiting all key on `req.ip`. Behind an unacknowledged proxy every visitor
 shares the proxy's IP and therefore one bucket, and the first five failed logins
 lock out the world. Set it to the real hop count and no higher — extra hops are
 client-spoofable through `X-Forwarded-For`.
+
+The hop count is **1** without Cloudflare (Traefik to Express) and **2** with it
+(Cloudflare to Traefik to Express). `TRUST_PROXY=2` only yields the real client
+IP if Traefik is configured to trust Cloudflare's forwarded header; otherwise
+set `CF_PROXIED=1`, which keys the rate limiters on `CF-Connecting-IP`. That
+header is spoofable by anyone who can reach the origin directly, so
+`CF_PROXIED` requires restricting origin ingress (ports 80/443) to Cloudflare's
+published IP ranges. Both options are in [cloudflare.md](./cloudflare.md).
 
 **Rate-limit store.** The seven rate limiters (login, register, password reset
 per IP and per email, checkout, blog comments, community reports) keep their
@@ -165,6 +173,10 @@ relay server. Keep the SPF, DKIM and DMARC records from
 [email-dns.md](./email-dns.md) — without them Resend delivers only to the
 account owner, and every buyer email (including the access link they paid for)
 silently goes nowhere.
+
+Once the zone moves to Cloudflare, DNS is edited there instead of at Hostinger,
+and the mail records must stay DNS-only (grey cloud). See
+[cloudflare.md](./cloudflare.md).
 
 ## Backups
 
