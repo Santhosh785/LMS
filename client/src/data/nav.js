@@ -23,7 +23,7 @@ const whenResourcesReady = (entries) =>
 
 /**
  * The 2026 redesign restructured the header from five entries to four:
- * Courses ▾ · Workshops · Flagship Program · Resources ▾.
+ * Courses · Workshops · Flagship Program · Resources ▾.
  *
  * Dropdown children may be a link, a `kind: 'label'` section heading, or a
  * `kind: 'divider'` rule — the three things the redesign's .nav-menu--lemlist
@@ -33,20 +33,9 @@ const whenResourcesReady = (entries) =>
  * every topic is hidden.
  */
 export const primaryNav = [
-  {
-    label: 'Courses',
-    menuKey: 'showCourses',
-    // The five topic links under the rule come from the taxonomy, so a topic an
-    // operator renames or unpublishes cannot leave a dead facet in the header.
-    termsFrom: 'topic',
-    menu: [
-      { kind: 'label', label: 'Self-paced' },
-      { label: 'Show courses', to: '/courses/category', feature: true },
-      { label: 'Course library', to: '/courses' },
-      { label: 'Foundation & gap tracks', to: '/#self-paced' },
-      { kind: 'divider' },
-    ],
-  },
+  // A plain link, not a dropdown: the course library already carries the topic
+  // filters the dropdown used to list.
+  { label: 'Courses', to: '/courses', menuKey: 'showCourses' },
   { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
   { label: 'Flagship Program', to: '/programs/complete-growth-marketing' },
   {
@@ -61,7 +50,7 @@ export const primaryNav = [
 ]
 
 export const mobileNav = [
-  { label: 'Show courses', to: '/courses/category', menuKey: 'showCourses' },
+  { label: 'Courses', to: '/courses', menuKey: 'showCourses' },
   { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
   { label: 'Flagship Program', to: '/programs/complete-growth-marketing' },
   { label: 'Resources', to: '/blog', menuKey: 'showBlog' },
