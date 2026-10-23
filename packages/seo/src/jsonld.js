@@ -256,14 +256,25 @@ export function breadcrumbList(items) {
 }
 
 /**
- * @param {string[]} urls
+ * An ItemList of the given entries, numbered from 1. Each entry is an absolute
+ * URL, or `{ url, name }` for a listing page that names what it renders (an
+ * empty name is dropped). Entries without a URL are skipped.
+ * @param {Array<string | { url?: string, name?: string }>} entries
  * @returns {object}
  */
-export function itemList(urls) {
-  const list = (Array.isArray(urls) ? urls : []).map((u) => text(u).trim()).filter(Boolean)
+export function itemList(entries) {
+  const list = (Array.isArray(entries) ? entries : [])
+    .map((entry) =>
+      entry && typeof entry === 'object'
+        ? { url: text(entry.url).trim(), name: collapse(entry.name) }
+        : { url: text(entry).trim(), name: '' },
+    )
+    .filter((entry) => entry.url)
   return {
     '@context': CONTEXT,
     '@type': 'ItemList',
-    itemListElement: list.map((url, i) => ({ '@type': 'ListItem', position: i + 1, url })),
+    itemListElement: list.map(({ url, name }, i) =>
+      compact({ '@type': 'ListItem', position: i + 1, url, name }),
+    ),
   }
 }

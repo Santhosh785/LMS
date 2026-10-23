@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { db, withMongoId } from '../index.js'
 import { workshops } from '../schema/index.js'
 
@@ -54,4 +54,22 @@ export function listWorkshopSlugs() {
     .select({ slug: workshops.slug, updatedAt: workshops.updatedAt })
     .from(workshops)
     .orderBy(asc(workshops.slug))
+}
+
+/**
+ * The public workshop list — GET /api/workshops and the server-rendered
+ * /workshops page read the same rows. `mode` and `language` filter when given;
+ * order is language then start date, missing values first (as Mongo sorted
+ * them; Postgres would put NULL last by default). Document-shaped (`_id`).
+ */
+export async function listWorkshops({ mode, language } = {}) {
+  const clauses = []
+  if (mode) clauses.push(eq(workshops.mode, String(mode)))
+  if (language) clauses.push(eq(workshops.language, String(language)))
+  const rows = await db
+    .select()
+    .from(workshops)
+    .where(clauses.length ? and(...clauses) : undefined)
+    .orderBy(sql`${workshops.language} asc nulls first`, sql`${workshops.startsAt} asc nulls first`)
+  return withMongoId(rows)
 }
