@@ -23,8 +23,13 @@ const ASSISTANTS = [
   { name: 'Perplexity', mark: 'P', url: (q) => `https://www.perplexity.ai/search?q=${q}` },
 ]
 
-export function AskAiMetaBar({ title, publishedLabel, readTime }) {
-  const prompt = encodeURIComponent(PROMPT(title, window.location.href))
+/**
+ * `url` is the article's absolute address, built from the site origin by the
+ * page — never read from `window` during render, which the server does not
+ * have and which would make the server and browser markup disagree.
+ */
+export function AskAiMetaBar({ title, publishedLabel, readTime, url }) {
+  const prompt = encodeURIComponent(PROMPT(title, url))
   const chatgpt = ASSISTANTS[0].url(prompt)
 
   return (
@@ -85,8 +90,8 @@ export function AskAiMetaBar({ title, publishedLabel, readTime }) {
   )
 }
 
-export function AskAiRail({ title }) {
-  const prompt = encodeURIComponent(PROMPT(title, window.location.href))
+export function AskAiRail({ title, url }) {
+  const prompt = encodeURIComponent(PROMPT(title, url))
 
   return (
     <aside className="ask-ai-rail" aria-label="Ask AI about this article">

@@ -178,7 +178,9 @@ export function workshopMeta(workshop, site) {
 
 /**
  * Blog post. Honours post.seo: metaTitle, metaDescription, canonicalUrl,
- * ogImage, noIndex.
+ * ogImage, noIndex. The breadcrumb matches the one the article shows — Home ›
+ * Blog › the post's category, linked to the blog filtered by it — and ends on
+ * the post itself only when it has no category.
  * @param {Record<string, any>} post
  * @param {Site} site
  * @returns {SeoMeta}
@@ -188,6 +190,15 @@ export function postMeta(post, site) {
   const seo = seoOverrides(p.seo, site)
   const canonical = seo.canonical || canonicalUrl(site, postPath(p.slug))
   const posting = blogPosting(p, site)
+  const category = collapse(p.category)
+  const last = category
+    ? {
+        name: category,
+        url: canonicalUrl(site, `/blog?category=${encodeURIComponent(category)}`, {
+          keepQuery: true,
+        }),
+      }
+    : { name: collapse(p.title), url: canonical }
   return build({
     site,
     title: seo.title || p.title,
@@ -198,11 +209,7 @@ export function postMeta(post, site) {
     image: seo.image || p.image,
     jsonLd: [
       { ...posting, url: canonical, mainEntityOfPage: { '@type': 'WebPage', '@id': canonical } },
-      crumbs(
-        site,
-        { name: 'Blog', url: canonicalUrl(site, '/blog') },
-        { name: collapse(p.title), url: canonical },
-      ),
+      crumbs(site, { name: 'Blog', url: canonicalUrl(site, '/blog') }, last),
     ],
   })
 }
