@@ -33,7 +33,7 @@ EnvironmentFile=/opt/growth-scholar/server/.env
 Restart=always
 RestartSec=2
 # Give up if it fails five times in a minute: a process dying on a bad
-# MONGO_URI should stay down and visible, not spin forever.
+# DATABASE_URL should stay down and visible, not spin forever.
 StartLimitBurst=5
 StartLimitIntervalSec=60
 

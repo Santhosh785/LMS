@@ -112,9 +112,10 @@ GET /api/health
 ```
 
 It used to return `{ ok: true }` unconditionally, so it reported healthy while
-MongoDB was unreachable and every request 500ed — a monitor pointed at it would
-have stayed green through a total outage. It now checks `readyState` **and**
-round-trips a `ping`, because `readyState` lags a network partition.
+the database was unreachable and every request 500ed — a monitor pointed at it
+would have stayed green through a total outage. It now round-trips a
+`select 1` against Postgres, because a connection pool reports nothing useful
+about reachability on its own.
 
 ## Uptime monitoring and alerts
 
@@ -133,13 +134,14 @@ by hand.** Nothing below is verified.
    failure this system has. `captureMessage` already fires on: the webhook secret
    being unset, a signature failing verification, and a payment that could not be
    fulfilled. Route these to the same phone.
-4. **Certificate expiry** — most uptime monitors check this. Certbot renews
-   automatically, but the timer failing silently is a real outage a month later.
+4. **Certificate expiry** — most uptime monitors check this. Coolify's proxy
+   renews automatically, but a renewal failing silently is a real outage a month
+   later.
 
 ### Sanity check once configured
 
 - Stop the Node process → the uptime monitor alerts within its interval.
-- Stop MongoDB with Node running → `/api/health` returns 503 and it alerts.
+- Point `DATABASE_URL` at an unreachable host with Node running → `/api/health` returns 503 and it alerts.
 - POST garbage to `/api/webhooks/razorpay` → a signature-failure event appears.
 - Trigger a deliberate 500 → it appears in Sentry **with no email, phone, UTR or
   secret anywhere in the payload**. Open the real event and read it; do not

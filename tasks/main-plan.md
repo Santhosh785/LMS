@@ -1,5 +1,11 @@
 # Plan: all-full-production-level
 
+> **Historical — completed 2026-08-11, before the move to Supabase.** Every task
+> below shipped. References to MongoDB, Mongoose, Atlas and the Hostinger VPS
+> describe the stack at the time; production now runs on Coolify + Supabase (see
+> `docs/deploy.md`). Kept for the reasoning behind each decision, not as a to-do
+> list.
+
 Take Growth Scholar from a demo build that cannot collect money or deliver video to a production-grade platform that sells courses, enforces access, and can be operated safely.
 
 ## Goal

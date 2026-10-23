@@ -50,7 +50,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary scope="root">
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true }}>
           <SiteConfigProvider>
             <AuthProvider>
               <App />

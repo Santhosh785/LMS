@@ -72,7 +72,7 @@ export default function Taxonomy() {
   })
 
   const meta = taxonomies.data?.items?.find((t) => t.name === taxonomy)
-  const rows = terms.data?.items || []
+  const rows = useMemo(() => terms.data?.items || [], [terms.data])
   const usage = terms.data?.usage || {}
 
   const done = (message) => {

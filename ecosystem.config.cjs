@@ -1,5 +1,7 @@
 /**
- * PM2 process definition for the Growth Scholar API + SPA.
+ * PM2 process definition for the Growth Scholar API + SPA — for self-hosting on
+ * a plain VPS only. Production runs on Coolify and does not use this file; see
+ * docs/deploy.md.
  *
  *   pm2 start ecosystem.config.cjs --env production
  *   pm2 save && pm2 startup        # survive a reboot
@@ -22,7 +24,7 @@ module.exports = {
       instances: 1,
 
       // Restart on crash, but stop flapping if it is crashing at boot — a
-      // process that dies on a bad MONGO_URI should stay dead and visible in
+      // process that dies on a bad DATABASE_URL should stay dead and visible in
       // `pm2 list` rather than spinning forever.
       autorestart: true,
       max_restarts: 10,
@@ -41,7 +43,7 @@ module.exports = {
       },
       env_production: {
         NODE_ENV: 'production',
-        // Everything else — MONGO_URI, JWT_SECRET, RESEND_API_KEY,
+        // Everything else — DATABASE_URL, JWT_SECRET, RESEND_API_KEY,
         // BUNNY_SECURITY_KEY, Razorpay keys — comes from server/.env, which is
         // gitignored and never passes through this file.
         PORT: 5000,

@@ -4,7 +4,7 @@ The seeded database mixes the real catalogue with data fabricated for a demo.
 Shipping the fabricated half means showing customers invented people and invented
 numbers. This is the sequence that puts only the real half into production.
 
-Run it **against the production `MONGO_URI`, with `NODE_ENV=production`**. Every
+Run it **against the production Supabase project (`DATABASE_URL`), with `NODE_ENV=production`**. Every
 command below is non-destructive; `npm run seed:demo` is the destructive one and
 refuses to run in production without an override flag it is not worth typing.
 
