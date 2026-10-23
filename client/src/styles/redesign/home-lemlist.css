@@ -603,6 +603,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  /* Same gap the body copy leaves, so the link below doesn't sit on the chips. */
+  margin-bottom: 1rem;
 }
 
 .lm-mock-body .chip {
