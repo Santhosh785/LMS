@@ -171,10 +171,6 @@ export default function Workshops() {
           <p className="ws-hero-deck">
             Short, high-energy live builds with mentors. Leave with templates you can run this week.
           </p>
-          <div className="ws-hero-chips" aria-label="Launch language">
-            <span>த Tamil</span>
-            <span className="ws-chip-muted">Launching now</span>
-          </div>
         </header>
 
         <div className="ws-mode" role="tablist" aria-label="Workshop format">
