@@ -1,11 +1,9 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { Link, useLoaderData } from 'react-router'
+import { useMutation } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { Button, cn, Loading, Modal, TextField, useToast } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
+import { Button, cn, Modal, TextField, useToast } from '../../components/ui/index.jsx'
 
 /**
  * /workshops/:slug — the 2026 redesign's landing page (.wl-page).
@@ -14,11 +12,28 @@ import useBodyClass from '../../hooks/useBodyClass.js'
  * subdocument carries its content, so the thirteen workshops that predate the
  * redesign still render a correct, shorter page rather than empty headings.
  *
- * Registration is unchanged: POST /api/workshops/:id/register, idempotent, with
- * a signed-in learner's details prefilled.
+ * Server-rendered: the workshop comes from the route loader
+ * (routes/public/workshop-detail.ts), so the first HTML already holds it; the
+ * title and body class come from that route's `meta` and `handle`.
+ *
+ * Registration stays a client mutation: POST /api/workshops/:id/register,
+ * idempotent, with a signed-in learner's details prefilled. Nothing rendered
+ * depends on the signed-in state, so the first client render matches the
+ * (possibly shared-cached, guest) server HTML.
  */
 
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`
+
+/**
+ * "12 Nov" — locale and zone pinned, never the runtime's defaults, so the
+ * server and every browser render the same text and hydration cannot differ.
+ */
+const pillDate = (value) =>
+  new Date(value).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'Asia/Kolkata',
+  })
 
 /** The drop's .wl-claim button; repeated in the hero and the final band. */
 function Claim({ pulse, label, onClick, disabled, pending }) {
@@ -34,48 +49,47 @@ function Claim({ pulse, label, onClick, disabled, pending }) {
   )
 }
 
+/** The loader's 404 (an unknown slug): today's message and a way back. */
+function WorkshopNotFound() {
+  return (
+    <div className="px-5 py-20 text-center">
+      <h1 className="text-[1.5rem]">Workshop not found</h1>
+      <p className="mt-2 text-muted">Workshop not found</p>
+      <Button to="/workshops" variant="outline" className="mt-5">
+        All workshops
+      </Button>
+    </div>
+  )
+}
+
 export default function WorkshopDetail() {
-  const { slug } = useParams()
+  const { workshop } = useLoaderData()
+  // Keyed on the workshop so a client navigation to another workshop starts
+  // from its own loader data rather than this one's registration state.
+  return workshop ? <WorkshopLanding key={workshop.id} workshop={workshop} /> : <WorkshopNotFound />
+}
+
+function WorkshopLanding({ workshop: loaded }) {
   const { user } = useAuth()
   const toast = useToast()
   const [done, setDone] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
-
-  const {
-    data: workshop,
-    isPending,
-    error,
-  } = useQuery({
-    queryKey: ['workshop', slug],
-    queryFn: async () => (await api.get(`/workshops/${slug}`)).data,
-  })
-
-  useDocumentTitle(workshop ? `${workshop.title} | Growth Scholar` : 'Workshop | Growth Scholar')
-  useBodyClass('gs-redesign wl-page')
+  // Starts from the loader's count (so the server and first client render
+  // agree) and follows the register response's count afterwards.
+  const [registeredCount, setRegisteredCount] = useState(loaded.registeredCount)
+  const workshop = { ...loaded, registeredCount }
 
   const register = useMutation({
     mutationFn: async (payload) =>
-      (await api.post(`/workshops/${workshop._id}/register`, payload)).data,
-    onSuccess: () => {
+      (await api.post(`/workshops/${workshop.id}/register`, payload)).data,
+    onSuccess: (res) => {
+      if (typeof res?.registeredCount === 'number') setRegisteredCount(res.registeredCount)
       setDone(true)
       setFormOpen(false)
       toast.show('Registered ✓')
     },
     onError: (err) => toast.show(apiError(err)),
   })
-
-  if (isPending) return <Loading />
-  if (error) {
-    return (
-      <div className="px-5 py-20 text-center">
-        <h1 className="text-[1.5rem]">Workshop not found</h1>
-        <p className="mt-2 text-muted">{apiError(error)}</p>
-        <Button to="/workshops" variant="outline" className="mt-5">
-          All workshops
-        </Button>
-      </div>
-    )
-  }
 
   const landing = workshop.landing || {}
   const isFree = !workshop.priceNew
@@ -134,10 +148,7 @@ export default function WorkshopDetail() {
                       workshop.durationLabel && { icon: '⏱', label: workshop.durationLabel },
                       workshop.startsAt && {
                         icon: '📅',
-                        label: new Date(workshop.startsAt).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                        }),
+                        label: pillDate(workshop.startsAt),
                       },
                       workshop.language && { icon: '🌐', label: workshop.language },
                       workshop.mode === 'offline' && workshop.venue
