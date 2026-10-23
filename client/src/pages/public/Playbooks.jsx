@@ -1,26 +1,19 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { Link, useLoaderData } from 'react-router'
+import { useMutation } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
-import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
+import { cn, EmptyState } from '../../components/ui/index.jsx'
 
 /**
  * /resources/playbooks — the mentor playbook index (.res-page), new in the
- * 2026 redesign. Cards come from the Playbook collection.
+ * 2026 redesign. Cards come from the route loader (server-rendered); the
+ * "notify me" form posts from the browser.
  */
 
 export default function Playbooks() {
-  useDocumentTitle('Growth playbooks | Growth Scholar')
-  useBodyClass('gs-redesign')
+  const data = useLoaderData()
   const [email, setEmail] = useState('')
   const [notifyError, setNotifyError] = useState('')
-
-  const { data, isPending } = useQuery({
-    queryKey: ['playbooks'],
-    queryFn: async () => (await api.get('/resources/playbooks')).data,
-  })
 
   const notify = useMutation({
     mutationFn: async (payload) => (await api.post('/resources/notify', payload)).data,
@@ -59,9 +52,7 @@ export default function Playbooks() {
           </p>
         </div>
 
-        {isPending ? (
-          <Loading />
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <EmptyState
             icon="📘"
             title="No playbooks published yet"

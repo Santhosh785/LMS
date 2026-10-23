@@ -2,11 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, apiError, apiFieldErrors } from '../../api/client.js'
 import { Button, ErrorNote, TextField } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import BrandLogo from '../../components/BrandLogo.jsx'
 
 export default function ForgotPassword() {
-  useDocumentTitle('Reset your password | Growth Scholar')
   const [error, setError] = useState(null)
   const [fields, setFields] = useState({})
   const [busy, setBusy] = useState(false)

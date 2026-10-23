@@ -1,28 +1,19 @@
 import { useRef, useState } from 'react'
-import { Link } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../../api/client.js'
-import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
+import { Link, useLoaderData } from 'react-router'
+import { cn, EmptyState } from '../../components/ui/index.jsx'
 import useRevealOnScroll from '../../hooks/useRevealOnScroll.js'
 
 /**
  * /resources/claude-skills — the skills index (.res-page), new in the 2026
- * redesign. The filter row is built from the categories that actually have
- * published skills, so a tab can never match nothing.
+ * redesign, server-rendered from the route loader. The filter row is built
+ * from the categories that actually have published skills, so a tab can
+ * never match nothing.
  */
 
 export default function ClaudeSkills() {
-  useDocumentTitle('Claude Skills | Growth Scholar')
-  useBodyClass('gs-redesign')
+  const data = useLoaderData()
   const [filter, setFilter] = useState('all')
   const pageRef = useRef(null)
-
-  const { data, isPending } = useQuery({
-    queryKey: ['claude-skills'],
-    queryFn: async () => (await api.get('/resources/skills')).data,
-  })
 
   const items = data?.items || []
   const categories = data?.categories || []
@@ -85,9 +76,7 @@ export default function ClaudeSkills() {
           ))}
         </div>
 
-        {isPending ? (
-          <Loading />
-        ) : shown.length === 0 ? (
+        {shown.length === 0 ? (
           <EmptyState icon="✦" title="No skills here yet" body="Try another category." />
         ) : (
           <div className="cs-grid" id="skills-grid">

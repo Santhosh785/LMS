@@ -1,7 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
 import useRevealOnScroll from '../../hooks/useRevealOnScroll.js'
 import {
   approach,
@@ -103,8 +101,6 @@ function StatRow({ ariaHidden, countRef }) {
 }
 
 export default function About() {
-  useDocumentTitle('About Growth Scholar')
-  useBodyClass('gs-redesign')
   const pageRef = useRef(null)
   const countRef = useRef(null)
   const [loopIndex, setLoopIndex] = useState(0)

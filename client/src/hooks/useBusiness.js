@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { business } from '../data/legal.js'
+import { businessFrom } from '../data/legal.js'
 import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 
 /**
@@ -20,15 +20,5 @@ import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 export default function useBusiness() {
   const { branding, help } = useSiteConfig()
 
-  return useMemo(
-    () => ({
-      ...business,
-      brandName: branding.brandName || business.brandName,
-      supportEmail: help.supportEmail || business.supportEmail,
-      salesEmail: help.salesEmail || business.salesEmail,
-      supportHours: help.hours || business.supportHours,
-      helpCenterUrl: help.helpCenterUrl || '',
-    }),
-    [branding, help],
-  )
+  return useMemo(() => businessFrom({ branding, help }), [branding, help])
 }

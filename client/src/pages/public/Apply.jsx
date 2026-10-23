@@ -3,8 +3,6 @@ import { Link } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { cn } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
 import { APPLY_STEPS, VISIBILITY, countWords, visibleFields } from '../../data/applyForm.js'
 
 /**
@@ -234,9 +232,10 @@ function Review({ values, onJump }) {
 }
 
 export default function Apply() {
-  useDocumentTitle('Apply for the Flagship cohort | Growth Scholar')
-  useBodyClass('gs-redesign pa-page')
-  const [values, setValues] = useState(loadDraft)
+  // Starts empty on the server and in the hydrating render alike; the saved
+  // draft is restored right after hydration, so the two renders agree.
+  const [values, setValues] = useState({})
+  const [draftLoaded, setDraftLoaded] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const [errors, setErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
@@ -244,14 +243,22 @@ export default function Apply() {
   const step = APPLY_STEPS[stepIndex]
   const isLast = stepIndex === APPLY_STEPS.length - 1
 
-  // Draft survives a refresh, as the drop's "Draft saved in this browser" promises.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration
+    setValues((current) => ({ ...loadDraft(), ...current }))
+    setDraftLoaded(true)
+  }, [])
+
+  // Draft survives a refresh, as the drop's "Draft saved in this browser" promises.
+  // Not before the restore above, or the empty first render would overwrite it.
+  useEffect(() => {
+    if (!draftLoaded) return
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(values))
     } catch {
       // Private mode or a full quota — the form still works, just without a draft.
     }
-  }, [values])
+  }, [values, draftLoaded])
 
   const submit = useMutation({
     mutationFn: async (payload) => (await api.post('/applications', payload)).data,

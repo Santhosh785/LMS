@@ -3,8 +3,6 @@ import { Link } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
 import { cn } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
 import { countWords } from '../../data/applyForm.js'
 
 /**
@@ -71,8 +69,6 @@ function Sel({ name, label, value, error, onChange }) {
 }
 
 export default function FitCall() {
-  useDocumentTitle('Book a fit call | Growth Scholar')
-  useBodyClass('gs-redesign pa-page pa-page--fit')
   const [v, setV] = useState({ preferredSlots: [], timezone: '' })
   const [errors, setErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
