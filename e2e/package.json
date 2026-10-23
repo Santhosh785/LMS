@@ -1,0 +1,20 @@
+{
+  "name": "growth-scholar-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only Playwright smoke suite for the public site. See the Smoke tests section of the README.",
+  "scripts": {
+    "test": "node scripts/run.mjs local",
+    "test:prod": "node scripts/run.mjs prod",
+    "typecheck": "tsc",
+    "format": "prettier --write \"**/*.{ts,mjs}\"",
+    "format:check": "prettier --check \"**/*.{ts,mjs}\""
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.3",
+    "dotenv": "^16.4.7"
+  }
+}
