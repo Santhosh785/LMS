@@ -52,6 +52,19 @@ async function authIdForEmail(email, tx = db) {
   return rows[0]?.id || null
 }
 
+/**
+ * Whether Supabase still holds this auth session. Supabase deletes the row when
+ * the session signs out or the user's password changes, while the session's
+ * access token keeps verifying until it expires.
+ */
+export async function authSessionExists(sessionId, { tx = db } = {}) {
+  if (!isUuid(sessionId)) return false
+  const { rows } = await tx.execute(
+    sql`select 1 from auth.sessions where id = ${sessionId} limit 1`,
+  )
+  return rows.length > 0
+}
+
 export class EmailTakenError extends Error {
   constructor() {
     super('An account with that email already exists')
