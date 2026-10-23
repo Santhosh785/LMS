@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 import { db, withMongoId } from '../index.js'
 import { workshops } from '../schema/index.js'
 
@@ -43,6 +43,35 @@ export async function findWorkshopBySlug(slug) {
     .from(workshops)
     .where(eq(workshops.slug, String(slug).toLowerCase()))
   return workshop || null
+}
+
+/**
+ * The first `limit` workshops in the order GET /api/workshops lists them
+ * (language, then start date, missing values first, as Mongo sorted them),
+ * with only the columns a workshop card renders. The home page previews the
+ * first three; it reads them here rather than over HTTP and without the rest
+ * of the row (landing copy, capacity, host).
+ */
+export function listWorkshopCards(limit) {
+  return db
+    .select({
+      slug: workshops.slug,
+      title: workshops.title,
+      language: workshops.language,
+      mode: workshops.mode,
+      venue: workshops.venue,
+      durationLabel: workshops.durationLabel,
+      image: workshops.image,
+      bannerClass: workshops.bannerClass,
+      priceNew: workshops.priceNew,
+    })
+    .from(workshops)
+    .orderBy(
+      sql`${workshops.language} asc nulls first`,
+      sql`${workshops.startsAt} asc nulls first`,
+      asc(workshops.id),
+    )
+    .limit(limit)
 }
 
 /**

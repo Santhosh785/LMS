@@ -1,11 +1,7 @@
 import { useRef, useState } from 'react'
-import { Link } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../../api/client.js'
+import { Link, useLoaderData } from 'react-router'
 import { cn } from '../../components/ui/index.jsx'
 import { RESOURCES_PAGES_READY } from '../../data/nav.js'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
 import useScrollReveal from '../../hooks/useScrollReveal.js'
 import {
   audienceLinks,
@@ -30,11 +26,12 @@ import {
  * has to match it. The two card grids are the deliberate exception: the drop
  * hard-coded six courses and six workshops, and those are read from the
  * catalogue here so the front page cannot advertise something unpublished.
+ *
+ * Both grids arrive server-rendered from the route loader
+ * (routes/public/home.ts), as do the title (its `meta`) and the body class (its
+ * `handle.bodyClass`). Only the product tab and the scroll reveal are client
+ * state.
  */
-
-const GRID_SIZE = 6
-/** The home page previews three workshops; the full list is one click away. */
-const WORKSHOP_PREVIEW = 3
 
 /** `→` inside the pill buttons, as .btn-lm-blue .arr. */
 const Arrow = () => (
@@ -73,7 +70,7 @@ function CourseCard({ course }) {
         <p className="provider">Self-paced</p>
         <h3>{course.title}</h3>
         {meta && <p className="meta">{meta}</p>}
-        {course.tags?.[0] && <span className="tag-live">{course.tags[0]}</span>}
+        {course.tag && <span className="tag-live">{course.tag}</span>}
         {/* Hidden until real ratings exist — see the note in Courses.jsx. */}
         {course.rating > 0 && <p className="rating">★ {course.rating}</p>}
       </div>
@@ -121,33 +118,15 @@ function WorkshopCard({ workshop }) {
 }
 
 export default function Home() {
-  useDocumentTitle('Growth Scholar — Become a Growth Marketer')
-  useBodyClass('gs-redesign home-lm')
+  const { courses, workshops } = useLoaderData()
   const [tab, setTab] = useState(productTabs[0].id)
   const mainRef = useRef(null)
-
-  const { data: courseData } = useQuery({
-    queryKey: ['courses', 'home'],
-    queryFn: async () =>
-      (
-        await api.get('/courses', {
-          params: { price: 'paid,free', limit: GRID_SIZE, sort: 'popularity' },
-        })
-      ).data,
-  })
-
-  const { data: workshopData } = useQuery({
-    queryKey: ['workshops', 'home'],
-    queryFn: async () => (await api.get('/workshops')).data,
-  })
 
   // Playbooks and Claude Skills are hidden until their pages exist — see
   // RESOURCES_PAGES_READY in data/nav.js.
   const teasers = RESOURCES_PAGES_READY
     ? resourceTeasers
     : resourceTeasers.filter((r) => !r.to.startsWith('/resources/'))
-  const courses = courseData?.items || []
-  const workshops = (workshopData?.items || []).slice(0, WORKSHOP_PREVIEW)
 
   useScrollReveal(mainRef, [courses.length, workshops.length, tab])
 
