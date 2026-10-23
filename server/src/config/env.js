@@ -14,6 +14,33 @@ const flag = (value) =>
       .toLowerCase(),
   )
 
+/**
+ * Where the rate limiters keep their counters (middleware/rateLimitStore.js).
+ *
+ *   postgres  one shared table, so every instance enforces the same counters
+ *   memory    per-process, as before — fine for one instance, wrong for more
+ *
+ * An explicit value always wins. Unset, production uses Postgres; tests, local
+ * development and any setup without a DATABASE_URL use memory. Anything else is
+ * rejected here rather than silently meaning "memory" in production.
+ */
+export function resolveRateLimitStore({ RATE_LIMIT_STORE, NODE_ENV, DATABASE_URL } = {}) {
+  const value = String(RATE_LIMIT_STORE ?? '')
+    .trim()
+    .toLowerCase()
+  if (value) {
+    if (value !== 'postgres' && value !== 'memory') {
+      throw new Error(`RATE_LIMIT_STORE must be "postgres" or "memory", got "${RATE_LIMIT_STORE}"`)
+    }
+    if (value === 'postgres' && !DATABASE_URL) {
+      throw new Error('RATE_LIMIT_STORE=postgres needs DATABASE_URL')
+    }
+    return value
+  }
+  if (NODE_ENV === 'test' || !DATABASE_URL) return 'memory'
+  return NODE_ENV === 'production' ? 'postgres' : 'memory'
+}
+
 export const env = {
   port: Number(process.env.PORT || 5000),
   // Read only by the one-shot ETL (scripts/migrate-mongo-to-pg.js) at cutover.
@@ -71,6 +98,9 @@ export const env = {
   trustProxy: Number.isFinite(Number(process.env.TRUST_PROXY))
     ? Number(process.env.TRUST_PROXY)
     : 0,
+
+  /** 'postgres' | 'memory' — see resolveRateLimitStore above. */
+  rateLimitStore: resolveRateLimitStore(process.env),
 
   // Shared password for the seeded accounts. Required by `npm run seed`, which
   // aborts when it is missing rather than falling back to a repo-visible value.

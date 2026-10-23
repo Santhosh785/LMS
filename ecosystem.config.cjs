@@ -9,10 +9,11 @@
  * `.cjs` because both packages are `"type": "module"` and PM2 reads this file
  * with require().
  *
- * Deliberately `fork` with a single instance rather than cluster mode. The
- * express-rate-limit counters (login, password reset, checkout) live in process
- * memory, so N workers would mean N independent buckets and N times the allowed
- * attempts. Moving to cluster mode requires a shared store first.
+ * `fork` with a single instance is the configured default. The rate-limit
+ * counters are shared in Postgres in production (RATE_LIMIT_STORE, see
+ * docs/deploy.md), so more instances enforce one set of limits; just keep
+ * RATE_LIMIT_STORE at its production default rather than `memory`, which is
+ * per process.
  */
 module.exports = {
   apps: [

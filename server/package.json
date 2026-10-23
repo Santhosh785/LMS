@@ -27,6 +27,7 @@
     "db:lock": "node scripts/with-db-lock.js"
   },
   "dependencies": {
+    "@acpr/rate-limit-postgresql": "^1.4.1",
     "@sentry/node": "^10.70.0",
     "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^2.4.3",

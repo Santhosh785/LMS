@@ -58,9 +58,48 @@ shares the proxy's IP and therefore one bucket, and the first five failed logins
 lock out the world. Set it to the real hop count and no higher — extra hops are
 client-spoofable through `X-Forwarded-For`.
 
-Run a **single instance**. The rate-limit counters live in process memory, so
-N replicas would mean N independent buckets and N times the allowed login
-attempts.
+**Rate-limit store.** The seven rate limiters (login, register, password reset
+per IP and per email, checkout, blog comments, community reports) keep their
+counters in Postgres, in a `rate_limit` schema shared by every instance, so the
+sixth login attempt in a window is refused whichever instance answers it. Each
+limiter counts under its own key prefix (`login`, `register`,
+`password-reset-ip`, `password-reset-email`, `checkout`, `blog-comment`,
+`community-report`), so one never spends another's budget. The store connects
+with `DATABASE_URL` and works through the transaction pooler (:6543). Limits and
+window lengths are unchanged, but the window is the package's: one fixed window
+per limiter, started by the first hit after the previous one ended, rather than
+a separate window per client as the memory store keeps.
+
+`RATE_LIMIT_STORE` picks the store:
+
+| Value      | Behaviour                                                       |
+| ---------- | --------------------------------------------------------------- |
+| `postgres` | Shared counters in Postgres. Requires `DATABASE_URL`.           |
+| `memory`   | Per-process counters, as before. Correct only for one instance. |
+
+Unset, it is `postgres` when `NODE_ENV=production` and `DATABASE_URL` is set,
+and `memory` under test (`NODE_ENV=test`), in development, and whenever there
+is no `DATABASE_URL`. An explicit value always wins; anything other than
+`postgres` or `memory` stops the server at boot.
+
+**Database privilege.** The store creates its schema, tables and functions on
+first use (the migrations shipped in `@acpr/rate-limit-postgresql`, applied
+once, in one transaction). The role in `DATABASE_URL` therefore needs
+permission to create a schema in the database (`CREATE` on the database) and
+objects in it, and the `uuid-ossp` extension must already exist or be creatable
+by it. Supabase's `postgres` role has all of this. If the role must not hold
+database-level `CREATE`, an admin pre-creates the schema for it instead —
+`CREATE SCHEMA rate_limit AUTHORIZATION <app role>`, or
+`GRANT USAGE, CREATE ON SCHEMA rate_limit TO <app role>` — and the store then
+creates its tables and functions inside it on first use.
+
+**Fail-open.** If the database is unreachable or a store query fails (connect
+and query timeouts are 5 seconds), the request is let through **without** a
+limit instead of being refused: a database outage must not also lock every user
+out of logging in. Each failure is reported through the error path
+(`[alert] Rate-limit store error` in the logs, and Sentry when configured),
+throttled to one report a minute across all limiters, and the report counts how
+many failures it stood in for.
 
 ## Schema changes
 
