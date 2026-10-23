@@ -15,32 +15,51 @@ import { staticFilterGroups } from '../data/nav.js'
  * mapping over these keys, so a group appearing late would drop that facet out
  * of the URL on the first render; a group with no options simply renders
  * nothing.
+ *
+ * `facets` is the catalogue's own `{ topics, languages }` (the facets lookup
+ * the page loader ran). When given, the topic and language groups list exactly
+ * those values — what public courses actually carry — less any whose term an
+ * operator has hidden from the filters, rather than every published term.
  */
 
 const TAXONOMY_GROUPS = [
-  { key: 'topic', label: 'Topic', taxonomy: 'topic' },
+  { key: 'topic', label: 'Topic', taxonomy: 'topic', facet: 'topics' },
   { key: 'category', label: 'Category', taxonomy: 'category' },
   { key: 'tag', label: 'Tag', taxonomy: 'tag' },
-  { key: 'lang', label: 'Language', taxonomy: 'language' },
+  { key: 'lang', label: 'Language', taxonomy: 'language', facet: 'languages' },
 ]
 
-export default function useFilterGroups() {
+const option = (name) => ({ value: name, label: name })
+
+export default function useFilterGroups(facets) {
   const { taxonomy } = useSiteConfig()
 
   return useMemo(() => {
-    const fromTerms = TAXONOMY_GROUPS.map((group) => ({
-      key: group.key,
-      label: group.label,
-      options: (taxonomy?.[group.taxonomy] || [])
-        .filter((term) => term.showInFilters)
-        // The value is the term name because that is what the content documents
-        // store and what the ?topic=SEO URL contract already carries.
-        .map((term) => ({ value: term.name, label: term.name })),
-    }))
+    const fromTerms = TAXONOMY_GROUPS.map((group) => {
+      const terms = taxonomy?.[group.taxonomy] || []
+      const values = group.facet ? facets?.[group.facet] : null
+      if (values) {
+        const hidden = new Set(terms.filter((t) => !t.showInFilters).map((t) => t.name))
+        return {
+          key: group.key,
+          label: group.label,
+          options: values.filter((v) => !hidden.has(v)).map(option),
+        }
+      }
+      return {
+        key: group.key,
+        label: group.label,
+        options: terms
+          .filter((term) => term.showInFilters)
+          // The value is the term name because that is what the content documents
+          // store and what the ?topic=SEO URL contract already carries.
+          .map((term) => option(term.name)),
+      }
+    })
 
     // Original sidebar order: topic, language, rating, price, duration, type —
     // with category and tag slotted in beside topic.
     const byKey = Object.fromEntries(fromTerms.map((g) => [g.key, g]))
     return [byKey.topic, byKey.category, byKey.tag, byKey.lang, ...staticFilterGroups]
-  }, [taxonomy])
+  }, [taxonomy, facets])
 }

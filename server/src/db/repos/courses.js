@@ -225,6 +225,27 @@ export async function listPublic(params = {}) {
 }
 
 /**
+ * The distinct topics and languages of the public catalogue, sorted — what
+ * `GET /api/courses/facets` returns and what the catalogue pages' loaders show
+ * as the topic and language filter values. Same visibility rule as the list.
+ */
+export async function listPublicFacets() {
+  const [topicRows, languageRows] = await Promise.all([
+    db.selectDistinct({ v: courses.topic }).from(courses).where(publicCourseWhere),
+    db
+      .selectDistinct({ v: sql`unnest(${courses.languages})` })
+      .from(courses)
+      .where(publicCourseWhere),
+  ])
+  const values = (rows) =>
+    rows
+      .map((r) => r.v)
+      .filter(Boolean)
+      .sort()
+  return { topics: values(topicRows), languages: values(languageRows) }
+}
+
+/**
  * A public course by slug, as the course page receives it: hydrated, with every
  * video URL and Bunny id stripped. Null when the slug is unknown, Draft or not
  * Public. `curriculum: false` skips loading lessons (sections stay).

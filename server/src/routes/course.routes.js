@@ -1,9 +1,14 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../middleware/error.js'
-import { and, eq, sql } from 'drizzle-orm'
-import { db } from '../db/index.js'
+import { and, eq } from 'drizzle-orm'
 import { courses } from '../db/schema/index.js'
-import { findCourse, findPublicBySlug, listPublic, publicCourseWhere } from '../db/repos/courses.js'
+import {
+  findCourse,
+  findPublicBySlug,
+  listPublic,
+  listPublicFacets,
+  publicCourseWhere,
+} from '../db/repos/courses.js'
 import {
   effectiveVideoStatus,
   findLesson,
@@ -29,19 +34,7 @@ router.get(
 router.get(
   '/facets',
   asyncHandler(async (_req, res) => {
-    const [topicRows, languageRows] = await Promise.all([
-      db.selectDistinct({ v: courses.topic }).from(courses).where(publicCourseWhere),
-      db
-        .selectDistinct({ v: sql`unnest(${courses.languages})` })
-        .from(courses)
-        .where(publicCourseWhere),
-    ])
-    const values = (rows) =>
-      rows
-        .map((r) => r.v)
-        .filter(Boolean)
-        .sort()
-    res.json({ topics: values(topicRows), languages: values(languageRows) })
+    res.json(await listPublicFacets())
   }),
 )
 

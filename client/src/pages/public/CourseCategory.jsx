@@ -1,13 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { api } from '../../api/client.js'
+import { useRef, useState } from 'react'
+import { Link, useLoaderData, useLocation, useNavigation, useSearchParams } from 'react-router'
 import { sortLabels } from '../../data/nav.js'
 import { useTerms } from '../../context/SiteConfigContext.jsx'
-import { cn, Loading } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
+import { cn } from '../../components/ui/index.jsx'
 import useFilterGroups from '../../hooks/useFilterGroups.js'
+import { categoryState, DEFAULT_SORT } from '../../lib/courseListing.js'
 
 /**
  * /courses/category — the 2026 redesign's Marketing category page (.cat-page).
@@ -16,17 +13,17 @@ import useFilterGroups from '../../hooks/useFilterGroups.js'
  * carousel, a topic-chip block and a filtered list view with its own sidebar.
  * Topics come from the taxonomy rather than the drop's nine hardcoded links, so
  * a renamed topic cannot leave a dead facet here.
+ *
+ * Server-rendered from the route loader (routes/public/course-category.ts),
+ * which also 404s a `?topic=` that names no published topic. The URL is the
+ * state: the rail links and the sidebar write search params, and the loader
+ * sends the new list while the previous one stays on screen.
  */
 
+/** Fixed locale, so the server and the browser format a price identically. */
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`
 
 const thumbTone = (thumbClass) => (thumbClass || '').replace(/^(media|art)-/, '')
-
-const readList = (params, key) =>
-  (params.get(key) || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
 
 /** The tabs over the starter carousel; each is a different ordering. */
 const STARTER_TABS = [
@@ -149,59 +146,46 @@ function Carousel({ children }) {
 }
 
 export default function CourseCategory() {
-  useDocumentTitle('Digital Marketing Courses | Growth Scholar')
-  useBodyClass('gs-redesign cat-page--convert')
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { items, total, facets, state } = useLoaderData()
+  const [, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  const navigation = useNavigation()
+  // Client-only UI state, the same on the server and at hydration.
   const [starterTab, setStarterTab] = useState('popular')
   const [filtersOpen, setFiltersOpen] = useState(false)
 
-  const topic = searchParams.get('topic') || ''
-  const sort = searchParams.get('sort') || 'popularity'
+  // A filter change in flight: the controls follow the pending URL (same
+  // function as the loader), the list stays the previous one until it lands.
+  const pending =
+    navigation.location && navigation.location.pathname === location.pathname
+      ? categoryState(new URLSearchParams(navigation.location.search))
+      : null
+  const { topic, selected, sort } = pending || state
+
   const topics = useTerms('topic', 'filters')
   // The same facet definitions the explore page uses, minus topic — the
   // subcategory rail above already owns that one.
-  const filterGroups = useFilterGroups().filter((g) => g.key !== 'topic')
-
-  const selected = useMemo(
-    () => Object.fromEntries(filterGroups.map((g) => [g.key, readList(searchParams, g.key)])),
-    [searchParams, filterGroups],
-  )
-
-  const queryParams = {
-    ...(topic ? { topic } : { price: 'paid,free' }),
-    ...Object.fromEntries(
-      Object.entries(selected)
-        .filter(([, v]) => v.length)
-        .map(([k, v]) => [k, v.join(',')]),
-    ),
-    sort,
-    limit: 50,
-  }
-
-  const { data, isPending } = useQuery({
-    queryKey: ['courses', 'category', queryParams],
-    queryFn: async () => (await api.get('/courses', { params: queryParams })).data,
-    placeholderData: keepPreviousData,
-  })
-
-  const items = data?.items || []
-  const total = data?.total ?? items.length
+  const filterGroups = useFilterGroups(facets).filter((g) => g.key !== 'topic')
 
   /** A topic link that preserves the current sort — real hrefs, not buttons. */
   const topicHref = (name) => {
     const params = new URLSearchParams()
     if (name) params.set('topic', name)
-    if (sort && sort !== 'popularity') params.set('sort', sort)
+    if (sort && sort !== DEFAULT_SORT) params.set('sort', sort)
     const qs = params.toString()
     return `/courses/category${qs ? `?${qs}` : ''}`
   }
 
-  const setParam = (key, value) => {
-    const params = new URLSearchParams(searchParams)
-    if (value) params.set(key, value)
-    else params.delete(key)
-    setSearchParams(params, { replace: true })
-  }
+  const setParam = (key, value) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(pending ? navigation.location.search : prev)
+        if (value) params.set(key, value)
+        else params.delete(key)
+        return params
+      },
+      { replace: true, preventScrollReset: true },
+    )
 
   const toggleFilter = (group, value) => {
     const current = selected[group.key] || []
@@ -219,7 +203,7 @@ export default function CourseCategory() {
     const params = new URLSearchParams()
     if (topic) params.set('topic', topic)
     params.set('sort', sort)
-    setSearchParams(params, { replace: true })
+    setSearchParams(params, { replace: true, preventScrollReset: true })
   }
 
   const starters = [...items].sort(
@@ -313,15 +297,11 @@ export default function CourseCategory() {
             ))}
           </div>
 
-          {isPending && !items.length ? (
-            <Loading />
-          ) : (
-            <Carousel>
-              {starters.slice(0, 12).map((c) => (
-                <CatCard key={c._id} course={c} />
-              ))}
-            </Carousel>
-          )}
+          <Carousel>
+            {starters.slice(0, 12).map((c) => (
+              <CatCard key={c._id} course={c} />
+            ))}
+          </Carousel>
         </section>
 
         <section className="cat-section" aria-labelledby="topics-heading">
@@ -419,7 +399,7 @@ export default function CourseCategory() {
                 </div>
               </div>
 
-              <div className="cat-list">
+              <div className="cat-list" aria-busy={pending ? true : undefined}>
                 {items.map((c) => (
                   <CatRow key={c._id} course={c} />
                 ))}
