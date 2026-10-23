@@ -32,6 +32,27 @@ export const env = {
   },
   databaseUrl: process.env.DATABASE_URL || '',
   directDatabaseUrl: process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL || '',
+  /**
+   * Background job queue (pg-boss, services/queue.js; see docs/jobs.md).
+   *
+   * `databaseUrl` defaults to the direct URL above and MUST be session-capable:
+   * the direct connection (:5432) or Supabase's session-mode pooler — never the
+   * :6543 transaction pooler, because pg-boss relies on session state (advisory
+   * locks, LISTEN, prepared statements). `enabled` is on unless BOSS_ENABLED=0,
+   * which makes every enqueue run its handler inline — the rollback switch.
+   */
+  boss: {
+    databaseUrl:
+      process.env.BOSS_DATABASE_URL ||
+      process.env.DIRECT_DATABASE_URL ||
+      process.env.DATABASE_URL ||
+      '',
+    enabled: !['0', 'false', 'no', 'off'].includes(
+      String(process.env.BOSS_ENABLED ?? '')
+        .trim()
+        .toLowerCase(),
+    ),
+  },
   jwtSecret: process.env.JWT_SECRET || 'dev-only-insecure-secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',

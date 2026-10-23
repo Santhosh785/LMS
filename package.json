@@ -2,6 +2,9 @@
   "name": "growth-scholar-mern",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12"
+  },
   "description": "Growth Scholar — MERN port of the static marketing/LMS/creator platform",
   "workspaces": [
     "client",

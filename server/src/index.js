@@ -10,7 +10,7 @@ import cookieParser from 'cookie-parser'
 
 import { env } from './config/env.js'
 import { connectDb } from './config/db.js'
-import { db } from './db/index.js'
+import { db, closeDb } from './db/index.js'
 import { accessLogStream, captureMessage, initObservability } from './config/observability.js'
 import { attachUser } from './middleware/auth.js'
 import { errorHandler, notFound } from './middleware/error.js'
@@ -18,6 +18,9 @@ import { errorHandler, notFound } from './middleware/error.js'
 import configRoutes from './routes/config.routes.js'
 import showcaseRoutes from './routes/showcase.routes.js'
 import { refreshRuntimeConfig } from './services/runtimeConfig.js'
+import { startQueue, stopQueue } from './services/queue.js'
+// Job definitions register themselves on import; they must exist before startQueue().
+import './jobs/index.js'
 import authRoutes from './routes/auth.routes.js'
 import courseRoutes from './routes/course.routes.js'
 import programRoutes from './routes/program.routes.js'
@@ -257,15 +260,59 @@ process.on('uncaughtException', (err) => {
   setTimeout(() => process.exit(1), 500)
 })
 
+/**
+ * Graceful shutdown on SIGTERM/SIGINT: stop accepting connections, let the job
+ * queue finish its in-flight handlers, close the database pool, exit 0. The
+ * whole sequence is capped at 30 seconds, and a second signal forces an exit —
+ * a deploy should never hang on a stuck handler.
+ */
+const SHUTDOWN_TIMEOUT_MS = 30_000
+let httpServer = null
+let shuttingDown = false
+
+async function shutdown(signal) {
+  if (shuttingDown) {
+    console.error(`[server] ${signal} again — forcing exit`)
+    process.exit(1)
+  }
+  shuttingDown = true
+  console.log(`[server] ${signal} received — shutting down`)
+  setTimeout(() => {
+    console.error('[server] shutdown took longer than 30s — forcing exit')
+    process.exit(1)
+  }, SHUTDOWN_TIMEOUT_MS).unref()
+
+  try {
+    // close() stops new connections at once; its callback waits for in-flight
+    // requests, which finish alongside the queue drain rather than ahead of it.
+    const httpClosed = httpServer
+      ? new Promise((resolve) => httpServer.close(() => resolve()))
+      : Promise.resolve()
+    await stopQueue()
+    await httpClosed
+    await closeDb()
+    process.exit(0)
+  } catch (err) {
+    console.error('[server] shutdown failed:', err.message)
+    process.exit(1)
+  }
+}
+
 // Under test the suite owns the connection and supertest drives `app` directly.
 if (!env.isTest) {
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
+
   connectDb()
     // Admin-set credentials and feature flags live in the database, so they can
     // only be read once it is reachable. Loaded before the port opens, or the
     // first requests would be served from the environment alone.
     .then(() => refreshRuntimeConfig())
+    // After the config refresh, before the port opens: a request that enqueues
+    // a job should find the workers already running.
+    .then(() => startQueue())
     .then(() => {
-      app.listen(env.port, () => {
+      httpServer = app.listen(env.port, () => {
         console.log(`[server] listening on http://localhost:${env.port}`)
       })
     })
