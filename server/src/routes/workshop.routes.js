@@ -6,7 +6,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { db, withMongoId } from '../db/index.js'
 import { isUuid } from '../db/coerce.js'
 import { workshopRegistrations, workshops } from '../db/schema/index.js'
-import { send } from '../mail/index.js'
+import { queueMail } from '../jobs/mail.js'
 
 const router = Router()
 
@@ -110,9 +110,9 @@ router.post(
       })
     }
 
-    // Not awaited, and `send` swallows its own failures: a bounced confirmation
-    // must not turn a successful registration into an error.
-    void send('workshop-confirmation', req.body.email, {
+    // Queued and retried on a provider failure; queuing never rejects, so a
+    // bounced confirmation cannot turn a successful registration into an error.
+    await queueMail('workshop-confirmation', req.body.email, {
       name: req.body.name || req.user?.name || 'there',
       workshopTitle: workshop.title,
       startsAt: workshop.startsAt,

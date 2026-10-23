@@ -16,7 +16,8 @@ import {
   updateProfile,
 } from '../db/repos/users.js'
 import { supabaseAdmin, supabaseForRequest } from '../services/supabaseAdmin.js'
-import { findUserByToken, sendPasswordEmail, setPassword } from '../services/passwordReset.js'
+import { findUserByToken, setPassword } from '../services/passwordReset.js'
+import { queuePasswordReset } from '../jobs/mail.js'
 
 const router = Router()
 
@@ -105,12 +106,14 @@ router.post(
  * body — a differing answer turns this endpoint into an account enumeration
  * oracle, letting anyone test an email list against the customer base.
  *
- * Timing is the other half of that promise, and the reason the mail send is not
- * awaited: issuing a token and calling Resend takes hundreds of milliseconds
- * that only ever happen for real accounts, which is a measurable tell even when
- * the bodies match. Fire-and-forget makes both branches return at the same
- * speed. `sendPasswordEmail` swallows its own errors (see mail/index.js), so
- * nothing here can reject unobserved.
+ * Timing is the other half of that promise. Looking the account up, issuing a
+ * token and calling Resend take time that only ever happens for real accounts —
+ * a measurable tell even when the bodies match. So the request does none of it:
+ * every well-formed request queues the same `send-password-reset` job with the
+ * address (jobs/mail.js), and the job does the lookup, the token and the mail.
+ * Known and unknown addresses therefore cost this handler exactly the same
+ * work: one enqueue with the queue running, and inline (tests, BOSS_ENABLED=0)
+ * a job that runs in the background, unawaited. Queuing never rejects.
  */
 router.post(
   '/forgot-password',
@@ -119,8 +122,7 @@ router.post(
   body('email').isEmail().withMessage('Enter a valid email').normalizeEmail(),
   validate,
   asyncHandler(async (req, res) => {
-    const user = await findUserByEmail(req.body.email)
-    if (user) void sendPasswordEmail(user, { isNewAccount: false })
+    await queuePasswordReset(req.body.email)
 
     res.json({ ok: true, message: 'If that email has an account, a reset link is on its way.' })
   }),

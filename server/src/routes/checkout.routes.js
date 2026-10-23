@@ -9,7 +9,7 @@ import { transactions } from '../db/schema/index.js'
 import { findCourseBySlug } from '../db/repos/courses.js'
 import { upsertCustomerByEmail } from '../db/repos/customers.js'
 import { insertTransaction, txnDoc } from '../db/repos/transactions.js'
-import { send } from '../mail/index.js'
+import { queueMail } from '../jobs/mail.js'
 import {
   isUpiConfigured,
   resolvePlan,
@@ -327,10 +327,11 @@ router.post(
       throw err
     }
 
-    // Not awaited: a slow or failing mail provider must not make a buyer think
-    // their payment was not recorded. The transaction is the record; this is a
-    // notification about it, and `send` swallows its own failures.
-    void send('payment-received', email, {
+    // Queued, not sent: a slow or failing mail provider must not make a buyer
+    // think their payment was not recorded. The transaction is the record; this
+    // is a notification about it, retried by the queue if the provider fails,
+    // and queuing it never fails the request (jobs/dispatch.js).
+    await queueMail('payment-received', email, {
       name,
       courseTitle: course.title,
       amount: plan.amount,

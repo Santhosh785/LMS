@@ -103,8 +103,10 @@ export async function setPassword(user, plainPassword) {
 }
 
 /**
- * Issues a token and mails it. Used by the forgot-password endpoint and by the
- * task 12 approval flow for accounts it creates.
+ * Issues a token and mails it, returning `send`'s result. Called from the
+ * `send-password-reset` and `fulfil-payment-side-effects` jobs (jobs/), which
+ * turn a delivery failure into a retry, and awaited directly only by the admin
+ * "resend link" action, which reports the outcome.
  *
  * Never awaited on the request path where timing is observable — see the note in
  * auth.routes.js about account enumeration.

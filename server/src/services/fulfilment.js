@@ -8,9 +8,8 @@ import {
   findUserByEmail,
   normaliseEmail,
 } from '../db/repos/users.js'
-import { send } from '../mail/index.js'
+import { queueFulfilmentSideEffects } from '../jobs/fulfilment.js'
 import { expiryForAccessTier, grantAccess, revokeAccess } from './access.js'
-import { sendPasswordEmail } from './passwordReset.js'
 import { nextInvoiceNo } from './razorpay.js'
 
 /**
@@ -56,9 +55,9 @@ export async function resolveBuyerAccount({ email, name, phone }) {
 /**
  * Grants access for a transaction already claimed inside `tx`.
  *
- * Returns the outcome plus `notify`, the emails to send — the caller sends them
- * only after commit, so a rolled-back fulfilment can never have told a customer
- * they have access.
+ * Returns the outcome plus `notify`, which queues the emails — the caller runs
+ * it only after commit, so a rolled-back fulfilment can never have told a
+ * customer they have access.
  */
 async function fulfilClaimed(tx, transaction, { user, created }) {
   const [course] = transaction.courseId
@@ -70,7 +69,7 @@ async function fulfilClaimed(tx, transaction, { user, created }) {
     console.error(
       `[fulfilment] transaction ${transaction.id} has no resolvable course — access NOT granted`,
     )
-    return { granted: false, reason: 'course-missing', notify: () => {} }
+    return { granted: false, reason: 'course-missing', notify: async () => {} }
   }
 
   const email = buyerEmail(transaction)
@@ -124,20 +123,15 @@ async function fulfilClaimed(tx, transaction, { user, created }) {
       )
   }
 
-  // Not awaited, and `send` swallows its own failures: a bounced confirmation
-  // must never leave a paying customer without the access they bought.
-  const notify = () => {
-    if (created) void sendPasswordEmail(user, { isNewAccount: true })
-    void send('access-granted', email, {
-      name: user.name,
-      email,
-      courseTitle: course.title,
-      courseSlug: course.slug,
-      amount: transaction.amount,
-      invoiceNo,
-      expiresAt,
-    })
-  }
+  /*
+   * The set-password mail (for a new account) and the access-granted mail go
+   * out from the `fulfil-payment-side-effects` job (jobs/fulfilment.js), which
+   * re-reads everything from this id and retries when the mail provider fails.
+   * Keyed `fulfil:<id>`, so a duplicate enqueue collapses into one job. Queuing
+   * never rejects: a failed notification must never leave a paying customer
+   * without the access they bought, which has committed by the time it runs.
+   */
+  const notify = () => queueFulfilmentSideEffects(transaction.id, created)
 
   return {
     granted: true,
@@ -179,7 +173,7 @@ async function claimAndFulfil(where, set, preview) {
       // Claimed but ungrantable: the payment is real, so it stays SUCCESS for a
       // human to resolve, as it always has.
       console.error(`[fulfilment] transaction ${claimed.id} has no buyer email`)
-      return { claimed, result: { granted: false, reason: 'no-email', notify: () => {} } }
+      return { claimed, result: { granted: false, reason: 'no-email', notify: async () => {} } }
     }
     const result = await fulfilClaimed(tx, claimed, account)
     if (result.invoiceNo) claimed.invoiceNo = result.invoiceNo
@@ -187,7 +181,8 @@ async function claimAndFulfil(where, set, preview) {
   })
 
   if (!outcome) return { claimed: null }
-  outcome.result.notify()
+  // After commit, and only on the branch that won the claim.
+  await outcome.result.notify()
   const { notify: _notify, ...result } = outcome.result
   return { claimed: outcome.claimed, result }
 }

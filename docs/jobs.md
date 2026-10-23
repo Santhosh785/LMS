@@ -7,8 +7,8 @@ v12: its state lives in the existing Supabase Postgres under the `pgboss` schema
 and its workers run inside the Express process. There is no Redis and no second
 service to deploy.
 
-This task delivers only the infrastructure and one trivial `noop` job. No mail or
-fulfilment call site uses it yet.
+Defined jobs: `noop` (a smoke test), and the transactional mail and payment jobs
+described under [Mail and payment jobs](#mail-and-payment-jobs).
 
 pg-boss v12 needs **Node 22.12 or newer**; the root `package.json` says so in
 `engines`.
@@ -67,6 +67,58 @@ The queue is not started:
 - with `BOSS_ENABLED=0`;
 - during boot, before `startQueue()` has finished, and during shutdown, once
   `stopQueue()` has begun.
+
+## Mail and payment jobs
+
+Transactional email and the side effects of a fulfilled payment run on the
+queue, so a mail-provider failure is retried and nothing depends on the request
+process staying alive. Request handlers queue them through `dispatch`
+(`server/src/jobs/dispatch.js`), which **never rejects**: with the queue running
+it awaits the enqueue (one insert) and alerts if that fails; inline it starts
+the handler in the background, unawaited, and logs a failure — the
+fire-and-forget behaviour these call sites had before. Neither ever fails the
+request.
+
+| Job | Data | Enqueued by |
+| --- | --- | --- |
+| `send-mail` | `{ template, to, data }` | checkout `payment-received` (manual UPI), `workshop-confirmation`, and the access-granted mail from the job below |
+| `fulfil-payment-side-effects` | `{ transactionId, accountCreated }`, singleton key `fulfil:<transactionId>` | fulfilment `notify()` after the fulfilment transaction commits (manual UPI approval and the Razorpay webhook) |
+| `send-password-reset` | `{ email }` | `POST /api/auth/forgot-password`, for every well-formed request |
+
+**A deliberate skip is not a failure.** `send` (`server/src/mail/index.js`)
+never throws; it returns `{ ok, skipped, error }`. `send-mail` throws — so
+pg-boss retries — only on `ok: false, skipped: false`, a provider rejection or a
+network failure, with the provider's message. A skip completes without retry:
+no API key or sender configured (`ok: true, skipped: true`), an unknown
+template, no recipient, or a template that failed to render (`ok: false,
+skipped: true`). Retrying those cannot succeed.
+
+`fulfil-payment-side-effects` trusts the payload for the id and the flag only.
+It re-reads the transaction, the buyer's account, the course and the enrolment
+expiry, and **sends nothing unless the transaction is `SUCCESS`** — a job for a
+missing, pending, failed or since-refunded transaction completes quietly. Then:
+
+1. when `accountCreated` is true (and the buyer has not set a password since),
+   it issues a 24-hour invite token and sends `set-password`; a delivery
+   failure throws and the whole job is retried, before anything else went out;
+2. it queues `access-granted` as its own `send-mail` job, so a failure there is
+   retried alone and the buyer is not sent a second set-password link.
+
+Its queue uses pg-boss's `exclusive` policy: at most one job per singleton key
+that is queued, waiting on a retry or running, so a duplicate enqueue collapses
+(`enqueue` resolves `null`). The real guard against double fulfilment is
+unchanged and synchronous: the `update … where status = 'PENDING' returning`
+claim inside the fulfilment transaction, on the request. Only the winner of the
+claim queues the job.
+
+`send-password-reset` does the account lookup, the token and the mail inside
+the job, so the endpoint does identical work for known and unknown addresses.
+An unknown address completes without sending. A retry issues a fresh token,
+replacing the one in the attempt that failed.
+
+Still synchronous, because an admin is waiting on the outcome: the admin
+"send test email" button and "resend set-password link" action call the mail
+layer directly.
 
 ## Configuration
 
