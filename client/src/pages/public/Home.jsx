@@ -34,6 +34,8 @@ import {
  */
 
 const GRID_SIZE = 6
+/** The home page previews three workshops; the full list is one click away. */
+const WORKSHOP_PREVIEW = 3
 
 /** `→` inside the pill buttons, as .btn-lm-blue .arr. */
 const Arrow = () => (
@@ -146,7 +148,7 @@ export default function Home() {
     ? resourceTeasers
     : resourceTeasers.filter((r) => !r.to.startsWith('/resources/'))
   const courses = courseData?.items || []
-  const workshops = (workshopData?.items || []).slice(0, GRID_SIZE)
+  const workshops = (workshopData?.items || []).slice(0, WORKSHOP_PREVIEW)
 
   useScrollReveal(mainRef, [courses.length, workshops.length, tab])
 
