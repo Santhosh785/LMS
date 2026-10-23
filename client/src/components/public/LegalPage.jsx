@@ -1,8 +1,6 @@
 import { Link, useLocation } from 'react-router'
 import { legalNav } from '../../data/legal.js'
-import useBusiness from '../../hooks/useBusiness.js'
 import { cn } from '../ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * Shared shell for the policy pages (privacy, terms, refund, delivery,
@@ -85,12 +83,13 @@ function PolicyRail() {
   )
 }
 
-export default function LegalPage({ title, intro, updated, children }) {
-  // Not a default parameter: the brand name and support details come from admin
-  // settings now, which a hook has to resolve inside the component.
-  const business = useBusiness()
+/**
+ * `business` is the identity the page's loader resolved from site config
+ * (`businessFrom` in data/legal.js), so the server HTML already carries it.
+ * The document title comes from the route's `meta` export.
+ */
+export default function LegalPage({ business, title, intro, updated, children }) {
   const lastUpdated = updated || business.policyLastUpdated
-  useDocumentTitle(`${title} | ${business.brandName}`)
 
   return (
     <div className="px-5 py-10 mx-560:px-4 mx-560:py-7">

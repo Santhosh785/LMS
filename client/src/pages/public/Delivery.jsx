@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Link, useLoaderData } from 'react-router'
 import LegalPage, {
   Bullets,
   Callout,
@@ -7,12 +7,12 @@ import LegalPage, {
   Section,
 } from '../../components/public/LegalPage.jsx'
 import { policyTerms } from '../../data/legal.js'
-import useBusiness from '../../hooks/useBusiness.js'
 
 export default function Delivery() {
-  const business = useBusiness()
+  const { business } = useLoaderData()
   return (
     <LegalPage
+      business={business}
       title="Delivery Policy"
       intro="Growth Scholar sells online courses. There is nothing to ship — “delivery” means unlocking the course on your account. This page explains exactly what you receive, when, and what to do if it does not arrive."
     >

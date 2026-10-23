@@ -3,11 +3,9 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { apiError, apiFieldErrors } from '../../api/client.js'
 import { Button, ErrorNote, TextField } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import BrandLogo from '../../components/BrandLogo.jsx'
 
 export default function Login() {
-  useDocumentTitle('Sign in | Growth Scholar')
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()

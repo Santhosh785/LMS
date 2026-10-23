@@ -3,11 +3,9 @@ import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { apiError, apiFieldErrors } from '../../api/client.js'
 import { Button, ErrorNote, SelectField, TextField } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import BrandLogo from '../../components/BrandLogo.jsx'
 
 export default function Signup() {
-  useDocumentTitle('Create your account | Growth Scholar')
   const { register } = useAuth()
   const navigate = useNavigate()
   const [error, setError] = useState(null)

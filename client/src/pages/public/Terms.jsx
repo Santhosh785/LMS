@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Link, useLoaderData } from 'react-router'
 import LegalPage, {
   Bullets,
   Callout,
@@ -6,12 +6,12 @@ import LegalPage, {
   Mail,
   Section,
 } from '../../components/public/LegalPage.jsx'
-import useBusiness from '../../hooks/useBusiness.js'
 
 export default function Terms() {
-  const business = useBusiness()
+  const { business } = useLoaderData()
   return (
     <LegalPage
+      business={business}
       title="Terms of Use"
       intro="These terms are the agreement between you and Growth Scholar. They cover your account, what you may do with our course content, how payment works, and the limits of what we promise. By using the site or buying a course you accept them."
     >
