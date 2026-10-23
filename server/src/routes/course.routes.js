@@ -19,7 +19,13 @@ import {
 import { db, withMongoId } from '../db/index.js'
 import { courses } from '../db/schema/index.js'
 import { findCourse } from '../db/repos/courses.js'
-import { stripVideoRefs } from '../services/bunny.js'
+import {
+  effectiveVideoStatus,
+  findLesson,
+  isBunnyConfigured,
+  signPlaybackUrl,
+  stripVideoRefs,
+} from '../services/bunny.js'
 
 const router = Router()
 
@@ -177,6 +183,48 @@ router.get(
     if (!course) throw new HttpError(404, 'Course not found')
     // Public route: the curriculum is a selling point, the video ids are not.
     res.json(stripVideoRefs(course))
+  }),
+)
+
+/**
+ * A signed URL for a free-preview lesson, for anyone — no account needed.
+ *
+ * The paywall still holds: only a lesson an admin explicitly marked
+ * `isFreePreview` on a published, public course is ever signed here, and every
+ * other lesson answers the same 404 whether it exists or not, so this cannot be
+ * used to probe the paid curriculum. The URL is as short-lived as a paying
+ * student's.
+ */
+router.get(
+  '/:slug/preview/:lessonId',
+  asyncHandler(async (req, res) => {
+    const notAvailable = () =>
+      new HttpError(404, 'This lesson is not available as a preview', {
+        code: 'PREVIEW_NOT_AVAILABLE',
+      })
+
+    const course = await findCourse(
+      and(eq(courses.slug, String(req.params.slug).toLowerCase()), visible),
+    )
+    if (!course) throw notAvailable()
+    const found = findLesson(course, req.params.lessonId)
+    const lesson = found?.lesson
+    if (!lesson?.isFreePreview || lesson.isDraft) throw notAvailable()
+    if ((lesson.contentType || 'Video') !== 'Video' || !lesson.bunnyVideoId) throw notAvailable()
+    if (effectiveVideoStatus(lesson) !== 'ready') {
+      throw new HttpError(409, 'This preview is still being processed — check back shortly', {
+        code: 'VIDEO_PROCESSING',
+      })
+    }
+    if (!isBunnyConfigured()) {
+      throw new HttpError(503, 'Video playback is temporarily unavailable', {
+        code: 'PLAYBACK_UNCONFIGURED',
+      })
+    }
+
+    const { url, expiresAt, ttlSeconds } = signPlaybackUrl(lesson.bunnyVideoId)
+    res.set('Cache-Control', 'no-store') // a signed URL must not sit in any cache
+    res.json({ url, expiresAt, ttlSeconds, lessonId: String(lesson._id), title: lesson.name })
   }),
 )
 

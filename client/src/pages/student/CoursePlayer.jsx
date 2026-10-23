@@ -6,6 +6,8 @@ import { Button, cn, Loading, useToast } from '../../components/ui/index.jsx'
 import { ProgressBar } from '../../components/student/index.jsx'
 import LessonPlayer from '../../components/student/LessonPlayer.jsx'
 import BrandLogo from '../../components/BrandLogo.jsx'
+import CurriculumList from '../../components/student/Curriculum.jsx'
+import { formatTotal, lessonLength, toSeconds } from '../../components/student/curriculum.js'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
@@ -36,140 +38,6 @@ const writeSidebarPref = (open) => {
     // Storage blocked (private mode, site data cleared) — the toggle still works
     // for this visit, it just is not remembered.
   }
-}
-
-/** "12:34" / "1:02:03" → seconds. Anything else (or nothing) counts as 0. */
-function toSeconds(duration) {
-  const parts = String(duration || '')
-    .trim()
-    .split(':')
-    .map(Number)
-  if (parts.length < 2 || parts.some((n) => !Number.isFinite(n))) return 0
-  return parts.reduce((total, n) => total * 60 + n, 0)
-}
-
-/** 2280 → "38min", 4500 → "1hr 15min" — the curriculum's compact style. */
-function formatTotal(seconds) {
-  if (!seconds) return ''
-  const mins = Math.round(seconds / 60)
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  if (!h) return `${m}min`
-  return m ? `${h}hr ${m}min` : `${h}hr`
-}
-
-/** Lesson durations are "mm:ss"; the list shows whole minutes. */
-const lessonLength = (duration) => {
-  const s = toSeconds(duration)
-  return s ? `${Math.max(1, Math.round(s / 60))}min` : duration || ''
-}
-
-const TYPE_ICON = { Video: '▶', Quiz: '?', PDF: '▤', 'E-book': '▤', Text: '▤', Live: '●' }
-
-function CurriculumList({
-  course,
-  completed,
-  activeId,
-  openSections,
-  onToggleSection,
-  onSelect,
-  onToggleDone,
-  busy,
-}) {
-  // Lesson numbers run across the whole course, counted from the data rather
-  // than from what is rendered — a collapsed section must not renumber the rest.
-  const firstNumber = course.sections.reduce(
-    (acc, s, i) => [...acc, i === 0 ? 1 : acc[i - 1] + course.sections[i - 1].lessons.length],
-    [],
-  )
-  return (
-    <div>
-      {course.sections.map((section, si) => {
-        const open = openSections[String(section._id)]
-        const done = section.lessons.filter((l) => completed.has(String(l._id))).length
-        const total = formatTotal(section.lessons.reduce((t, l) => t + toSeconds(l.duration), 0))
-        return (
-          <div key={section._id} className="border-b border-line-solid">
-            <button
-              type="button"
-              aria-expanded={!!open}
-              onClick={() => onToggleSection(section._id)}
-              className="flex w-full items-start justify-between gap-3 bg-surface-mist px-4 py-3.5 text-left transition-colors duration-200 ease-gs hover:bg-surface"
-            >
-              <span>
-                <span className="block text-[0.92rem] font-bold leading-snug text-brand-deep">
-                  Section {si + 1}: {section.name}
-                </span>
-                <span className="mt-1 block text-[0.75rem] text-muted">
-                  {done} / {section.lessons.length}
-                  {total && ` | ${total}`}
-                </span>
-              </span>
-              <span
-                className={cn(
-                  'mt-0.5 shrink-0 text-muted transition-transform duration-200',
-                  open && 'rotate-180',
-                )}
-                aria-hidden="true"
-              >
-                ▾
-              </span>
-            </button>
-
-            {open && (
-              <ul>
-                {section.lessons.map((l, li) => {
-                  const number = firstNumber[si] + li
-                  const id = String(l._id)
-                  const isDone = completed.has(id)
-                  const active = id === activeId
-                  return (
-                    <li
-                      key={l._id}
-                      className={cn(
-                        'flex gap-3 px-4 py-3 transition-colors duration-200 ease-gs',
-                        active ? 'bg-accent-soft' : 'hover:bg-surface',
-                      )}
-                    >
-                      {/* A real checkbox: keyboard and screen readers get
-                          "mark complete" without opening the lesson. */}
-                      <input
-                        type="checkbox"
-                        checked={isDone}
-                        disabled={busy}
-                        onChange={() => onToggleDone({ ...l, sectionId: section._id }, !isDone)}
-                        aria-label={`Mark "${l.name}" as ${isDone ? 'not complete' : 'complete'}`}
-                        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => onSelect({ ...l, sectionId: section._id })}
-                        aria-current={active ? 'true' : undefined}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <span
-                          className={cn(
-                            'block text-[0.86rem] leading-snug',
-                            active ? 'font-semibold text-brand' : 'text-ink',
-                          )}
-                        >
-                          {number}. {l.name}
-                        </span>
-                        <span className="mt-1 flex items-center gap-1.5 text-[0.74rem] text-muted">
-                          <span aria-hidden="true">{TYPE_ICON[l.contentType] || '▤'}</span>
-                          {lessonLength(l.duration) || l.contentType}
-                        </span>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
 }
 
 export default function CoursePlayer() {

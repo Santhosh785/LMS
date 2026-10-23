@@ -84,7 +84,11 @@ function Notice({ icon, title, body, action }) {
   )
 }
 
-export default function LessonPlayer({ slug, lesson, thumbClass }) {
+/**
+ * `source(lessonId)` is the API path that returns a signed URL — the enrolled
+ * playback route by default; the public course page passes the free-preview one.
+ */
+export default function LessonPlayer({ slug, lesson, thumbClass, source }) {
   const [state, setState] = useState({ status: 'idle', url: null, error: null })
   const timer = useRef(null)
   /** Always the current `load`, so the refresh timer cannot fire a stale one. */
@@ -97,9 +101,10 @@ export default function LessonPlayer({ slug, lesson, thumbClass }) {
     if (!lessonId) return
     setState((s) => ({ status: s.url ? 'refreshing' : 'loading', url: s.url, error: null }))
     try {
-      const { data } = await api.get(
-        `/enrollments/course/${slug}/playback/${encodeURIComponent(lessonId)}`,
-      )
+      const path = source
+        ? source(lessonId)
+        : `/enrollments/course/${slug}/playback/${encodeURIComponent(lessonId)}`
+      const { data } = await api.get(path)
       setState({ status: 'ready', url: data.url, error: null })
 
       // Schedule the next fetch from the expiry the server reported, rather than
@@ -119,7 +124,7 @@ export default function LessonPlayer({ slug, lesson, thumbClass }) {
         error: { code: err?.response?.data?.details?.code, message: apiError(err) },
       })
     }
-  }, [slug, lessonId])
+  }, [slug, lessonId, source])
 
   // Written in an effect, not during render: a ref mutated while rendering is
   // invisible to React and breaks under concurrent rendering, where a render can
