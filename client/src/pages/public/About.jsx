@@ -38,7 +38,6 @@ const REVEAL_SELECTORS = [
   '.about-loop-wrap',
   '.about-approach-step',
   '.about-quote',
-  '.about-cta',
   '.about-tagline',
 ]
 
@@ -319,26 +318,6 @@ export default function About() {
       </section>
 
       <div className="about-wrap">
-        <section className="about-cta" aria-labelledby="cta-heading">
-          <div className="about-cta-glow" aria-hidden="true" />
-          <h2 id="cta-heading">Want to learn marketing you can actually apply?</h2>
-          <p>
-            Start free in the course library, join a live workshop, or apply for the Flagship cohort
-            — 10 seats per batch, built for implementation.
-          </p>
-          <div className="about-cta-actions">
-            <Link className="btn-lm-primary" to="/courses/category">
-              Browse courses{' '}
-              <span className="arr" aria-hidden="true">
-                →
-              </span>
-            </Link>
-            <Link className="btn-lm-ghost" to="/programs/complete-growth-marketing">
-              Flagship program
-            </Link>
-          </div>
-        </section>
-
         <div className="about-tagline">
           <p>
             Learn what matters. Apply what you learn. Grow what you build.

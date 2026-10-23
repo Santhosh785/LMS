@@ -9,7 +9,6 @@ import useBodyClass from '../../hooks/useBodyClass.js'
 import useScrollReveal from '../../hooks/useScrollReveal.js'
 import {
   audienceLinks,
-  finalCta,
   flagship,
   hero,
   journey,
@@ -432,20 +431,6 @@ export default function Home() {
               </Link>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ------------------------------ final CTA --------------------------- */}
-      <section className="lm-final lm-final--visual">
-        <h2>{finalCta.heading}</h2>
-        <p>{finalCta.body}</p>
-        <div className="lm-final-actions">
-          <Link className="btn-lm-blue" to="/courses/category">
-            Browse self-paced library <Arrow />
-          </Link>
-          <Link className="btn-lm-white" to="/programs/complete-growth-marketing">
-            Apply for Flagship
-          </Link>
         </div>
       </section>
     </div>

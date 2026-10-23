@@ -216,8 +216,3 @@ export const resourceTeasers = [
     to: '/blog',
   },
 ]
-
-export const finalCta = {
-  heading: 'Pick a self-paced course — or apply for Flagship LIVE.',
-  body: 'Foundation & gap courses in the library · Workshops when you want live practice · 10 seats per Flagship batch.',
-}
