@@ -137,56 +137,6 @@ const WpMediaUpload = lazyNamed(() => import('./pages/admin/blog/Media.jsx'), 'M
 const WpComments = lazy(() => import('./pages/admin/blog/Comments.jsx'))
 const WpTools = lazy(() => import('./pages/admin/blog/Tools.jsx'))
 
-/**
- * The static site used .html URLs. Anything already bookmarked or linked from
- * outside is mapped onto the new route so old links don't 404.
- */
-const LEGACY_REDIRECTS = {
-  '/index.html': '/',
-  '/courses/index.html': '/courses',
-  '/courses/marketing.html': '/courses/category',
-  '/courses/seo.html': '/courses/seo-mastery',
-  '/programs/complete-growth-marketing.html': '/programs/complete-growth-marketing',
-  '/workshops/index.html': '/workshops',
-  '/workshops/seo-mastery.html': '/workshops/seo-mastery-live-tamil',
-  '/blog/index.html': '/blog',
-  '/blog/seo-vs-sem.html': '/blog/seo-vs-sem',
-  '/community/index.html': '/community',
-  '/community/channel.html': '/community/announcements',
-  '/community/workshops.html': '/community/workshops',
-  '/student/index.html': '/student',
-  '/student/courses.html': '/student/courses',
-  '/student/course.html': '/student/courses/seo-mastery',
-  '/student/live.html': '/student/live',
-  '/student/practice.html': '/student/practice',
-  '/student/certificates.html': '/student/certificates',
-  '/student/achievements.html': '/student/achievements',
-  '/student/profile.html': '/student/profile',
-  '/admin/index.html': '/admin',
-  '/admin/courses.html': '/admin/courses',
-  '/admin/customers.html': '/admin/customers',
-  '/admin/transactions.html': '/admin/transactions',
-  '/admin/email.html': '/admin/email/broadcasts',
-  '/admin/email-lists.html': '/admin/email/lists',
-  '/admin/email-contacts.html': '/admin/email/contacts',
-  '/admin/email-broadcast-create.html': '/admin/email/broadcasts/create',
-  '/admin/funnels.html': '/admin/funnels',
-  '/admin/funnel-create.html': '/admin/funnels/create',
-  '/admin/funnel-leads.html': '/admin/funnels/leads',
-  '/admin/community.html': '/admin/community',
-  '/admin/settings.html': '/admin/settings',
-  '/admin/live.html': '/admin/live/calendar',
-  '/admin/live-bookings.html': '/admin/live/bookings',
-  '/admin/live-booking-create.html': '/admin/live/bookings/create',
-  '/admin/live-create.html': '/admin/live/create',
-  '/admin/live-class.html': '/admin/live/class',
-  '/admin/live-stream.html': '/admin/live/stream',
-  '/admin/gamification-points.html': '/admin/gamification/points',
-  '/admin/gamification-badges.html': '/admin/gamification/badges',
-  '/admin/gamification-leaderboard.html': '/admin/gamification/leaderboard',
-  '/admin/gamification-settings.html': '/admin/gamification/settings',
-}
-
 function NotFound() {
   return (
     <div className="grid min-h-[60vh] place-items-center px-5 text-center">
@@ -253,10 +203,6 @@ export default function App() {
       <RouteBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
-            {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (
-              <Route key={from} path={from} element={<Navigate to={to} replace />} />
-            ))}
-
             {/* ------------------------------ public ------------------------------ */}
             <Route element={<PublicLayout />}>
               <Route index element={<Home />} />
