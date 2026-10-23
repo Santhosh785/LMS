@@ -17,3 +17,7 @@ server/uploads/
 # React Router build output and generated route types (client)
 client/build/
 .react-router/
+
+# Playwright smoke suite output (e2e/)
+e2e/test-results/
+e2e/playwright-report/

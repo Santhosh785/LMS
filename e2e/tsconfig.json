@@ -1,0 +1,17 @@
+{
+  "include": ["**/*.ts", "**/*.mjs"],
+  "exclude": ["node_modules", "playwright-report", "test-results"],
+  "compilerOptions": {
+    "lib": ["DOM", "ES2022"],
+    "types": ["node"],
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true
+  }
+}

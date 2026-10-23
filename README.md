@@ -53,6 +53,65 @@ tests. Never point it at production. Concurrent runs are serialised by an
 advisory lock; use `npm --prefix server run db:lock -- <cmd>` for any other ad-hoc
 command that writes to the shared dev project.
 
+### Smoke tests (Playwright)
+
+`e2e/` is a read-only Playwright suite for the public site. It never creates a
+row, never signs in as a student or an admin, and never pays. It checks:
+
+- **SEO** (raw server HTML and headers, no browser): title, description,
+  canonical and Organization JSON-LD on `/`; Course, BlogPosting and Event
+  JSON-LD on a course, a blog post and a workshop; the discovered pages in
+  `/sitemap.xml`; a `Sitemap:` line in `/robots.txt`; a 404 with `noindex` for an
+  unknown course; a 301 for a legacy `.html` path; no admin markup in the
+  `/admin` document; a JSON 404 for `/api/*`; an immutable cache header on a
+  hashed asset; `private, no-store` on the login page and the API when a (dummy)
+  session cookie is sent.
+- **Enrol**: open a paid course, click Enrol, land on `/checkout/<slug>` with the
+  price and a UPI or Razorpay control showing. It stops there; the page is
+  blocked from sending any non-GET request.
+- **Auth shell**: the email and password fields are in the `/login` server HTML,
+  and a logged-out visit to `/student` ends on `/login`.
+- **Hydration**: `/`, a course page and a blog post load in a real browser with
+  no hydration or markup-mismatch console errors.
+
+```sh
+# one-time, per machine: download the browser Playwright drives
+npx playwright install chromium
+
+# before a deploy: build, start the app on :3000 against the TEST project, seed
+# the catalogue, run the suite
+npm run e2e
+
+# after a deploy: the same specs against the live site; starts no server
+BASE_URL=https://growthscholar.in npm run e2e:prod
+```
+
+`npm run e2e` takes the same guard as the server tests: it refuses to run unless
+`SUPABASE_PROJECT_REF` equals `TEST_SUPABASE_PROJECT_REF`, because it seeds that
+database (`seed:sample`: the content seed, then publishing the draft courses) and
+serves it. It ignores `BASE_URL`. `E2E_SKIP_SEED=1` skips the seed when the
+content is already published. Playwright builds the client and starts the
+production server itself, with mail, Sentry, Cloudflare purges and background
+jobs switched off.
+
+Slugs are not hardcoded. The suite takes the first course (paid), workshop and
+blog post from the public API, and each can be pinned:
+
+| Variable            | Overrides                                                                     |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `E2E_COURSE_SLUG`   | the course used by the SEO, enrol and hydration specs (must be a paid course) |
+| `E2E_WORKSHOP_SLUG` | the workshop used by the SEO spec                                             |
+| `E2E_BLOG_SLUG`     | the blog post used by the SEO and hydration specs                             |
+| `E2E_BRAND`         | the brand the home page title must contain (default `Growth Scholar`)         |
+
+If discovery finds nothing and no override is set, the run fails naming the
+missing content type.
+
+The suite can later run as a Coolify post-deployment command
+(`BASE_URL=https://growthscholar.in npm run e2e:prod`, from an image that has the
+Playwright browser). No GitHub Actions workflow exists today, and none is added
+for this suite. See [docs/deploy.md](docs/deploy.md#verify-after-a-deploy).
+
 ### Migrating data from MongoDB
 
 `npm --prefix server run etl` copies a MongoDB database (`MONGO_URI`) into the
@@ -176,15 +235,14 @@ Redis, no second service. `BOSS_ENABLED=0` runs every job inline instead. See
 
 All are optional and documented in `server/.env.example`.
 
-| Variable            | Purpose                                                                                                                                                                                                                                                                                                                      |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BOSS_DATABASE_URL` | Session-capable Postgres connection for pg-boss (direct `:5432` or the session-mode pooler, never `:6543`). Defaults to `DIRECT_DATABASE_URL`. The cache-invalidation listener uses it too when set.                                                                                                                         |
-| `BOSS_ENABLED`      | `0` runs every job inline instead of on the queue. On otherwise, and always off under test.                                                                                                                                                                                                                                  |
-| `RATE_LIMIT_STORE`  | `postgres` or `memory`. Unset: `postgres` in production when `DATABASE_URL` is set, `memory` otherwise.                                                                                                                                                                                                                      |
-| `REPLICAS`          | How many instances run (default 1). Above 1 the server refuses to start without Bunny Storage configured.                                                                                                                                                                                                                    |
-| `CF_ZONE_ID`        | Cloudflare zone whose cache is purged after content changes. Blank: the purge job does nothing.                                                                                                                                                                                                                              |
-| `CF_API_TOKEN`      | Cloudflare API token with Zone > Cache Purge on that zone.                                                                                                                                                                                                                                                                   |
-| `CF_PROXIED`        | Optional. `1` or `true` when the site is behind Cloudflare: every rate limiter keys on the `CF-Connecting-IP` header (falling back to the client IP, IPv6 by subnet). Requires restricting origin ingress to Cloudflare's IP ranges; see [docs/cloudflare.md](docs/cloudflare.md). With Cloudflare also set `TRUST_PROXY=2`. |
+| Variable            | Purpose                                                                                                                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BOSS_DATABASE_URL` | Session-capable Postgres connection for pg-boss (direct `:5432` or the session-mode pooler, never `:6543`). Defaults to `DIRECT_DATABASE_URL`. The cache-invalidation listener uses it too when set. |
+| `BOSS_ENABLED`      | `0` runs every job inline instead of on the queue. On otherwise, and always off under test.                                                                                                          |
+| `RATE_LIMIT_STORE`  | `postgres` or `memory`. Unset: `postgres` in production when `DATABASE_URL` is set, `memory` otherwise.                                                                                              |
+| `REPLICAS`          | How many instances run (default 1). Above 1 the server refuses to start without Bunny Storage configured.                                                                                            |
+| `CF_ZONE_ID`        | Cloudflare zone whose cache is purged after content changes. Blank: the purge job does nothing.                                                                                                      |
+| `CF_API_TOKEN`      | Cloudflare API token with Zone > Cache Purge on that zone.                                                                                                                                           |
 
 ---
 
@@ -212,6 +270,7 @@ growth-scholar-mern/
 │       └── utils/                csv helpers, generic CRUD router
 ├── packages/
 │   └── seo/                      @gs/seo: page meta, JSON-LD and meta() descriptors
+├── e2e/                          read-only Playwright smoke suite (tests/, fixtures/, scripts/)
 └── client/
     ├── react-router.config.ts    framework mode, ssr: true
     └── src/
@@ -480,19 +539,21 @@ browser gets them from the site config in the root loader (`context/SiteConfigCo
 
 ## Scripts
 
-| Command               | What it does                                                                              |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `npm run install:all` | install root + server + client                                                            |
-| `npm run dev`         | Express on :5000, serving the client from source through embedded Vite                    |
-| `npm run seed`        | publish catalogue content — idempotent, deletes nothing                                   |
-| `npm run build`       | `react-router build`: the client and server bundles into `client/build`                   |
-| `npm run typecheck`   | generate the route types and run `tsc` over the client                                    |
-| `npm start`           | run Express, which server-renders the client from `client/build` on the same origin       |
-| `npm test`            | build the client, then run the server test suite (needs a disposable database, see Tests) |
-| `npm run lint`        | ESLint over both packages                                                                 |
-| `npm run format`      | Prettier over both packages                                                               |
-| `npm run test:server` | the server test suite alone, without building the client                                  |
-| `npm run check`       | lint + format check + tests                                                               |
+| Command               | What it does                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `npm run install:all` | install root + server + client                                                                                |
+| `npm run dev`         | Express on :5000, serving the client from source through embedded Vite                                        |
+| `npm run seed`        | publish catalogue content — idempotent, deletes nothing                                                       |
+| `npm run build`       | `react-router build`: the client and server bundles into `client/build`                                       |
+| `npm run typecheck`   | generate the route types and run `tsc` over the client and the e2e suite                                      |
+| `npm start`           | run Express, which server-renders the client from `client/build` on the same origin                           |
+| `npm test`            | build the client, then run the server test suite (needs a disposable database, see Tests)                     |
+| `npm run lint`        | ESLint over both packages                                                                                     |
+| `npm run format`      | Prettier over both packages                                                                                   |
+| `npm run test:server` | the server test suite alone, without building the client                                                      |
+| `npm run e2e`         | build, start and seed the app against the test project, then run the Playwright smoke suite (see Smoke tests) |
+| `npm run e2e:prod`    | the same suite against `BASE_URL`; starts nothing                                                             |
+| `npm run check`       | lint + format check + tests                                                                                   |
 
 Deployment, email DNS, Bunny, Razorpay, mobile QA and observability each have a
 runbook in [docs/](docs/).

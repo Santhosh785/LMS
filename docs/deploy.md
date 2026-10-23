@@ -211,6 +211,26 @@ NODE_ENV=production npm --prefix server run seed:demo                # must refu
 Then walk the money path by hand: browse → checkout at ₹1 → approve in admin →
 confirm the email arrives at an external address → sign in → play a lesson.
 
+### Smoke suite
+
+The read-only Playwright suite in `e2e/` checks the same things by machine, and
+is the check to run both sides of a deploy (what it covers, the env overrides and
+the one-time `npx playwright install chromium` are in the README under
+*Smoke tests*):
+
+```sh
+# Before the deploy: locally, against the TEST Supabase project (never production)
+npm run e2e
+
+# After the deploy: against the live site. Starts no server and writes nothing.
+BASE_URL=https://growthscholar.in npm run e2e:prod
+```
+
+It can later be wired as a Coolify post-deployment command running the second
+line; that needs the Playwright browser in the image it runs in. **No GitHub
+Actions workflow exists today and none is added for this suite**: deploys are
+triggered from Coolify, as above, so the run is manual until that hook is set.
+
 ## Rollback
 
 Redeploy the previous commit from Coolify (Deployments → pick the earlier one →
