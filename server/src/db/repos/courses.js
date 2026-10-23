@@ -1,7 +1,24 @@
-import { and, asc, eq, inArray, notInArray } from 'drizzle-orm'
+import {
+  and,
+  arrayOverlaps,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  gt,
+  gte,
+  ilike,
+  inArray,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm'
 import { db, inParallel, withMongoId } from '../index.js'
 import { coerce, isUuid } from '../coerce.js'
 import { courses, courseSections, coursePricingPlans, lessons } from '../schema/index.js'
+import { stripVideoRefs } from '../../services/bunny.js'
 
 /**
  * Courses as documents.
@@ -69,6 +86,166 @@ export const findCourseById = (id, opts) =>
 
 export const findCourseBySlug = (slug, opts) =>
   findCourse(eq(courses.slug, String(slug).toLowerCase()), opts)
+
+/**
+ * What "public" means for a course: Published AND Public.
+ *
+ * The one definition. The catalogue, the course page, the free-preview route,
+ * the sitemap and the SEO resolver all read it from here, so a Draft or Hidden
+ * course cannot be reachable through one surface and absent from another.
+ * Students already enrolled in a drafted course keep access through
+ * /api/enrollments, which is a different route with a different check.
+ */
+export const publicCourseWhere = and(
+  eq(courses.status, 'Published'),
+  eq(courses.visibility, 'Public'),
+)
+
+const splitList = (value) =>
+  String(value || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+const SORTS = {
+  popularity: [desc(courses.popularity)],
+  newest: [desc(courses.newestRank)],
+  rating: [desc(courses.rating)],
+  'price-asc': [asc(courses.amount)],
+  'price-desc': [desc(courses.amount)],
+}
+
+/**
+ * Mirrors the original js/explore.js filtering exactly, including its quirk
+ * that "paid" is pre-selected when the URL carries no facet at all. Returns a
+ * SQL condition.
+ */
+export function buildCourseQuery(params) {
+  const { price, type, topic, lang, rating, duration, q, category, tag } = params
+  /**
+   * Draft and Hidden courses never reach the public catalogue. Task 13 moves any
+   * course whose lessons have no video attached to Draft — a catalogue where
+   * some courses cannot be watched after payment is worse than a smaller one,
+   * and until this filter existed the status field was decorative.
+   */
+  const clauses = [publicCourseWhere]
+  // `category` and `tag` count as facets too, or arriving at /courses?tag=x
+  // would silently add the legacy "paid only" default on top of the tag.
+  const hasFacet = Boolean(price || type || topic || lang || category || tag)
+
+  const prices = splitList(price)
+  if (prices.length) clauses.push(inArray(courses.price, prices))
+  else if (!hasFacet) clauses.push(eq(courses.price, 'paid'))
+
+  const types = splitList(type)
+  if (types.length) clauses.push(inArray(courses.type, types))
+
+  const topics = splitList(topic)
+  if (topics.length) clauses.push(inArray(courses.topic, topics))
+
+  // Array columns match when they share any value — Mongo's `{ $in }` on an array.
+  const langs = splitList(lang)
+  if (langs.length) clauses.push(arrayOverlaps(courses.languages, langs))
+
+  const categories = splitList(category)
+  if (categories.length) clauses.push(arrayOverlaps(courses.categories, categories))
+
+  const tags = splitList(tag)
+  if (tags.length) clauses.push(arrayOverlaps(courses.tags, tags))
+
+  const ratings = splitList(rating)
+    .map(Number)
+    .filter((n) => !Number.isNaN(n))
+  if (ratings.length) clauses.push(gte(courses.rating, Math.max(...ratings)))
+
+  const durations = splitList(duration)
+  if (durations.length) {
+    const ranges = durations
+      .map((d) => {
+        if (d === 'short') return lte(courses.hours, 5)
+        if (d === 'mid') return and(gt(courses.hours, 5), lte(courses.hours, 12))
+        if (d === 'long') return gt(courses.hours, 12)
+        return null
+      })
+      .filter(Boolean)
+    if (ranges.length) clauses.push(or(...ranges))
+  }
+
+  if (q && q.trim()) {
+    // the old client searched title + topic + languages as one string
+    const pattern = `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+    clauses.push(
+      or(
+        ilike(courses.title, pattern),
+        ilike(courses.topic, pattern),
+        sql`array_to_string(${courses.languages}, ' ') ilike ${pattern}`,
+      ),
+    )
+  }
+
+  return and(...clauses)
+}
+
+/** Catalogue cards: everything except the heavy page-only copy and rules. */
+const {
+  overview: _o,
+  journey: _j,
+  faqs: _f,
+  whoShouldEnroll: _w,
+  dripSchedule: _d,
+  automationRules: _a,
+  ...cardColumns
+} = getTableColumns(courses)
+
+/**
+ * One page of the public catalogue plus the total it was cut from — what
+ * `GET /api/courses` returns. `params` are the route's query values (price,
+ * type, topic, lang, category, tag, rating, duration, sort, q, limit, offset),
+ * raw strings or absent; the defaults are the route's: 9 per page, capped at
+ * 100, popularity order.
+ */
+export async function listPublic(params = {}) {
+  const where = buildCourseQuery(params)
+  const sort = SORTS[params.sort] || SORTS.popularity
+  const limit = Math.min(Number(params.limit) || 9, 100)
+  const offset = Number(params.offset) || 0
+
+  const [items, [{ total }]] = await Promise.all([
+    db
+      .select(cardColumns)
+      .from(courses)
+      .where(where)
+      .orderBy(...sort, asc(courses.id))
+      .limit(limit)
+      .offset(offset),
+    db.select({ total: count() }).from(courses).where(where),
+  ])
+
+  return { items: withMongoId(items), total }
+}
+
+/**
+ * A public course by slug, as the course page receives it: hydrated, with every
+ * video URL and Bunny id stripped. Null when the slug is unknown, Draft or not
+ * Public. `curriculum: false` skips loading lessons (sections stay).
+ */
+export async function findPublicBySlug(slug, { curriculum = true } = {}) {
+  const course = await findCourse(
+    and(eq(courses.slug, String(slug).toLowerCase()), publicCourseWhere),
+    { curriculum },
+  )
+  // Public payload: the curriculum is a selling point, the video ids are not.
+  return course ? stripVideoRefs(course) : null
+}
+
+/** `{ slug, updatedAt }` for every public course — the sitemap's input. */
+export function listPublicCourseSlugs() {
+  return db
+    .select({ slug: courses.slug, updatedAt: courses.updatedAt })
+    .from(courses)
+    .where(publicCourseWhere)
+    .orderBy(asc(courses.slug))
+}
 
 /**
  * Replaces a course's curriculum with `sections`, preserving ids.

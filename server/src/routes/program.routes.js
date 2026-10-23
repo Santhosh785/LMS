@@ -1,8 +1,9 @@
 import { Router } from 'express'
-import { asc, eq } from 'drizzle-orm'
+import { asc } from 'drizzle-orm'
 import { asyncHandler, HttpError } from '../middleware/error.js'
 import { db, withMongoId } from '../db/index.js'
 import { programs } from '../db/schema/index.js'
+import { findProgramBySlug } from '../db/repos/programs.js'
 
 const router = Router()
 
@@ -17,10 +18,7 @@ router.get(
 router.get(
   '/:slug',
   asyncHandler(async (req, res) => {
-    const [program] = await db
-      .select()
-      .from(programs)
-      .where(eq(programs.slug, String(req.params.slug).toLowerCase()))
+    const program = await findProgramBySlug(req.params.slug)
     if (!program) throw new HttpError(404, 'Program not found')
     res.json(withMongoId(program))
   }),

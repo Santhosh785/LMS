@@ -1,4 +1,6 @@
-import { withMongoId } from '../index.js'
+import { asc } from 'drizzle-orm'
+import { db, withMongoId } from '../index.js'
+import { workshops } from '../schema/index.js'
 
 /**
  * Workshop registrations as documents. The guest is three columns in the table
@@ -28,4 +30,15 @@ export function guestValues(guest) {
   }
   if (guest.phone !== undefined) out.guestPhone = guest.phone || null
   return out
+}
+
+/**
+ * `{ slug, updatedAt }` for every workshop — the sitemap's input. Workshops have
+ * no visibility column, so every row is public.
+ */
+export function listWorkshopSlugs() {
+  return db
+    .select({ slug: workshops.slug, updatedAt: workshops.updatedAt })
+    .from(workshops)
+    .orderBy(asc(workshops.slug))
 }

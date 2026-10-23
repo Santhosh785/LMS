@@ -9,36 +9,28 @@ import {
   inArray,
   isNotNull,
   isNull,
-  lte,
   ne,
   or,
 } from 'drizzle-orm'
 import { asyncHandler, HttpError } from '../middleware/error.js'
 import { db, withMongoId } from '../db/index.js'
 import { blogComments, blogPosts, media } from '../db/schema/index.js'
-import { listColumns, withoutColumns } from '../db/repos/blog.js'
+import {
+  findPublicPostBySlug,
+  listColumns,
+  publicPostWhere,
+  withoutColumns,
+} from '../db/repos/blog.js'
 import { blogCommentLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
-
-// Only published (or scheduled-and-due) posts are public. Rows migrated from
-// seeded documents that predate the publishing workflow are given 'Published'
-// by the ETL, so there is no "status missing" case left to allow for.
-const publicFilter = () =>
-  and(
-    inArray(blogPosts.status, ['Published', 'Scheduled']),
-    // Private and password-protected posts are editorial states, not public
-    // ones — they stay out of the archive and out of a direct slug hit alike.
-    eq(blogPosts.visibility, 'Public'),
-    lte(blogPosts.publishedAt, new Date()),
-  )
 
 const escapeLike = (q) => q.replace(/[\\%_]/g, (c) => `\\${c}`)
 
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const clauses = [publicFilter()]
+    const clauses = [publicPostWhere()]
     // "latest" is the catch-all tab in the original category rail
     if (req.query.category && req.query.category !== 'latest') {
       clauses.push(eq(blogPosts.category, req.query.category))
@@ -64,12 +56,12 @@ router.get(
       db
         .select(list)
         .from(blogPosts)
-        .where(and(publicFilter(), eq(blogPosts.featured, true)))
+        .where(and(publicPostWhere(), eq(blogPosts.featured, true)))
         .orderBy(desc(blogPosts.publishedAt)),
       db
         .selectDistinct({ category: blogPosts.category })
         .from(blogPosts)
-        .where(and(publicFilter(), isNotNull(blogPosts.category))),
+        .where(and(publicPostWhere(), isNotNull(blogPosts.category))),
     ])
     res.json({
       items: withMongoId(items),
@@ -82,18 +74,10 @@ router.get(
   }),
 )
 
-async function findPublicPost(slug, columns) {
-  const [row] = await db
-    .select(columns)
-    .from(blogPosts)
-    .where(and(eq(blogPosts.slug, String(slug).toLowerCase()), publicFilter()))
-  return row || null
-}
-
 router.get(
   '/:slug/comments',
   asyncHandler(async (req, res) => {
-    const post = await findPublicPost(req.params.slug, {
+    const post = await findPublicPostBySlug(req.params.slug, {
       id: blogPosts.id,
       allowComments: blogPosts.allowComments,
     })
@@ -117,7 +101,7 @@ router.post(
   '/:slug/comments',
   blogCommentLimiter,
   asyncHandler(async (req, res) => {
-    const post = await findPublicPost(req.params.slug, {
+    const post = await findPublicPostBySlug(req.params.slug, {
       id: blogPosts.id,
       allowComments: blogPosts.allowComments,
     })
@@ -192,7 +176,7 @@ async function withImageSources(post) {
 router.get(
   '/:slug',
   asyncHandler(async (req, res) => {
-    const found = await findPublicPost(req.params.slug, withoutColumns(['revisions']))
+    const found = await findPublicPostBySlug(req.params.slug, withoutColumns(['revisions']))
     if (!found) throw new HttpError(404, 'Article not found')
     const post = await withImageSources(withMongoId(found))
     const related = await db
@@ -202,7 +186,7 @@ router.get(
         and(
           ne(blogPosts.id, post.id),
           found.category ? eq(blogPosts.category, found.category) : isNull(blogPosts.category),
-          publicFilter(),
+          publicPostWhere(),
         ),
       )
       .limit(3)
