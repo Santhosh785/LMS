@@ -208,6 +208,13 @@ export const env = {
   release: process.env.RELEASE || '',
 
   /**
+   * Per-route SEO head tags in the SPA shell (middleware/spaShell.js). On unless
+   * SEO_INJECT=0, which serves the built index.html untouched — the rollback
+   * switch if injection ever misbehaves in production.
+   */
+  seoInject: String(process.env.SEO_INJECT ?? '').trim() !== '0',
+
+  /**
    * Modules whose admin UI is finished but whose backing behaviour is not.
    * Off by default, which hides them in three places at once: the admin
    * navigation, the client routes (both read the flags from GET /api/config)

@@ -1,4 +1,4 @@
-import { asc } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { db, withMongoId } from '../index.js'
 import { workshops } from '../schema/index.js'
 
@@ -30,6 +30,19 @@ export function guestValues(guest) {
   }
   if (guest.phone !== undefined) out.guestPhone = guest.phone || null
   return out
+}
+
+/**
+ * A workshop by slug, as stored, or null. Workshops have no status or
+ * visibility column, so every row is public — the same rule GET
+ * /api/workshops/:slug applies.
+ */
+export async function findWorkshopBySlug(slug) {
+  const [workshop] = await db
+    .select()
+    .from(workshops)
+    .where(eq(workshops.slug, String(slug).toLowerCase()))
+  return workshop || null
 }
 
 /**

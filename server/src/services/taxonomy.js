@@ -254,4 +254,20 @@ export async function publicTermGroups() {
   return groups
 }
 
+/**
+ * One visible (Published, Public) term of `taxonomy` by its exact name, with
+ * its stored `seo` JSON, or null. Content references terms by name, and the
+ * course category page's `?topic=` carries that name, so the match is exact —
+ * the same comparison the catalogue filter makes.
+ */
+export async function findPublicTermByName(taxonomy, name) {
+  const value = String(name ?? '').trim()
+  if (!value) return null
+  const [term] = await db
+    .select()
+    .from(terms)
+    .where(and(eq(terms.taxonomy, taxonomy), eq(terms.name, value), visibleTerm))
+  return term || null
+}
+
 export { TERM_REFERENCES, MAX_DEPTH }

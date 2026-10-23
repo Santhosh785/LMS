@@ -42,6 +42,7 @@ import adminRoutes from './routes/admin/index.js'
 import { mediaDir } from './routes/admin/media.routes.js'
 import { legacyRedirect } from './middleware/legacyRedirect.js'
 import sitemapRoutes from './routes/sitemap.routes.js'
+import { spaShell } from './middleware/spaShell.js'
 
 const app = express()
 
@@ -231,15 +232,12 @@ if (fs.existsSync(indexHtml)) {
     }),
   )
 
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/')) return next()
-    // index.html must never be cached: it names the fingerprinted bundles, so a
-    // cached copy pins the browser to the previous deploy's filenames — which
-    // 404 once the old assets are gone.
-    res.set('Cache-Control', 'no-cache, must-revalidate')
-    res.sendFile(indexHtml)
-  })
-  console.log(`[server] serving the SPA from ${clientDist}`)
+  // GET only, `/api/*` passed through, `Cache-Control: no-cache` on every
+  // response; the head carries per-route SEO tags unless SEO_INJECT=0.
+  app.get('*', spaShell({ indexHtml, inject: env.seoInject }))
+  console.log(
+    `[server] serving the SPA from ${clientDist}${env.seoInject ? '' : ' (SEO_INJECT=0: no head injection)'}`,
+  )
 } else if (env.isProd) {
   // In production this is a broken deploy, not a preference: the site would
   // answer every page request with a JSON 404.
