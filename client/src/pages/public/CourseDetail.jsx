@@ -12,7 +12,6 @@ import {
   lessonCount,
 } from '../../components/student/curriculum.js'
 import LessonPlayer from '../../components/student/LessonPlayer.jsx'
-import useBodyClass from '../../hooks/useBodyClass.js'
 
 /**
  * /courses/:slug — the public course page, in the same Udemy-style frame as the
@@ -112,8 +111,6 @@ export default function CourseDetail() {
     retry: false,
   })
   const isEnrolled = Boolean(owned?.enrollment)
-
-  useBodyClass('gs-redesign course-page--convert')
 
   // A client-side move to another course keeps this component mounted; open
   // that course's first section too.

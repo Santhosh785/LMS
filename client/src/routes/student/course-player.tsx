@@ -1,3 +1,4 @@
+import { privateMeta } from '../../lib/clientMeta'
 import ProtectedRoute from '../../components/ProtectedRoute.jsx'
 import CoursePlayer from '../../pages/student/CoursePlayer.jsx'
 
@@ -12,6 +13,8 @@ clientLoader.hydrate = true as const
 export function HydrateFallback() {
   return <div className="min-h-screen" aria-busy="true" />
 }
+
+export const meta = privateMeta('Course | Growth Scholar')
 
 export default function CoursePlayerRoute() {
   return (

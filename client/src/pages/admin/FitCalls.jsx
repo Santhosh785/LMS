@@ -14,7 +14,6 @@ import {
   TextField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * The fit-call inbox — requests from /programs/fit-call.
@@ -54,7 +53,6 @@ const toLocalInput = (d) => {
 }
 
 export default function FitCalls() {
-  useDocumentTitle('Fit calls | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
 

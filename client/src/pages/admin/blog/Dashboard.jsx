@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../../api/client.js'
-import useDocumentTitle from '../../../hooks/useDocumentTitle.js'
 import { fmtDateTime, Icon, Postbox, Spinner, timeAgo, useNotices } from './wp.jsx'
 
 /**
@@ -12,7 +11,6 @@ import { fmtDateTime, Icon, Postbox, Spinner, timeAgo, useNotices } from './wp.j
  * without the ones that only make sense for a hosted WordPress install.
  */
 export default function Dashboard() {
-  useDocumentTitle('Dashboard | Growth Scholar Blog')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const notices = useNotices()

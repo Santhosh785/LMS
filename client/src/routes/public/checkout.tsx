@@ -1,9 +1,12 @@
+import { privateMeta } from '../../lib/clientMeta'
 import Checkout from '../../pages/public/Checkout.jsx'
 
 /**
  * Client-only: the public chrome around it is server-rendered, the checkout
  * body itself (TanStack Query + axios, the payment SDK) renders in the browser.
  */
+
+export const meta = privateMeta('Checkout | Growth Scholar')
 
 export async function clientLoader() {
   return null

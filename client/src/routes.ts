@@ -1,8 +1,8 @@
 import { type RouteConfig, index, layout, route } from '@react-router/dev/routes'
 
 /**
- * The route table — the old App.jsx tree, minus the legacy .html redirects,
- * which Express now serves (middleware/legacyRedirect.js). Order matters where
+ * The route table. The legacy .html redirects are not here: Express serves
+ * them (middleware/legacyRedirect.js). Order matters where
  * a static path shares a prefix with a :param route: the static one comes
  * first so it is not swallowed.
  *

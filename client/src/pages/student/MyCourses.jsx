@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client.js'
 import { Button, EmptyState, Loading, cn } from '../../components/ui/index.jsx'
 import { CourseProgressCard, PageHead } from '../../components/student/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const TABS = [
   { id: 'all', label: 'All' },
@@ -14,7 +13,6 @@ const TABS = [
 ]
 
 export default function MyCourses() {
-  useDocumentTitle('My Learning | Growth Scholar')
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') || '')
   const [tab, setTab] = useState('all')

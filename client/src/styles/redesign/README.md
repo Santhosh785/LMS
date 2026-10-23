@@ -21,10 +21,10 @@ drop is a `cp`.
   Those custom properties are declared in `src/index.css`, transcribed from the
   drop's `css/base.css`. `tailwind.config.js` holds the same literals for the
   Tailwind-based components. Change one, change both in the same commit.
-- **Load order.** Imported from `src/main.jsx` *after* `./index.css`, so a rule
+- **Load order.** Imported from `src/root.tsx` *after* `./index.css`, so a rule
   here beats a Tailwind utility of equal specificity.
 - **Scoping.** Each sheet is scoped under the page class the static build set on
-  `<body>` (`.home-lm`, …). React applies it with `hooks/useBodyClass.js`.
+  `<body>` (`.home-lm`, …). Each route sets it through `handle.bodyClass`, which `src/root.tsx` puts on `<body>`.
 
 ## Adding a sheet from a new drop
 
@@ -34,7 +34,7 @@ drop is a `cp`.
 4. Confirm it contains no global or chrome rules (`body`, `.site-header`,
    `.nav`, `.site-footer`) that would collide with the shared components — the
    header and footer are React components, not vendored CSS.
-5. Import it in `src/main.jsx`.
+5. Import it in `src/root.tsx`.
 
 ## What must not go here
 

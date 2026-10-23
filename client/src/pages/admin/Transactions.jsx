@@ -4,7 +4,6 @@ import { api, apiError } from '../../api/client.js'
 import { useAdminMutation, downloadCsv } from '../../api/admin.js'
 import { Button, Modal, StatusPill, TextField, useToast } from '../../components/ui/index.jsx'
 import { DataTable, KpiRow, PageHead, StatCard } from '../../components/admin/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
 const fmt = (d) =>
@@ -17,7 +16,6 @@ const fmt = (d) =>
  * course — is on the row rather than behind a click.
  */
 export default function AdminTransactions() {
-  useDocumentTitle('Transactions — Growth Scholar Admin')
   const toast = useToast()
   const [rejecting, setRejecting] = useState(null)
   const [confirming, setConfirming] = useState(null)

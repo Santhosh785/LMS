@@ -34,13 +34,13 @@ npm --prefix client ci
 
 say "Building the client"
 npm --prefix client run build
-[[ -f client/dist/index.html ]] || die "client build produced no dist/index.html"
+[[ -f client/build/server/index.js && -d client/build/client ]] || die "client build produced no client/build/server/index.js or client/build/client"
 
 # The credential leak this project already shipped once. A grep is cheap;
 # task 20 turns it into a test that fails the suite.
 say "Checking the bundle for leaked credentials"
-if grep -rqE 'password123|SEED_PASSWORD|BUNNY_SECURITY_KEY|RESEND_API_KEY|rzp_live' client/dist; then
-  die "a credential appears in client/dist — do NOT deploy this build"
+if grep -rqE 'password123|SEED_PASSWORD|BUNNY_SECURITY_KEY|RESEND_API_KEY|rzp_live' client/build/client; then
+  die "a credential appears in client/build/client — do NOT deploy this build"
 fi
 
 # --- publish content -------------------------------------------------------

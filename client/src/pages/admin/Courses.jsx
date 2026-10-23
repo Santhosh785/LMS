@@ -10,7 +10,6 @@ import {
   useToast,
 } from '../../components/ui/index.jsx'
 import { DataTable, PageHead } from '../../components/admin/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const slugify = (s) =>
   s
@@ -20,7 +19,6 @@ const slugify = (s) =>
     .replace(/^-|-$/g, '')
 
 export default function AdminCourses() {
-  useDocumentTitle('Courses — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const [creating, setCreating] = useState(false)

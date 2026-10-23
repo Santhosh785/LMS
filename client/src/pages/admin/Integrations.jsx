@@ -14,7 +14,6 @@ import {
   TextField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * Integrations, feature flags and business identity.
@@ -97,7 +96,6 @@ function FlagRow({ name, label, stored, effective, onChange }) {
 }
 
 export default function Integrations() {
-  useDocumentTitle('Integrations | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState({})

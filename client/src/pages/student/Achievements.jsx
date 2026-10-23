@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client.js'
 import { cn, Loading } from '../../components/ui/index.jsx'
 import { PageHead, StatTile } from '../../components/student/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const toneRing = {
   gold: 'bg-gold/15 text-gold',
@@ -11,8 +10,6 @@ const toneRing = {
 }
 
 export default function Achievements() {
-  useDocumentTitle('Achievements | Growth Scholar')
-
   const { data, isPending } = useQuery({
     queryKey: ['me', 'achievements'],
     queryFn: async () => (await api.get('/me/achievements')).data,

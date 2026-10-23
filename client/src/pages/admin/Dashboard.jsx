@@ -4,7 +4,6 @@ import { api } from '../../api/client.js'
 import { cn, Loading, Panel, StatusPill } from '../../components/ui/index.jsx'
 import { ChartSvg, DataTable, KpiRow, PageHead, StatCard } from '../../components/admin/index.jsx'
 import { useFeatures, visibleNav } from '../../context/SiteConfigContext.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const inr = (n) => `₹ ${Number(n || 0).toLocaleString('en-IN')}`
 
@@ -38,7 +37,6 @@ const QUICK_CARDS = [
 ]
 
 export default function AdminDashboard() {
-  useDocumentTitle('Dashboard — Growth Scholar Admin')
   const features = useFeatures()
 
   const { data, isPending } = useQuery({

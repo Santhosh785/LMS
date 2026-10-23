@@ -14,7 +14,6 @@ import {
   TextField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * The leads inbox.
@@ -38,7 +37,6 @@ const fmt = (d) =>
     : '—'
 
 export default function Leads() {
-  useDocumentTitle('Leads | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
 

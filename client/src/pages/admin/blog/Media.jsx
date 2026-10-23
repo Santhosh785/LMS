@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../../api/client.js'
-import useDocumentTitle from '../../../hooks/useDocumentTitle.js'
 import { SIZE_LABELS } from './blocks.jsx'
 import {
   ConfirmDialog,
@@ -26,7 +25,6 @@ import {
  */
 
 export function MediaLibrary() {
-  useDocumentTitle('Media Library | Growth Scholar Blog')
   const queryClient = useQueryClient()
   const notices = useNotices()
   const fileInput = useRef(null)
@@ -655,7 +653,6 @@ function AttachmentDetails({ media, onChange, onClose, onSave, saving, onDelete 
 /* ------------------------------ upload screen ----------------------------- */
 
 export function MediaUpload() {
-  useDocumentTitle('Upload New Media | Growth Scholar Blog')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const notices = useNotices()

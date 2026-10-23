@@ -1,5 +1,4 @@
 import { useLoaderData } from 'react-router'
-import useBodyClass from '../../hooks/useBodyClass.js'
 import useProgramCopy from '../../hooks/useProgramCopy.js'
 
 /**
@@ -23,8 +22,6 @@ function Faq({ q, a, defaultOpen }) {
 
 export default function ProgramDetail() {
   const { program } = useLoaderData()
-
-  useBodyClass('gs-redesign prog-page')
 
   // Section headings and button labels are editable per program; anything the
   // operator left blank falls back to the wording the page shipped with.

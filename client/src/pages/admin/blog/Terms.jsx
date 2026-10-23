@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../../api/client.js'
-import useDocumentTitle from '../../../hooks/useDocumentTitle.js'
 import {
   ConfirmDialog,
   Pagination,
@@ -24,7 +23,6 @@ import {
 const EMPTY = { name: '', slug: '', description: '' }
 
 export default function Terms({ taxonomy, title, singular, help }) {
-  useDocumentTitle(`${title} | Growth Scholar Blog`)
   const queryClient = useQueryClient()
   const notices = useNotices()
 

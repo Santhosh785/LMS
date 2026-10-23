@@ -16,14 +16,12 @@ import {
   useToast,
 } from '../../components/ui/index.jsx'
 import { DataTable, PageHead, TypeCard } from '../../components/admin/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const fmtDT = (d) =>
   d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
 /* -------------------------------- Calendar -------------------------------- */
 export function LiveCalendar() {
-  useDocumentTitle('Live calendar — Growth Scholar Admin')
   const navigate = useNavigate()
   const now = new Date()
   const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() })
@@ -120,7 +118,6 @@ export function LiveCalendar() {
 
 /* ------------------------------ Live classes ------------------------------ */
 export function LiveClassList() {
-  useDocumentTitle('Live classes — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const { data, isPending } = useAdminList('live/classes', { limit: 200 })
@@ -168,7 +165,6 @@ export function LiveClassList() {
 }
 
 export function LiveClassCreate() {
-  useDocumentTitle('New live class — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const save = useAdminSave('live/classes')
@@ -231,7 +227,6 @@ export function LiveClassCreate() {
 
 /* ------------------------------ 1-1 bookings ------------------------------ */
 export function LiveBookings() {
-  useDocumentTitle('1-1 Bookings — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const { data, isPending } = useAdminList('live/bookings', { limit: 200 })
@@ -291,7 +286,6 @@ const THEMES = [
 ]
 
 export function LiveBookingCreate() {
-  useDocumentTitle('New booking page — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const save = useAdminSave('live/bookings')
@@ -395,7 +389,6 @@ export function LiveBookingCreate() {
 
 /* ------------------------------- Live stream ------------------------------ */
 export function LiveStream() {
-  useDocumentTitle('Live stream — Growth Scholar Admin')
   const toast = useToast()
   const { data } = useAdminList('live/classes', { limit: 5 })
   const next = data?.items?.[0]

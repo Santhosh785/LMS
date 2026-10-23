@@ -4,7 +4,6 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, apiError, apiFieldErrors } from '../../api/client.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Button, cn, ErrorNote, Loading, TextField } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 import RazorpayButton from './RazorpayButton.jsx'
 import CoverArt from '../../components/CoverArt.jsx'
 
@@ -46,10 +45,6 @@ export default function Checkout() {
       (await api.get(`/checkout/${slug}`, { params: planName ? { plan: planName } : {} })).data,
     retry: false,
   })
-
-  useDocumentTitle(
-    data ? `Checkout — ${data.course.title} | Growth Scholar` : 'Checkout | Growth Scholar',
-  )
 
   const submitUpi = useMutation({
     mutationFn: async (payload) => (await api.post('/checkout/upi', payload)).data,

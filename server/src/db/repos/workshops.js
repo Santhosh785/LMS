@@ -63,22 +63,24 @@ const publicOrder = () => [
  * of the row (landing copy, capacity, host).
  */
 export function listWorkshopCards(limit) {
-  return db
-    .select({
-      slug: workshops.slug,
-      title: workshops.title,
-      language: workshops.language,
-      mode: workshops.mode,
-      venue: workshops.venue,
-      durationLabel: workshops.durationLabel,
-      image: workshops.image,
-      bannerClass: workshops.bannerClass,
-      priceNew: workshops.priceNew,
-    })
-    .from(workshops)
-    // id breaks ties so the preview is stable between requests.
-    .orderBy(...publicOrder(), asc(workshops.id))
-    .limit(limit)
+  return (
+    db
+      .select({
+        slug: workshops.slug,
+        title: workshops.title,
+        language: workshops.language,
+        mode: workshops.mode,
+        venue: workshops.venue,
+        durationLabel: workshops.durationLabel,
+        image: workshops.image,
+        bannerClass: workshops.bannerClass,
+        priceNew: workshops.priceNew,
+      })
+      .from(workshops)
+      // id breaks ties so the preview is stable between requests.
+      .orderBy(...publicOrder(), asc(workshops.id))
+      .limit(limit)
+  )
 }
 
 /**

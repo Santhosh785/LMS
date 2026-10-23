@@ -13,8 +13,8 @@
  * ported pages start flush against it. Every redesign page instead pads its own
  * first section by calc(var(--header-h) + …), the way the static build did — so
  * on those pages the layout's offset is applied twice and leaves a 76px gap
- * above the hero. `gs-redesign` is set by useBodyClass() on each redesign page
- * alongside its page-specific class, and cancels it.
+ * above the hero. `gs-redesign` is set on <body> by each redesign route's
+ * `handle.bodyClass` (see root.tsx) alongside its page-specific class, and cancels it.
  */
 body.gs-redesign main {
   padding-top: 0;

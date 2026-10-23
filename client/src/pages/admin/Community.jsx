@@ -10,7 +10,6 @@ import {
   useToast,
 } from '../../components/ui/index.jsx'
 import { DataTable, KpiRow, PageHead, StatCard } from '../../components/admin/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const GROUPS = ['Yoda Class Cohort', 'Growth Scholar Hub', 'Group Chats']
 
@@ -110,7 +109,6 @@ function ReportsQueue({ toast }) {
 }
 
 export default function AdminCommunity() {
-  useDocumentTitle('Communities — Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [adding, setAdding] = useState(false)

@@ -20,15 +20,15 @@ import { findPublicTermByName } from './taxonomy.js'
  * Per-URL page meta for the public site: which `@gs/seo` mapper serves a path,
  * and the record it is fed.
  *
- * The Express shell (middleware/spaShell.js) injects the result into the built
- * index.html today; the SSR root loader is meant to call the same function, so
- * a crawler sees one answer for a URL whichever of the two rendered it.
+ * The React Router root loader calls this through the load context
+ * (middleware/reactRouter.js) for every document request, as the fallback head
+ * for a route without its own `meta()` and as the document's status code.
  */
 
 /**
  * The fallback description, used when a page has none of its own. The site
- * settings have no description field yet, so this mirrors the one in
- * client/index.html; a `branding.description`, should the settings grow one,
+ * settings have no description field yet, so this is the site's
+ * long-standing default; a `branding.description`, should the settings grow one,
  * wins over it.
  */
 const DEFAULT_DESCRIPTION =

@@ -1,11 +1,10 @@
 /**
  * Cache-Control policy.
  *
- * `publicCache` is the header a server-rendered public page will carry once
- * the page tasks convert it to loader data: cacheable at the edge for
- * `seconds`, served stale for a day while it revalidates — unless the request
- * is for a signed-in visitor, whose page is personal and must not be stored
- * anywhere. Exported for those later tasks; nothing applies it yet.
+ * `publicCache` is the header a server-rendered public page carries from its
+ * route loader: cacheable at the edge for `seconds`, served stale for a day
+ * while it revalidates — unless the request is for a signed-in visitor, whose
+ * page is personal and must not be stored anywhere.
  *
  * @param {number} seconds s-maxage for the shared cache
  * @param {boolean} hasUser whether the response is for a signed-in visitor

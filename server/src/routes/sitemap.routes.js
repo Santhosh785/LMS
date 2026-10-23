@@ -4,8 +4,8 @@ import { getSitemap, robotsTxt } from '../services/sitemap.js'
 export { invalidateSitemap } from '../services/sitemap.js'
 
 /**
- * GET /sitemap.xml and GET /robots.txt. Mounted at the root, ahead of the SPA
- * fallback, which would otherwise answer both with the app shell.
+ * GET /sitemap.xml and GET /robots.txt. Mounted at the root, ahead of the page
+ * handler, which would otherwise answer both with the not-found page.
  */
 const router = Router()
 

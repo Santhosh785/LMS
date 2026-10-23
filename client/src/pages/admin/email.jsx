@@ -15,14 +15,12 @@ import {
   useToast,
 } from '../../components/ui/index.jsx'
 import { DataTable, KpiRow, PageHead, StatCard } from '../../components/admin/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const fmt = (d) =>
   d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
 /* ------------------------------- Broadcasts ------------------------------- */
 export function Broadcasts() {
-  useDocumentTitle('Broadcasts — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const queryClient = useQueryClient()
@@ -123,7 +121,6 @@ export function Broadcasts() {
 
 /* --------------------------- Create a broadcast --------------------------- */
 export function BroadcastCreate() {
-  useDocumentTitle('New broadcast — Growth Scholar Admin')
   const navigate = useNavigate()
   const toast = useToast()
   const { data: lists } = useAdminList('email/lists', { limit: 100 })
@@ -192,7 +189,6 @@ export function BroadcastCreate() {
 
 /* --------------------------------- Lists ---------------------------------- */
 export function EmailLists() {
-  useDocumentTitle('Email lists — Growth Scholar Admin')
   const toast = useToast()
   const [adding, setAdding] = useState(false)
   const { data, isPending } = useAdminList('email/lists', { limit: 200 })
@@ -282,7 +278,6 @@ export function EmailLists() {
 
 /* -------------------------------- Contacts -------------------------------- */
 export function EmailContacts() {
-  useDocumentTitle('Contacts — Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [adding, setAdding] = useState(false)

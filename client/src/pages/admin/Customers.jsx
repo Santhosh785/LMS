@@ -11,13 +11,11 @@ import {
   useToast,
 } from '../../components/ui/index.jsx'
 import { DataTable, PageHead } from '../../components/admin/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const fmt = (d) =>
   new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 export default function AdminCustomers() {
-  useDocumentTitle('Customers — Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [adding, setAdding] = useState(false)

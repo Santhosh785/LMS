@@ -13,7 +13,6 @@ import {
   TextAreaField,
   useToast,
 } from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 /**
  * The Flagship application inbox.
@@ -55,7 +54,6 @@ const ESSAYS = [
 ]
 
 export default function Applications() {
-  useDocumentTitle('Flagship applications | Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
 

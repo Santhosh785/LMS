@@ -3,11 +3,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { asyncHandler, HttpError } from '../middleware/error.js'
 import { db, withMongoId } from '../db/index.js'
 import { blogComments, blogPosts } from '../db/schema/index.js'
-import {
-  findPublicPostBySlug,
-  findPublicPostPage,
-  listPublicPosts,
-} from '../db/repos/blog.js'
+import { findPublicPostBySlug, findPublicPostPage, listPublicPosts } from '../db/repos/blog.js'
 import { blogCommentLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()

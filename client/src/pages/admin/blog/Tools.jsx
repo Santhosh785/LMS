@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../../api/client.js'
-import useDocumentTitle from '../../../hooks/useDocumentTitle.js'
 import { Icon, Spinner, useNotices } from './wp.jsx'
 
 /**
@@ -14,7 +13,6 @@ import { Icon, Spinner, useNotices } from './wp.jsx'
  * useful as a backup rather than only as a copy.
  */
 export default function Tools() {
-  useDocumentTitle('Tools | Growth Scholar Blog')
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get('tab') === 'import' ? 'import' : 'export'
   const notices = useNotices()

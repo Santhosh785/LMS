@@ -11,7 +11,6 @@ import {
   useToast,
 } from '../../components/ui/index.jsx'
 import { PageHead } from '../../components/admin/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
 
 const TABS = [
   { id: 'branding', label: 'Branding' },
@@ -29,7 +28,6 @@ const MENU_LABELS = {
 }
 
 export default function AdminSettings() {
-  useDocumentTitle('Site settings — Growth Scholar Admin')
   const toast = useToast()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState('branding')

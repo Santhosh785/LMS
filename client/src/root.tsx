@@ -40,8 +40,7 @@ import './styles/redesign/blog.css'
 import './styles/redesign/resources.css'
 import './styles/redesign/overrides.css'
 
-// Carried over from the deleted index.html: the same font source as the
-// original static site, and the bundled favicon (admin settings may swap it
+// The same font source as the original static site, and the bundled favicon (admin settings may swap it
 // at runtime — see SiteConfigProvider).
 export const links: Route.LinksFunction = () => [
   { rel: 'icon', href: '/logo.png' },
@@ -52,9 +51,9 @@ export const links: Route.LinksFunction = () => [
 ]
 
 /**
- * Runs on the server for document requests only. The SEO result is the same
- * `resolveSeo` the Express stopgap used, so a crawler sees one answer for a
- * URL whichever rendered it; its `status` (404 for an unknown slug) becomes
+ * Runs on the server for document requests only. The SEO result comes from
+ * `resolveSeo` through the load context: it is the head of every route that
+ * has no `meta()` of its own, and its `status` (404 for an unknown slug) becomes
  * the document's status code. A resolver failure must not take the page down:
  * the document still renders, with a generic head for that request.
  */
@@ -72,8 +71,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 /**
  * Document requests only: a client-side navigation never re-fetches this
- * loader, so the SEO head stays whatever the first document carried (the pages
- * set their own titles through useDocumentTitle, as before).
+ * loader, so this fallback head stays whatever the first document carried.
+ * Every page with its own head sets it through its route `meta()`.
  */
 export function shouldRevalidate() {
   return false
@@ -87,8 +86,7 @@ export const meta: Route.MetaFunction = ({ data }) =>
 /**
  * The document. The body carries the page scope class the stylesheets key on
  * (`.home-lm`, `.course-page--convert`, …) from the matched routes' `handle`,
- * so the server HTML is already styled; the pages' useBodyClass calls add the
- * same names on the client and are idempotent with it.
+ * so the server HTML is already styled and the class follows client navigation.
  */
 export function Layout({ children }: { children: React.ReactNode }) {
   const root = useRouteLoaderData<typeof loader>('root')
