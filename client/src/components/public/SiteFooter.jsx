@@ -7,7 +7,7 @@ import useSiteNav from '../../hooks/useSiteNav.js'
 
 /**
  * The 2026 redesign's .upgrad-footer — the light bordered footer is replaced by
- * a dark #0b1f1e slab: brand block and social row on the left, three-column
+ * a dark #0b1f1e slab: brand block and social row on the left, four-column
  * link grid on the right, then a rule and the legal bar.
  */
 
@@ -20,7 +20,7 @@ export default function SiteFooter() {
 
   return (
     <footer className="bg-[#0b1f1e] text-[#d1d5db]">
-      <div className="mx-auto grid max-w-footer grid-cols-[1.1fr_2.4fr] gap-10 px-[clamp(1rem,3vw,2rem)] pb-8 pt-12 mx-1040:grid-cols-1">
+      <div className="mx-auto grid max-w-footer grid-cols-[1fr_3fr] gap-10 px-[clamp(1rem,3vw,2rem)] pb-8 pt-12 mx-1040:grid-cols-1">
         <div>
           <Link to="/" className="inline-flex">
             <BrandLogo width={140} height={88} className="h-11 w-auto rounded-lg" />
@@ -52,7 +52,7 @@ export default function SiteFooter() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-x-5 gap-y-6 mx-960:grid-cols-2 mx-640:grid-cols-1">
+        <div className="grid grid-cols-4 gap-x-6 gap-y-8 mx-640:grid-cols-2">
           {columns.map((col) => (
             <div key={col.title}>
               <h4 className="mb-[0.85rem] text-[0.82rem] uppercase tracking-[0.06em] text-white">
@@ -72,32 +72,35 @@ export default function SiteFooter() {
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-footer flex-wrap items-center justify-between gap-4 border-t border-white/[0.08] px-[clamp(1rem,3vw,2rem)] pb-6 pt-[1.15rem]">
-        <p className="text-[0.85rem] text-[#6b7280]">
-          © 2021–2026 Growth Media Pvt. Ltd. All rights reserved.
-        </p>
-        {/* Policy pages have to be reachable from every page — payment gateways check. */}
-        <nav aria-label="Policies" className="flex flex-wrap gap-4">
-          {legalNav.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="text-[0.85rem] text-[#9ca3af] hover:text-white"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
+      {/* The rule sits inside the padding so it lines up with the content above. */}
+      <div className="mx-auto max-w-footer px-[clamp(1rem,3vw,2rem)] pb-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-white/[0.08] pt-[1.15rem]">
+          <p className="text-[0.85rem] text-[#6b7280]">
+            © 2021–2026 Growth Media Pvt. Ltd. All rights reserved.
+          </p>
+          {/* Policy pages have to be reachable from every page — payment gateways check. */}
+          <nav aria-label="Policies" className="flex flex-wrap gap-x-4 gap-y-2">
+            {legalNav.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="text-[0.85rem] text-[#9ca3af] hover:text-white"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
 
-      <div className="mx-auto max-w-footer px-[clamp(1rem,3vw,2rem)] pb-6 text-[0.78rem] text-[#6b7280]">
-        <p>Prices are inclusive. GST not applicable. All course fees are shown in INR.</p>
-        <p className="mt-1">
-          Support:{' '}
-          <a href={`mailto:${business.supportEmail}`} className="hover:text-accent">
-            {business.supportEmail}
-          </a>
-        </p>
+        <div className="mt-4 text-[0.78rem] text-[#6b7280]">
+          <p>Prices are inclusive. GST not applicable. All course fees are shown in INR.</p>
+          <p className="mt-1">
+            Support:{' '}
+            <a href={`mailto:${business.supportEmail}`} className="hover:text-accent">
+              {business.supportEmail}
+            </a>
+          </p>
+        </div>
       </div>
     </footer>
   )

@@ -81,7 +81,6 @@ export const footerColumns = [
       // the pages that actually hold the content the labels promise.
       { label: 'Free Resources', to: '/courses?price=free' },
       { label: 'Success Stories', to: '/#community' },
-      { label: 'Workshops', to: '/workshops', menuKey: 'showWorkshops' },
     ]),
   },
   {
@@ -89,10 +88,7 @@ export const footerColumns = [
     links: [
       { label: 'About us', to: '/about' },
       { label: 'Contact Us', to: '/contact' },
-      { label: 'Refund Policy', to: '/refund' },
-      { label: 'Delivery Policy', to: '/delivery' },
-      { label: 'Privacy Policy', to: '/privacy' },
-      { label: 'Terms of Use', to: '/terms' },
+      // The policy pages are linked once, in the footer's legal bar.
     ],
   },
 ]
