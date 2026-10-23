@@ -37,7 +37,7 @@ export const productTabs = [
     chrome: 'Foundation track',
     title: 'Strong base, native language',
     body: 'For learners who want clarity on core marketing — without ₹40K “what is what” modules. Self-paced, learn on your schedule.',
-    link: { label: 'Start a foundation course →', to: '/courses?price=free&sort=popularity' },
+    link: { label: 'Browse courses →', to: '/courses' },
     visualLabel: 'Foundation courses',
   },
   {
