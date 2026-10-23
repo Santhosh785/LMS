@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
 import { getSettings, updateSettings } from '../../db/repos/settings.js'
-import { cfg, invalidateRuntimeConfig, refreshRuntimeConfig } from '../../services/runtimeConfig.js'
-import { invalidateSiteConfig } from '../../services/siteConfig.js'
+import { cfg } from '../../services/runtimeConfig.js'
+import { invalidateEverywhere } from '../../services/invalidation.js'
 import { mask, open, seal } from '../../utils/secretBox.js'
 import { isRazorpayConfigured } from '../../services/razorpay.js'
 import { isBunnyConfigured } from '../../services/bunny.js'
@@ -175,9 +175,8 @@ router.put(
 
     // Both caches serve this document: the public one carries branding and the
     // feature flags the browser reads, this one carries the credentials.
-    invalidateRuntimeConfig()
-    invalidateSiteConfig()
-    await refreshRuntimeConfig()
+    // Resolves once this instance has reloaded; the others follow via NOTIFY.
+    await invalidateEverywhere('all')
 
     res.json({ ok: true })
   }),

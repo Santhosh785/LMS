@@ -21,6 +21,9 @@ import { refreshRuntimeConfig } from './services/runtimeConfig.js'
 import { startQueue, stopQueue } from './services/queue.js'
 // Job definitions register themselves on import; they must exist before startQueue().
 import './jobs/index.js'
+import { startInvalidationListener, stopInvalidationListener } from './services/invalidation.js'
+import { isBunnyStorageConfigured } from './services/bunnyStorage.js'
+import { assertReplicaSafe } from './config/replicas.js'
 import authRoutes from './routes/auth.routes.js'
 import courseRoutes from './routes/course.routes.js'
 import programRoutes from './routes/program.routes.js'
@@ -290,6 +293,8 @@ async function shutdown(signal) {
       : Promise.resolve()
     await stopQueue()
     await httpClosed
+    // Its own long-lived connection, outside the pool closeDb() ends.
+    await stopInvalidationListener()
     await closeDb()
     process.exit(0)
   } catch (err) {
@@ -308,10 +313,19 @@ if (!env.isTest) {
     // only be read once it is reachable. Loaded before the port opens, or the
     // first requests would be served from the environment alone.
     .then(() => refreshRuntimeConfig())
+    // After the runtime config load, because Bunny Storage may be configured in
+    // /admin/integrations rather than the environment — the same check the
+    // media routes make. Throwing here exits before the queue or port start.
+    .then(() =>
+      assertReplicaSafe({ replicas: env.replicas, storageConfigured: isBunnyStorageConfigured() }),
+    )
     // After the config refresh, before the port opens: a request that enqueues
     // a job should find the workers already running.
     .then(() => startQueue())
     .then(() => {
+      // Cross-instance cache invalidation. Not awaited: an unreachable listener
+      // database leaves the caches on their TTLs, it never blocks or fails boot.
+      startInvalidationListener()
       httpServer = app.listen(env.port, () => {
         console.log(`[server] listening on http://localhost:${env.port}`)
       })

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
 import { getSettings, updateSettings } from '../../db/repos/settings.js'
-import { invalidateSiteConfig } from '../../services/siteConfig.js'
+import { invalidateEverywhere } from '../../services/invalidation.js'
 
 const router = Router()
 
@@ -35,8 +35,8 @@ for (const tab of TABS) {
     asyncHandler(async (req, res) => {
       const setting = await updateSettings({ [tab]: pickKeys(req.body, TAB_KEYS[tab]) })
       // These fields are served to every visitor via GET /api/config, so the
-      // cached copy has to go the moment one of them changes.
-      invalidateSiteConfig()
+      // cached copy has to go the moment one of them changes — on every instance.
+      await invalidateEverywhere('siteConfig')
       res.json(setting)
     }),
   )

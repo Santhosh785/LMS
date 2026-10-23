@@ -1,4 +1,5 @@
 import dotenv from 'dotenv'
+import { parseReplicas } from './replicas.js'
 
 dotenv.config()
 
@@ -80,6 +81,11 @@ export const env = {
         .toLowerCase(),
     ),
   },
+  /**
+   * How many instances this deployment runs (default 1). Above 1 the server
+   * refuses to boot without Bunny Storage — see config/replicas.js.
+   */
+  replicas: parseReplicas(process.env.REPLICAS),
   jwtSecret: process.env.JWT_SECRET || 'dev-only-insecure-secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',

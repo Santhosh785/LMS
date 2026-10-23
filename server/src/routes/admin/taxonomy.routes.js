@@ -12,7 +12,7 @@ import {
   uniqueSlug,
   usageMap,
 } from '../../services/taxonomy.js'
-import { invalidateSiteConfig } from '../../services/siteConfig.js'
+import { invalidateEverywhere } from '../../services/invalidation.js'
 
 const router = Router()
 
@@ -75,8 +75,8 @@ async function findTerm(id) {
 }
 
 /** Every write here changes what the public site renders. */
-const touched = (res, payload) => {
-  invalidateSiteConfig()
+const touched = async (res, payload) => {
+  await invalidateEverywhere('siteConfig')
   return res.json(payload)
 }
 
@@ -144,7 +144,7 @@ router.post(
       .insert(terms)
       .values({ ...body, name: body.name.trim(), taxonomy, slug })
       .returning()
-    invalidateSiteConfig()
+    await invalidateEverywhere('siteConfig')
     res.status(201).json(withMongoId(created))
   }),
 )

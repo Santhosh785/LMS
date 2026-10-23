@@ -101,6 +101,14 @@ out of logging in. Each failure is reported through the error path
 throttled to one report a minute across all limiters, and the report counts how
 many failures it stood in for.
 
+`REPLICAS` (default 1) declares how many instances run. Admin edits to settings,
+taxonomy and integrations reach every instance within a second or two over
+Postgres `LISTEN/NOTIFY` (`gs_invalidate`, on `BOSS_DATABASE_URL` or else
+`DIRECT_DATABASE_URL`), with the 60s cache TTL as the fallback. With
+`REPLICAS` above 1 the server refuses to start unless Bunny Storage is
+configured, because the local-disk media fallback is not shared between
+instances.
+
 ## Schema changes
 
 ```sh
