@@ -6,7 +6,6 @@ import LegalPage, {
   Mail,
   Section,
 } from '../../components/public/LegalPage.jsx'
-import { policyTerms } from '../../data/legal.js'
 import useBusiness from '../../hooks/useBusiness.js'
 
 export default function Terms() {
@@ -116,14 +115,9 @@ export default function Terms() {
           <Link to="/refund" className="font-semibold text-brand underline">
             Refund Policy
           </Link>
-          , which forms part of these terms. In short: a purchase that has not yet been verified can
-          be cancelled for a full refund, and after access is granted a refund may be requested
-          within{' '}
-          <Field
-            value={policyTerms.refundWindowDays}
-            label="refund window in days after access is granted"
-          />{' '}
-          subject to the conditions set out there.
+          , which forms part of these terms. In short: all sales are final once access is granted. A
+          purchase that has not yet been verified can be cancelled for a full refund, and we refund
+          duplicate payments and any order we cannot deliver.
         </p>
       </Section>
 

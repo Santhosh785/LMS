@@ -30,7 +30,7 @@ export const business = {
   /** Grievance officer's name (required by the IT Rules / DPDP Act). */
   grievanceOfficer: null,
   /** Shown as "Last updated" on every policy page. */
-  policyLastUpdated: '10 August 2026',
+  policyLastUpdated: '23 October 2026',
 }
 
 /**
@@ -40,10 +40,6 @@ export const business = {
 export const policyTerms = {
   /** How long an admin takes to verify a UPI payment and open access. */
   paymentConfirmationSla: null,
-  /** Days after access is granted during which a refund can be requested. */
-  refundWindowDays: null,
-  /** How much of a course may be consumed and still qualify for a refund. */
-  refundConsumptionLimit: null,
   /** Working days taken to send an approved refund back to the payer. */
   refundProcessingDays: null,
   /** Notice needed to cancel a seat in a LIVE batch or workshop. */

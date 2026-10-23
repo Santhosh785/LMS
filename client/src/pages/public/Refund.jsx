@@ -14,18 +14,18 @@ export default function Refund() {
   return (
     <LegalPage
       title="Refund and Cancellation Policy"
-      intro="Growth Scholar sells digital course access, not physical products. This policy explains when you can cancel, when a refund is available, how to ask for one, and how long it takes to reach you."
+      intro="Growth Scholar sells digital course access, not physical products. All sales are final once access is granted. This policy explains the few cases where we do refund, how to ask, and how long it takes to reach you."
     >
       <Section id="summary" title="1. In short">
-        <Callout title="Payments are verified by hand right now.">
-          Course fees are paid by UPI and confirmed manually by our team against our bank statement,
-          so access is not instant. Until we have verified your payment and opened access, you can
-          cancel the order for a full refund of the amount we received. After access is granted, the
-          conditions in section 4 apply.
+        <Callout title="All sales are final once your access is opened.">
+          We do not offer refunds after a course, workshop or program has been opened on your
+          account. Before that, you can cancel a pending order for a full refund. We also refund
+          duplicate or excess payments, and any order we cannot deliver.
         </Callout>
         <p>
-          Prices are inclusive. GST not applicable — the amount you paid is the amount considered
-          for any refund, with no tax component to deduct or adjust.
+          Course fees are paid by UPI and confirmed manually by our team against our bank statement,
+          so access is not instant. Prices are inclusive. GST not applicable — the amount you paid
+          is the amount considered for any refund, with no tax component to deduct or adjust.
         </p>
       </Section>
 
@@ -59,58 +59,23 @@ export default function Refund() {
             never reached ours, the transfer has failed at the payment network and your bank or UPI
             app will reverse it — we can only refund money we have actually received.
           </li>
-          <li>
-            If we receive your money but cannot give you access for any reason at our end, we refund
-            the full amount without you having to ask.
-          </li>
         </Bullets>
       </Section>
 
-      <Section id="after-access" title="4. Refunds after access is granted">
+      <Section id="after-access" title="4. No refunds after access is granted">
         <p>
           Once we confirm your payment, the course is opened on your account and the content is
-          delivered in full and immediately. A refund may still be requested on these terms:
+          delivered in full and immediately. From that point the fee is non-refundable, including
+          where:
         </p>
         <Bullets>
+          <li>You have watched little or none of the course.</li>
           <li>
-            <strong className="text-brand-deep">Request window</strong> — within{' '}
-            <Field
-              value={policyTerms.refundWindowDays}
-              label="refund window in days after access is granted"
-            />{' '}
-            of the date access was granted.
+            The reason is a change of mind about the subject, lack of time, or the absence of a
+            specific career or business outcome, which we do not promise.
           </li>
           <li>
-            <strong className="text-brand-deep">Consumption limit</strong> — provided you have
-            consumed no more than{' '}
-            <Field
-              value={policyTerms.refundConsumptionLimit}
-              label="maximum course consumption still eligible for a refund"
-            />{' '}
-            of the course. We check lesson completion and viewing records on your account.
-          </li>
-          <li>
-            <strong className="text-brand-deep">Live batches and workshops</strong> — a seat in a
-            LIVE program or workshop can be cancelled up to{' '}
-            <Field
-              value={policyTerms.liveCancellationCutoff}
-              label="notice required to cancel a LIVE batch or workshop seat"
-            />{' '}
-            before the batch or session starts. After that the seat is committed and the fee is not
-            refundable, though you may ask us to move you to a later batch subject to availability.
-          </li>
-        </Bullets>
-        <p>Refunds are not available where:</p>
-        <Bullets>
-          <li>The request is made after the window above has closed.</li>
-          <li>
-            You have consumed more of the course than the limit above allows, or have downloaded the
-            downloadable materials that come with it.
-          </li>
-          <li>A certificate has already been issued to you for the course.</li>
-          <li>
-            The course was received free, as part of a bundle offer with no separate price, or
-            through a scholarship or coupon that reduced the price to zero.
+            The course was received free, as part of a bundle, or through a scholarship or coupon.
           </li>
           <li>
             Access was terminated for breach of our{' '}
@@ -119,27 +84,38 @@ export default function Refund() {
             </Link>{' '}
             — for example sharing your login or redistributing course content.
           </li>
-          <li>
-            The reason given is a change of mind about the subject, lack of time, or the absence of
-            a specific career or business outcome, which we do not promise.
-          </li>
         </Bullets>
+        <p>
+          A confirmed seat in a LIVE program or workshop is also non-refundable. If you cannot
+          attend, you may ask us to move you to a later batch; we will try to, subject to
+          availability.
+        </p>
       </Section>
 
-      <Section id="how-to-request" title="5. How to request a refund">
-        <p>
-          Email <Mail address={business.supportEmail} /> from the address on your account with the
-          subject “Refund request”, and include:
-        </p>
+      <Section id="exceptions" title="5. When we do refund">
         <Bullets>
-          <li>Your full name and registered email address.</li>
-          <li>The course name.</li>
-          <li>The UPI transaction reference (UTR) or order reference, and the date of payment.</li>
-          <li>The reason for the request.</li>
+          <li>
+            <strong className="text-brand-deep">Duplicate or excess payment</strong> — if you paid
+            twice for the same course, or transferred more than the listed price, we refund the
+            extra amount in full. Send both transaction references to{' '}
+            <Mail address={business.supportEmail} />.
+          </li>
+          <li>
+            <strong className="text-brand-deep">We cannot deliver</strong> — if we receive your
+            money but cannot give you access for any reason at our end, or we cancel a LIVE batch or
+            workshop you paid for and you do not want a seat in a later one, we refund the full
+            amount without you having to ask.
+          </li>
+          <li>
+            <strong className="text-brand-deep">Cancelled before access</strong> — as set out in
+            section 3.
+          </li>
         </Bullets>
         <p>
-          We acknowledge every request and tell you whether it is approved, together with the reason
-          if it is not.
+          To claim one of these, email <Mail address={business.supportEmail} /> from the address on
+          your account with the subject “Refund request”, your name, the course name, and the UPI
+          transaction reference (UTR) and date of payment. We acknowledge every request and tell you
+          the outcome.
         </p>
       </Section>
 
@@ -162,22 +138,10 @@ export default function Refund() {
             We refund the amount we actually received. Any charge levied by your own bank or payment
             app on the original transfer is not refundable by us.
           </li>
-          <li>
-            Access to the course ends when the refund is approved, along with any certificate,
-            points or badges earned in it.
-          </li>
         </Bullets>
       </Section>
 
-      <Section id="duplicate" title="7. Duplicate and mistaken payments">
-        <p>
-          If you paid twice for the same course, or transferred more than the listed price, tell us
-          at <Mail address={business.supportEmail} /> with both transaction references. We refund
-          the extra amount in full, and the conditions in section 4 do not apply to it.
-        </p>
-      </Section>
-
-      <Section id="disputes" title="8. Disputes and chargebacks">
+      <Section id="disputes" title="7. Disputes and chargebacks">
         <p>
           Please raise any billing problem with us first — we can usually resolve it faster than a
           bank dispute. If a chargeback or payment dispute is raised while a refund request is
@@ -186,7 +150,7 @@ export default function Refund() {
         </p>
       </Section>
 
-      <Section id="changes" title="9. Changes to this policy">
+      <Section id="changes" title="8. Changes to this policy">
         <p>
           We may update this policy, for example when card and netbanking payments replace manual
           UPI verification. The version in force is the one on this page on the date of your
