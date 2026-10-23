@@ -5,7 +5,8 @@
   "description": "Growth Scholar — MERN port of the static marketing/LMS/creator platform",
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "packages/*"
   ],
   "scripts": {
     "install:all": "npm install",

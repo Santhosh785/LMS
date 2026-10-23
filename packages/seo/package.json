@@ -1,0 +1,26 @@
+{
+  "name": "@gs/seo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pure SEO helpers: page meta mappers, JSON-LD builders and head renderers. Runs in the browser and in Node.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}
