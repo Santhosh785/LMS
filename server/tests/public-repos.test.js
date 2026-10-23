@@ -6,7 +6,11 @@ import {
   listPublic,
   listPublicCourseSlugs,
 } from '../src/db/repos/courses.js'
-import { findPublicPostBySlug, listPublicPostSlugs } from '../src/db/repos/blog.js'
+import {
+  findPublicPostBySlug,
+  findPublicPostPage,
+  listPublicPostSlugs,
+} from '../src/db/repos/blog.js'
 import { listProgramSlugs } from '../src/db/repos/programs.js'
 import { listWorkshopSlugs } from '../src/db/repos/workshops.js'
 import { insertRow } from './helpers/content.js'
@@ -157,6 +161,25 @@ describe('public blog helpers', () => {
     expect(await findPublicPostBySlug('scheduled-future')).toBeNull()
     // The default select is the article page's: no revision history.
     expect(await findPublicPostBySlug('public-post')).not.toHaveProperty('revisions')
+  })
+
+  it('findPublicPostPage returns the post and its public same-category posts', async () => {
+    await seedPosts()
+    await post('same-category', { category: 'SEO' })
+    await post('same-category-draft', { category: 'SEO', status: 'Draft' })
+    await post('other-category', { category: 'Ads' })
+    await post('the-article', { category: 'SEO', body: [{ type: 'p', text: 'Hello' }] })
+
+    const page = await findPublicPostPage('the-article')
+    expect(page.post.slug).toBe('the-article')
+    expect(page.post.body).toEqual([{ type: 'p', text: 'Hello' }])
+    expect(page.post).not.toHaveProperty('revisions')
+    expect(slugsOf(page.related)).toEqual(['same-category'])
+    expect(page.related[0]).not.toHaveProperty('body')
+
+    expect(await findPublicPostPage('draft-post')).toBeNull()
+    expect(await findPublicPostPage('scheduled-future')).toBeNull()
+    expect(await findPublicPostPage('no-such-post')).toBeNull()
   })
 
   it('listPublicPostSlugs returns { slug, updatedAt } for public posts only', async () => {

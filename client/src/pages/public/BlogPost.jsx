@@ -1,23 +1,27 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { Link, isRouteErrorResponse, useLoaderData, useRouteError } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client.js'
-import {
-  Button,
-  cn,
-  Loading,
-  TextAreaField,
-  TextField,
-  useToast,
-} from '../../components/ui/index.jsx'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
+import { Button, cn, TextAreaField, TextField, useToast } from '../../components/ui/index.jsx'
 import { AskAiMetaBar, AskAiRail } from '../../components/public/AskAiBar.jsx'
 import CoverArt from '../../components/CoverArt.jsx'
+import RouteErrorView from '../../components/RouteErrorView'
 import { plainText, renderRich, safeHref } from '../../lib/richText.jsx'
 import { embedFrom } from '../../lib/embed.js'
 
+/**
+ * Pinned locale and time zone: the server and the browser must print the same
+ * text for the same instant, or hydration mismatches on every date.
+ */
 const fmt = (d) =>
-  new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  d
+    ? new Date(d).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+    : ''
 
 /**
  * Renders the structured body blocks the API returns.
@@ -263,61 +267,47 @@ const anchor = (text = '') =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
 
+/**
+ * What the route renders for a missing article (the loader's 404, which also
+ * covers drafts, private and not-yet-due posts): the not-found message and a
+ * way back, inside the public chrome. Anything else is the shared failure UI.
+ */
+export function ErrorBoundary() {
+  const error = useRouteError()
+  if (!isRouteErrorResponse(error) || error.status !== 404) {
+    return <RouteErrorView scope="blog-post" />
+  }
+  return (
+    <div className="px-5 py-20 text-center">
+      <h1 className="text-[1.5rem]">Article not found</h1>
+      <p className="mt-3 text-[0.95rem] text-muted">
+        This article does not exist or is no longer published.
+      </p>
+      <Button to="/blog" variant="outline" className="mt-5">
+        Back to blog
+      </Button>
+    </div>
+  )
+}
+
+/**
+ * The article page. The post and its related posts come from the route
+ * loader (routes/public/blog-post.ts), so everything but the comments renders
+ * on the server; the head is the route's meta(). Comments, the comment form,
+ * the mentor form, the contents toggle, video embeds and copy-link are client
+ * interactions on top of that markup.
+ */
 export default function BlogPost() {
-  const { slug } = useParams()
+  const { post, related, shareUrl } = useLoaderData()
+  const { slug } = post
   const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef()
   const [tocOpen, setTocOpen] = useState(true)
   const [consultDone, setConsultDone] = useState(false)
   const toast = useToast()
   const queryClient = useQueryClient()
 
-  const { data, isPending, error } = useQuery({
-    queryKey: ['blog', 'post', slug],
-    queryFn: async () => (await api.get(`/blog/${slug}`)).data,
-  })
-
-  useDocumentTitle(data?.post ? `${data.post.title} | Growth Scholar` : 'Article | Growth Scholar')
-
-  useEffect(() => {
-    const post = data?.post
-    if (!post) return undefined
-    const setMeta = (name, content) => {
-      if (!content) return
-      let tag = document.head.querySelector(`meta[name="${name}"]`)
-      if (!tag) {
-        tag = document.createElement('meta')
-        tag.name = name
-        document.head.appendChild(tag)
-      }
-      tag.content = content
-    }
-    const setProperty = (property, content) => {
-      if (!content) return
-      let tag = document.head.querySelector(`meta[property="${property}"]`)
-      if (!tag) {
-        tag = document.createElement('meta')
-        tag.setAttribute('property', property)
-        document.head.appendChild(tag)
-      }
-      tag.content = content
-    }
-    document.title = `${post.seo?.metaTitle || post.title} | Growth Scholar`
-    setMeta('description', post.seo?.metaDescription || post.excerpt)
-    setMeta('robots', post.seo?.noIndex ? 'noindex, nofollow' : 'index, follow')
-    setProperty('og:title', post.seo?.metaTitle || post.title)
-    setProperty('og:description', post.seo?.metaDescription || post.excerpt)
-    setProperty('og:image', post.seo?.ogImage || post.image)
-    if (post.seo?.canonicalUrl) {
-      let tag = document.head.querySelector('link[rel="canonical"]')
-      if (!tag) {
-        tag = document.createElement('link')
-        tag.rel = 'canonical'
-        document.head.appendChild(tag)
-      }
-      tag.href = post.seo.canonicalUrl
-    }
-    return undefined
-  }, [data?.post])
+  useEffect(() => () => clearTimeout(copiedTimer.current), [])
 
   const consult = useMutation({
     mutationFn: async (payload) =>
@@ -329,7 +319,9 @@ export default function BlogPost() {
   const comments = useQuery({
     queryKey: ['blog', 'comments', slug],
     queryFn: async () => (await api.get(`/blog/${slug}/comments`)).data,
-    enabled: Boolean(data?.post?.allowComments),
+    // Fetched after hydration only: the server never runs queries, so the
+    // first client render matches the server's "loading" state.
+    enabled: post.allowComments,
   })
   const comment = useMutation({
     mutationFn: async (payload) => (await api.post(`/blog/${slug}/comments`, payload)).data,
@@ -340,25 +332,13 @@ export default function BlogPost() {
     onError: (err) => toast.show(apiError(err)),
   })
 
-  if (isPending) return <Loading />
-  if (error) {
-    return (
-      <div className="px-5 py-20 text-center">
-        <h1 className="text-[1.5rem]">Article not found</h1>
-        <Button to="/blog" variant="outline" className="mt-5">
-          Back to blog
-        </Button>
-      </div>
-    )
-  }
-
-  const { post, related } = data
   const headings = post.body?.filter((b) => b.type === 'h2') || []
 
   const copyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href)
+    await navigator.clipboard.writeText(shareUrl)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    clearTimeout(copiedTimer.current)
+    copiedTimer.current = setTimeout(() => setCopied(false), 1500)
   }
 
   return (
@@ -397,6 +377,7 @@ export default function BlogPost() {
               title={post.title}
               publishedLabel={fmt(post.publishedAt)}
               readTime={post.readTime}
+              url={shareUrl}
             />
 
             <div className="mt-4 flex items-center gap-2">
@@ -412,11 +393,11 @@ export default function BlogPost() {
               {[
                 {
                   label: 'WA',
-                  href: `https://wa.me/?text=${encodeURIComponent(window.location.href)}`,
+                  href: `https://wa.me/?text=${encodeURIComponent(shareUrl)}`,
                 },
                 {
                   label: 'in',
-                  href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`,
+                  href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
                 },
               ].map((s) => (
                 <a
@@ -462,7 +443,9 @@ export default function BlogPost() {
             {post.allowComments && (
               <section className="mt-12 border-t border-line pt-8">
                 <h2 className="text-[1.25rem]">Comments</h2>
-                {comments.data?.items?.length > 0 ? (
+                {comments.isPending ? (
+                  <p className="mt-3 text-[0.88rem] text-muted">Loading comments…</p>
+                ) : comments.data?.items?.length > 0 ? (
                   <div className="mt-5 grid gap-4">
                     {comments.data.items.map((entry) => (
                       <article
@@ -610,7 +593,7 @@ export default function BlogPost() {
         )}
       </div>
 
-      <AskAiRail title={post.title} />
+      <AskAiRail title={post.title} url={shareUrl} />
     </div>
   )
 }

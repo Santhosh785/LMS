@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, lte } from 'drizzle-orm'
-import { db } from '../index.js'
-import { blogPosts } from '../schema/index.js'
+import { and, asc, eq, inArray, isNull, lte, ne } from 'drizzle-orm'
+import { db, withMongoId } from '../index.js'
+import { blogPosts, media } from '../schema/index.js'
 import { omitColumns } from './content.js'
 
 /**
@@ -38,6 +38,81 @@ export async function findPublicPostBySlug(slug, columns = withoutColumns(['revi
     .from(blogPosts)
     .where(and(eq(blogPosts.slug, String(slug).toLowerCase()), publicPostWhere()))
   return row || null
+}
+
+/**
+ * Attaches a `srcset` to every image that came from the Media Library.
+ *
+ * The derivatives live on the Media row, not on the post, so that regenerating
+ * them flows through to published articles instead of leaving them pointing at
+ * URLs that no longer exist. That means one lookup here, at read time, rather
+ * than a copy of today's URLs baked into every post body.
+ */
+async function withImageSources(post) {
+  const ids = [post.imageMediaId, ...(post.body || []).map((block) => block.mediaId)]
+    .filter(Boolean)
+    .map(String)
+    .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+  if (!ids.length) return post
+
+  const rows = await db
+    .select({
+      id: media.id,
+      url: media.url,
+      width: media.width,
+      height: media.height,
+      sizes: media.sizes,
+    })
+    .from(media)
+    .where(inArray(media.id, ids))
+  const byId = new Map(rows.map((row) => [String(row.id), row]))
+
+  // Widest last: a browser picks the first candidate that satisfies `sizes`.
+  const srcsetFor = (row) =>
+    [...(row.sizes || []), { url: row.url, width: row.width }]
+      .filter((variant) => variant.url && variant.width)
+      .sort((a, b) => a.width - b.width)
+      .map((variant) => `${variant.url} ${variant.width}w`)
+      .join(', ') || ''
+
+  const cover = post.imageMediaId && byId.get(String(post.imageMediaId))
+  return {
+    ...post,
+    ...(cover
+      ? { imageSrcset: srcsetFor(cover), imageWidth: cover.width, imageHeight: cover.height }
+      : {}),
+    body: (post.body || []).map((block) => {
+      const row = block.mediaId && byId.get(String(block.mediaId))
+      return row ? { ...block, srcset: srcsetFor(row) } : block
+    }),
+  }
+}
+
+/**
+ * Everything the article page shows, for a public post: the post (no revision
+ * history, Media Library srcsets attached) and up to three other public posts
+ * from the same category. Null when the slug has no public post. The public
+ * blog API (GET /api/blog/:slug) and the server-rendered page both read this,
+ * so the two cannot disagree about what an article carries.
+ */
+export async function findPublicPostPage(slug) {
+  const found = await findPublicPostBySlug(slug)
+  if (!found) return null
+  const [post, related] = await Promise.all([
+    withImageSources(withMongoId(found)),
+    db
+      .select(listColumns())
+      .from(blogPosts)
+      .where(
+        and(
+          ne(blogPosts.id, found.id),
+          found.category ? eq(blogPosts.category, found.category) : isNull(blogPosts.category),
+          publicPostWhere(),
+        ),
+      )
+      .limit(3),
+  ])
+  return { post, related: withMongoId(related) }
 }
 
 /** `{ slug, updatedAt }` for every public post — the sitemap's input. */
