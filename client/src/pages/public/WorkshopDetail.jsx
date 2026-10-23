@@ -335,24 +335,6 @@ export default function WorkshopDetail() {
         </section>
       )}
 
-      {landing.quotes?.length > 0 && (
-        <section className="wl-section">
-          <div className="wl-shell">
-            <div className="wl-section-head">
-              <h2>Recommended by operators &amp; creators</h2>
-            </div>
-            <div className="wl-quotes">
-              {landing.quotes.map((q) => (
-                <figure className="wl-quote-slide" key={q.author}>
-                  <blockquote>{q.quote}</blockquote>
-                  <figcaption>{q.author}</figcaption>
-                </figure>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
       <section className="wl-final-cta">
         <div className="wl-shell">
           <h2>
