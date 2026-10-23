@@ -113,7 +113,7 @@ export default function SiteHeader() {
         className="flex items-center justify-center gap-[0.05rem] mx-960:hidden"
         aria-label="Primary"
       >
-        {nav.map((item) => {
+        {nav.map((item, _i, all) => {
           if (!item.menu) {
             return (
               <Link
@@ -128,7 +128,11 @@ export default function SiteHeader() {
 
           const children = trimTrailingDividers(item.menu)
           const open = openMenu === item.label
-          const branchCurrent = children.some((c) => isCurrent(c.to))
+          // A page that has its own top-level link (Workshops) highlights only
+          // that link, not also a dropdown that happens to list it.
+          const branchCurrent =
+            !all.some((other) => !other.menu && isCurrent(other.to)) &&
+            children.some((c) => isCurrent(c.to))
 
           return (
             <div key={item.label} className="relative" onClick={(e) => e.stopPropagation()}>
