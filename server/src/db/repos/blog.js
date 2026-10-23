@@ -1,4 +1,18 @@
-import { and, asc, eq, inArray, isNull, lte, ne } from 'drizzle-orm'
+import {
+  and,
+  arrayContains,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+} from 'drizzle-orm'
 import { db, withMongoId } from '../index.js'
 import { blogPosts, media } from '../schema/index.js'
 import { omitColumns } from './content.js'
@@ -122,4 +136,58 @@ export function listPublicPostSlugs() {
     .from(blogPosts)
     .where(publicPostWhere())
     .orderBy(asc(blogPosts.slug))
+}
+
+const escapeLike = (q) => q.replace(/[\\%_]/g, (c) => `\\${c}`)
+
+/**
+ * One page of the public blog archive — GET /api/blog and the server-rendered
+ * /blog page read the same rows. Public posts only (publicPostWhere), newest
+ * first, card columns only. `category` 'latest' (or none) is the catch-all tab
+ * of the category rail; `q` matches title or excerpt. `page` and `limit` are
+ * coerced as the API always has (limit 1–100, default 12; page ≥ 1) — a page
+ * past the end comes back empty, with `pages` saying how many there are.
+ *
+ * Returns `{ items, total, page, pages, featured, categories }`, document-shaped.
+ */
+export async function listPublicPosts({ category, tag, q, page, limit } = {}) {
+  const clauses = [publicPostWhere()]
+  if (category && category !== 'latest') clauses.push(eq(blogPosts.category, String(category)))
+  if (tag) clauses.push(arrayContains(blogPosts.tags, [String(tag)]))
+  const term = typeof q === 'string' ? q.trim() : ''
+  if (term) {
+    const pattern = `%${escapeLike(term)}%`
+    clauses.push(or(ilike(blogPosts.title, pattern), ilike(blogPosts.excerpt, pattern)))
+  }
+  const where = and(...clauses)
+  const size = Math.min(Math.max(Number(limit) || 12, 1), 100)
+  const current = Math.max(Math.floor(Number(page)) || 1, 1)
+  const list = listColumns()
+  const [items, [{ total }], featured, categories] = await Promise.all([
+    db
+      .select(list)
+      .from(blogPosts)
+      .where(where)
+      .orderBy(desc(blogPosts.publishedAt))
+      .offset((current - 1) * size)
+      .limit(size),
+    db.select({ total: count() }).from(blogPosts).where(where),
+    db
+      .select(list)
+      .from(blogPosts)
+      .where(and(publicPostWhere(), eq(blogPosts.featured, true)))
+      .orderBy(desc(blogPosts.publishedAt)),
+    db
+      .selectDistinct({ category: blogPosts.category })
+      .from(blogPosts)
+      .where(and(publicPostWhere(), isNotNull(blogPosts.category))),
+  ])
+  return {
+    items: withMongoId(items),
+    total,
+    page: current,
+    pages: Math.max(1, Math.ceil(total / size)),
+    featured: withMongoId(featured),
+    categories: categories.map((c) => c.category).filter(Boolean),
+  }
 }

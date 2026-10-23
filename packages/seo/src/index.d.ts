@@ -143,7 +143,9 @@ export function course(course: CourseInput, site: Site): Record<string, any>
 export function blogPosting(post: PostInput, site: Site): Record<string, any>
 export function event(workshop: WorkshopInput, site: Site): Record<string, any>
 export function breadcrumbList(items: BreadcrumbItem[]): Record<string, any>
-export function itemList(urls: string[]): Record<string, any>
+export function itemList(
+  entries: Array<string | { url?: string | null; name?: string | null }>,
+): Record<string, any>
 
 // Helpers
 export function absoluteUrl(site: Site, pathOrUrl: string | null | undefined): string

@@ -83,3 +83,20 @@ body.gs-redesign main {
   font-weight: 600;
   color: var(--brand);
 }
+
+/**
+ * Workshop cards are visible in the server HTML.
+ *
+ * workshops.css starts every `.ws-card` at opacity 0 and only paints it with
+ * `.is-visible`, which needs JavaScript — so a no-JS visitor, a crawler's
+ * screenshot, or the first paint before hydration would see blank grids. Here
+ * the hidden state applies only to cards the page has marked `.ws-reveal`
+ * after hydration (the ones still below the fold; see Workshops.jsx), and the
+ * hover lift keeps working on the rest.
+ */
+.ws-card:not(.ws-reveal) {
+  opacity: 1;
+}
+.ws-card:not(.ws-reveal):not(:hover) {
+  transform: none;
+}

@@ -576,6 +576,22 @@ describe('breadcrumbList and itemList', () => {
       ],
     })
   })
+  it('names { url, name } entries and skips entries without a URL', () => {
+    expect(
+      itemList([
+        { url: 'https://x.in/a', name: '  Post  A ' },
+        { url: '', name: 'No URL' },
+        { url: 'https://x.in/b' },
+      ]),
+    ).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, url: 'https://x.in/a', name: 'Post A' },
+        { '@type': 'ListItem', position: 2, url: 'https://x.in/b' },
+      ],
+    })
+  })
 })
 
 describe('jsonLdScript', () => {

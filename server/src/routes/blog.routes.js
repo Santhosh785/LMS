@@ -1,64 +1,29 @@
 import { Router } from 'express'
-import { and, arrayContains, count, desc, eq, ilike, isNotNull, or } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { asyncHandler, HttpError } from '../middleware/error.js'
 import { db, withMongoId } from '../db/index.js'
 import { blogComments, blogPosts } from '../db/schema/index.js'
 import {
   findPublicPostBySlug,
   findPublicPostPage,
-  listColumns,
-  publicPostWhere,
+  listPublicPosts,
 } from '../db/repos/blog.js'
 import { blogCommentLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
 
-const escapeLike = (q) => q.replace(/[\\%_]/g, (c) => `\\${c}`)
-
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const clauses = [publicPostWhere()]
-    // "latest" is the catch-all tab in the original category rail
-    if (req.query.category && req.query.category !== 'latest') {
-      clauses.push(eq(blogPosts.category, req.query.category))
-    }
-    if (req.query.tag) clauses.push(arrayContains(blogPosts.tags, [String(req.query.tag)]))
-    if (req.query.q?.trim()) {
-      const pattern = `%${escapeLike(req.query.q.trim())}%`
-      clauses.push(or(ilike(blogPosts.title, pattern), ilike(blogPosts.excerpt, pattern)))
-    }
-    const where = and(...clauses)
-    const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 100)
-    const page = Math.max(Number(req.query.page) || 1, 1)
-    const list = listColumns()
-    const [items, [{ total }], featured, categories] = await Promise.all([
-      db
-        .select(list)
-        .from(blogPosts)
-        .where(where)
-        .orderBy(desc(blogPosts.publishedAt))
-        .offset((page - 1) * limit)
-        .limit(limit),
-      db.select({ total: count() }).from(blogPosts).where(where),
-      db
-        .select(list)
-        .from(blogPosts)
-        .where(and(publicPostWhere(), eq(blogPosts.featured, true)))
-        .orderBy(desc(blogPosts.publishedAt)),
-      db
-        .selectDistinct({ category: blogPosts.category })
-        .from(blogPosts)
-        .where(and(publicPostWhere(), isNotNull(blogPosts.category))),
-    ])
-    res.json({
-      items: withMongoId(items),
-      total,
-      page,
-      pages: Math.max(1, Math.ceil(total / limit)),
-      featured: withMongoId(featured),
-      categories: categories.map((c) => c.category).filter(Boolean),
-    })
+    res.json(
+      await listPublicPosts({
+        category: req.query.category,
+        tag: req.query.tag,
+        q: req.query.q,
+        page: req.query.page,
+        limit: req.query.limit,
+      }),
+    )
   }),
 )
 

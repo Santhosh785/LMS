@@ -1,28 +1,44 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../../api/client.js'
+import { Link, useLoaderData, useNavigation, useSearchParams } from 'react-router'
 import { useTerms } from '../../context/SiteConfigContext.jsx'
-import { cn, EmptyState, Loading } from '../../components/ui/index.jsx'
+import { cn, EmptyState } from '../../components/ui/index.jsx'
 import { RESOURCES_PAGES_READY } from '../../data/nav.js'
-import useDocumentTitle from '../../hooks/useDocumentTitle.js'
-import useBodyClass from '../../hooks/useBodyClass.js'
+import { ALL_POSTS, blogCategory } from '../../lib/blogParams.js'
 
 /**
- * /blog — the 2026 redesign's archive (.blog-wrap).
+ * /blog — the 2026 redesign's archive (.blog-wrap), server-rendered.
  *
  * Masthead, topic rail, spotlight, latest strip and a category-filtered grid.
- * Categories come from the taxonomy, and the query, pagination and 8-second
- * featured rotation are unchanged.
+ * The posts come from the route loader (routes/public/blog.ts); the category,
+ * search text and page all live in the URL (`?category=&q=&page=`), so the
+ * server HTML and a shared link show the same view. Categories come from the
+ * taxonomy, and the 8-second featured rotation is unchanged (client-only — the
+ * server and the first client render both show the first featured post).
  */
 
-const ALL_POSTS = 'Latest Articles'
 const ROTATE_MS = 8000
+const SEARCH_DEBOUNCE_MS = 350
 
+// A fixed time zone: the server renders in UTC, the visitor's browser in IST,
+// and a post published late in the evening would otherwise hydrate onto a
+// different date.
 const dateLabel = (d) =>
   d
-    ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    ? new Date(d).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      })
     : ''
+
+/** `params` with `key` set, or removed when `value` is empty. */
+const withParam = (params, key, value) => {
+  const next = new URLSearchParams(params)
+  if (value) next.set(key, String(value))
+  else next.delete(key)
+  return next
+}
 
 /** The drop paints thumbnails with `.thumb.seo`; the database stores `feat-seo`. */
 const heroTone = (heroClass) => (heroClass || '').replace(/^(feat|thumb)-/, '')
@@ -62,35 +78,49 @@ function BlogCard({ post }) {
 }
 
 export default function Blog() {
-  useDocumentTitle('Blog | Growth Scholar')
-  useBodyClass('gs-redesign')
+  const { featured, items, page, pages } = useLoaderData()
+  const navigation = useNavigation()
   const [searchParams, setSearchParams] = useSearchParams()
-  // Category lives in the URL so the topic rail is real, shareable links —
-  // `.blog-topic-row a` is also what the stylesheet targets.
-  const category = searchParams.get('category') || ALL_POSTS
+  // The filters follow the URL at once; the posts follow when the loader
+  // returns. The topic rail is real, shareable links — `.blog-topic-row a` is
+  // also what the stylesheet targets.
+  const category = blogCategory(searchParams.get('category')) || ALL_POSTS
+  const q = (searchParams.get('q') || '').trim()
   const [slide, setSlide] = useState(0)
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
   const categories = [ALL_POSTS, ...useTerms('blog-category', 'filters').map((t) => t.name)]
+  const loading = navigation.state === 'loading' && navigation.location?.pathname === '/blog'
 
-  const { data, isPending } = useQuery({
-    queryKey: ['blog', category, search, page],
-    queryFn: async () =>
-      (
-        await api.get('/blog', {
-          params: {
-            category: category === ALL_POSTS ? 'latest' : category,
-            q: search || undefined,
-            page,
-            limit: 12,
-          },
-        })
-      ).data,
-  })
-
-  const featured = data?.featured || []
-  const items = data?.items || []
-  const pages = data?.pages || 1
+  /**
+   * The search box is local while typing and lands in `?q=` after a pause, so
+   * a keystroke is not a navigation. `pushed` is the last value the box sent;
+   * `seenQ` the last `?q=` this component reacted to. A URL change the box did
+   * not make (a topic link, Back) resets the box; the box's own push landing
+   * leaves it alone. (A newer push aborts the older navigation, so a stale
+   * value never lands after a newer one.)
+   */
+  const [search, setSearch] = useState(q)
+  const [pushed, setPushed] = useState(q)
+  const [seenQ, setSeenQ] = useState(q)
+  if (q !== seenQ) {
+    setSeenQ(q)
+    if (q !== pushed) {
+      setPushed(q)
+      setSearch(q)
+    }
+  }
+  useEffect(() => {
+    const value = search.trim()
+    if (value === pushed) return undefined
+    const timer = setTimeout(() => {
+      setPushed(value)
+      // Any filter change but paging goes back to page 1.
+      setSearchParams((prev) => withParam(withParam(prev, 'q', value), 'page', null), {
+        replace: true,
+        preventScrollReset: true,
+      })
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [search, pushed, setSearchParams])
 
   // 8s auto-rotate, same cadence as js/blog.js
   useEffect(() => {
@@ -99,16 +129,25 @@ export default function Blog() {
     return () => clearInterval(timer)
   }, [featured.length])
 
-  const current = featured[slide]
+  const current = featured.length ? featured[slide % featured.length] : null
   const latest = items.slice(0, 8)
 
-  const categoryHref = (c) =>
-    c === ALL_POSTS ? '/blog' : `/blog?category=${encodeURIComponent(c)}`
-
-  const pick = (c) => {
-    setSearchParams(c === ALL_POSTS ? {} : { category: c }, { replace: true })
-    setPage(1)
+  /** A category's URL: the search text carries over, the page starts again. */
+  const categoryParams = (c) =>
+    withParam(withParam({}, 'category', c === ALL_POSTS ? '' : c), 'q', q)
+  const categoryHref = (c) => {
+    const qs = categoryParams(c).toString()
+    return qs ? `/blog?${qs}` : '/blog'
   }
+
+  const pick = (c) =>
+    setSearchParams(categoryParams(c), { replace: true, preventScrollReset: true })
+
+  const goToPage = (n) =>
+    setSearchParams((prev) => withParam(prev, 'page', n > 1 ? n : null), {
+      replace: true,
+      preventScrollReset: true,
+    })
 
   return (
     <div className="blog-wrap">
@@ -139,10 +178,7 @@ export default function Blog() {
             placeholder="Search articles…"
             autoComplete="off"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setPage(1)
-            }}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </form>
       </header>
@@ -153,7 +189,7 @@ export default function Blog() {
             key={c}
             to={categoryHref(c)}
             className={cn(category === c && 'is-active')}
-            onClick={() => setPage(1)}
+            preventScrollReset
           >
             {c === ALL_POSTS ? 'All' : c}
           </Link>
@@ -281,11 +317,9 @@ export default function Blog() {
             ))}
           </aside>
 
-          <div>
+          <div aria-busy={loading || undefined}>
             <h3 className="visually-hidden">{category}</h3>
-            {isPending ? (
-              <Loading />
-            ) : items.length === 0 ? (
+            {items.length === 0 ? (
               <EmptyState
                 icon="📝"
                 title="Nothing here yet"
@@ -305,7 +339,7 @@ export default function Blog() {
                   type="button"
                   className="btn btn-outline"
                   disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => goToPage(page - 1)}
                 >
                   ← Newer
                 </button>
@@ -316,7 +350,7 @@ export default function Blog() {
                   type="button"
                   className="btn btn-outline"
                   disabled={page >= pages}
-                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                  onClick={() => goToPage(page + 1)}
                 >
                   Older →
                 </button>
