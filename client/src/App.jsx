@@ -295,6 +295,16 @@ export default function App() {
             </Route>
 
             {/* ------------------------------ student ----------------------------- */}
+            {/* The course player is full-screen, Udemy-style — outside the
+                dashboard shell so the video gets the width. Same URL as before. */}
+            <Route
+              path="student/courses/:slug"
+              element={
+                <ProtectedRoute>
+                  <CoursePlayer />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="student"
               element={
@@ -305,7 +315,6 @@ export default function App() {
             >
               <Route index element={<Dashboard />} />
               <Route path="courses" element={<MyCourses />} />
-              <Route path="courses/:slug" element={<CoursePlayer />} />
               <Route path="live" element={<StudentLive />} />
               <Route path="practice" element={<Practice />} />
               <Route path="certificates" element={<Certificates />} />

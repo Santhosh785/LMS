@@ -5,7 +5,172 @@ import { api, apiError } from '../../api/client.js'
 import { Button, cn, Loading, useToast } from '../../components/ui/index.jsx'
 import { ProgressBar } from '../../components/student/index.jsx'
 import LessonPlayer from '../../components/student/LessonPlayer.jsx'
+import BrandLogo from '../../components/BrandLogo.jsx'
 import useDocumentTitle from '../../hooks/useDocumentTitle.js'
+
+/**
+ * The course player: an immersive, full-height layout — video stage, a
+ * collapsible "Course content" sidebar, and tabs under the video. It renders
+ * outside the student dashboard shell (see App.jsx) so the video gets the
+ * width a learner actually watches at.
+ *
+ * Below 1040px there is no room for a sidebar, so the same curriculum becomes
+ * the first tab under the video — one list, two placements.
+ */
+
+/** Remembered per browser; a learner who closes the sidebar wants it closed. */
+const SIDEBAR_KEY = 'gs_player_sidebar'
+
+const readSidebarPref = () => {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) !== 'closed'
+  } catch {
+    return true
+  }
+}
+
+const writeSidebarPref = (open) => {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, open ? 'open' : 'closed')
+  } catch {
+    // Storage blocked (private mode, site data cleared) — the toggle still works
+    // for this visit, it just is not remembered.
+  }
+}
+
+/** "12:34" / "1:02:03" → seconds. Anything else (or nothing) counts as 0. */
+function toSeconds(duration) {
+  const parts = String(duration || '')
+    .trim()
+    .split(':')
+    .map(Number)
+  if (parts.length < 2 || parts.some((n) => !Number.isFinite(n))) return 0
+  return parts.reduce((total, n) => total * 60 + n, 0)
+}
+
+/** 2280 → "38min", 4500 → "1hr 15min" — the curriculum's compact style. */
+function formatTotal(seconds) {
+  if (!seconds) return ''
+  const mins = Math.round(seconds / 60)
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (!h) return `${m}min`
+  return m ? `${h}hr ${m}min` : `${h}hr`
+}
+
+/** Lesson durations are "mm:ss"; the list shows whole minutes. */
+const lessonLength = (duration) => {
+  const s = toSeconds(duration)
+  return s ? `${Math.max(1, Math.round(s / 60))}min` : duration || ''
+}
+
+const TYPE_ICON = { Video: '▶', Quiz: '?', PDF: '▤', 'E-book': '▤', Text: '▤', Live: '●' }
+
+function CurriculumList({
+  course,
+  completed,
+  activeId,
+  openSections,
+  onToggleSection,
+  onSelect,
+  onToggleDone,
+  busy,
+}) {
+  // Lesson numbers run across the whole course, counted from the data rather
+  // than from what is rendered — a collapsed section must not renumber the rest.
+  const firstNumber = course.sections.reduce(
+    (acc, s, i) => [...acc, i === 0 ? 1 : acc[i - 1] + course.sections[i - 1].lessons.length],
+    [],
+  )
+  return (
+    <div>
+      {course.sections.map((section, si) => {
+        const open = openSections[String(section._id)]
+        const done = section.lessons.filter((l) => completed.has(String(l._id))).length
+        const total = formatTotal(section.lessons.reduce((t, l) => t + toSeconds(l.duration), 0))
+        return (
+          <div key={section._id} className="border-b border-line-solid">
+            <button
+              type="button"
+              aria-expanded={!!open}
+              onClick={() => onToggleSection(section._id)}
+              className="flex w-full items-start justify-between gap-3 bg-surface-mist px-4 py-3.5 text-left transition-colors duration-200 ease-gs hover:bg-surface"
+            >
+              <span>
+                <span className="block text-[0.92rem] font-bold leading-snug text-brand-deep">
+                  Section {si + 1}: {section.name}
+                </span>
+                <span className="mt-1 block text-[0.75rem] text-muted">
+                  {done} / {section.lessons.length}
+                  {total && ` | ${total}`}
+                </span>
+              </span>
+              <span
+                className={cn(
+                  'mt-0.5 shrink-0 text-muted transition-transform duration-200',
+                  open && 'rotate-180',
+                )}
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </button>
+
+            {open && (
+              <ul>
+                {section.lessons.map((l, li) => {
+                  const number = firstNumber[si] + li
+                  const id = String(l._id)
+                  const isDone = completed.has(id)
+                  const active = id === activeId
+                  return (
+                    <li
+                      key={l._id}
+                      className={cn(
+                        'flex gap-3 px-4 py-3 transition-colors duration-200 ease-gs',
+                        active ? 'bg-accent-soft' : 'hover:bg-surface',
+                      )}
+                    >
+                      {/* A real checkbox: keyboard and screen readers get
+                          "mark complete" without opening the lesson. */}
+                      <input
+                        type="checkbox"
+                        checked={isDone}
+                        disabled={busy}
+                        onChange={() => onToggleDone({ ...l, sectionId: section._id }, !isDone)}
+                        aria-label={`Mark "${l.name}" as ${isDone ? 'not complete' : 'complete'}`}
+                        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onSelect({ ...l, sectionId: section._id })}
+                        aria-current={active ? 'true' : undefined}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <span
+                          className={cn(
+                            'block text-[0.86rem] leading-snug',
+                            active ? 'font-semibold text-brand' : 'text-ink',
+                          )}
+                        >
+                          {number}. {l.name}
+                        </span>
+                        <span className="mt-1 flex items-center gap-1.5 text-[0.74rem] text-muted">
+                          <span aria-hidden="true">{TYPE_ICON[l.contentType] || '▤'}</span>
+                          {lessonLength(l.duration) || l.contentType}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function CoursePlayer() {
   const { slug } = useParams()
@@ -13,6 +178,10 @@ export default function CoursePlayer() {
   const toast = useToast()
   const [activeId, setActiveId] = useState(null)
   const [openSections, setOpenSections] = useState({})
+  const [sidebarOpen, setSidebarOpen] = useState(readSidebarPref)
+  // 'content' only exists as a tab on narrow screens; wide screens fall back to
+  // Overview through CSS, so resizing never strands the learner on a blank tab.
+  const [tab, setTab] = useState('content')
 
   const { data, isPending, error } = useQuery({
     queryKey: ['enrollment', slug],
@@ -30,14 +199,19 @@ export default function CoursePlayer() {
     )
   }, [data])
 
-  // open the section the learner was last in and select their current lesson
+  // Open the section the learner was last in and select their current lesson —
+  // once, when the course first loads, so a later refetch (after marking a
+  // lesson done) does not yank them back to their saved position.
+  const loaded = Boolean(data)
   useEffect(() => {
-    if (!data) return
+    if (!loaded) return
     const currentId = data.enrollment.currentLessonId || flat[0]?._id
-    setActiveId(String(currentId))
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveId((prev) => prev ?? (currentId ? String(currentId) : null))
     const section = flat.find((l) => String(l._id) === String(currentId))?.sectionId
-    if (section) setOpenSections({ [String(section)]: true })
-  }, [data, flat])
+    if (section) setOpenSections((s) => ({ [String(section)]: true, ...s }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded])
 
   const progress = useMutation({
     mutationFn: async (payload) =>
@@ -56,7 +230,7 @@ export default function CoursePlayer() {
     // they were never enrolled.
     const expired = error?.response?.data?.details?.code === 'ACCESS_EXPIRED'
     return (
-      <div className="py-20 text-center">
+      <div className="px-4 py-20 text-center">
         <h1 className="text-[1.4rem]">{expired ? 'Your access has expired' : 'Not enrolled'}</h1>
         <p className="mx-auto mt-2 max-w-md text-muted">{apiError(error)}</p>
         {expired ? (
@@ -76,144 +250,264 @@ export default function CoursePlayer() {
   const completed = new Set(enrollment.completedLessonIds.map(String))
   const lesson = flat.find((l) => String(l._id) === activeId) || flat[0]
   const index = flat.findIndex((l) => String(l._id) === String(lesson?._id))
+  const prev = index > 0 ? flat[index - 1] : null
   const next = flat[index + 1]
   const isDone = completed.has(String(lesson?._id))
+  const totalSeconds = flat.reduce((t, l) => t + toSeconds(l.duration), 0)
+
+  const select = (l) => {
+    setActiveId(String(l._id))
+    setOpenSections((s) => ({ ...s, [String(l.sectionId)]: true }))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const toggleSection = (id) => setOpenSections((s) => ({ ...s, [String(id)]: !s[String(id)] }))
+
+  const toggleDone = (l, done) =>
+    progress.mutate({ lessonId: l._id, sectionId: l.sectionId, completed: done })
+
+  const setSidebar = (open) => {
+    setSidebarOpen(open)
+    writeSidebarPref(open)
+  }
+
+  const curriculum = (
+    <CurriculumList
+      course={course}
+      completed={completed}
+      activeId={lesson ? String(lesson._id) : null}
+      openSections={openSections}
+      onToggleSection={toggleSection}
+      onSelect={select}
+      onToggleDone={toggleDone}
+      busy={progress.isPending}
+    />
+  )
+
+  const arrow =
+    'absolute top-1/2 z-10 grid h-11 w-9 -translate-y-1/2 place-items-center bg-brand-deep/85 text-[1.1rem] text-white shadow-lg transition-colors duration-200 ease-gs hover:bg-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent'
 
   return (
-    <>
+    <div className="min-h-screen bg-white">
       {toast.node}
-      <nav className="mb-4 text-[0.8rem] text-muted" aria-label="Breadcrumb">
-        <Link to="/student/courses" className="hover:text-brand">
-          My Learning
+
+      {/* ------------------------------ top bar ------------------------------ */}
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 bg-brand-deep px-4 text-white">
+        <Link
+          to="/student"
+          aria-label="Back to my dashboard"
+          // The logo is drawn for light backgrounds; a white chip keeps it
+          // legible on the dark bar.
+          className="shrink-0 rounded-md bg-white px-1.5 py-0.5"
+        >
+          <BrandLogo width={96} height={60} className="h-8 w-auto rounded-sm2" />
         </Link>
-        <span className="px-1.5">/</span>
-        <span className="text-brand-deep">{course.title}</span>
-      </nav>
+        <span className="h-6 w-px shrink-0 bg-white/25 mx-560:hidden" aria-hidden="true" />
+        <h1 className="min-w-0 flex-1 truncate text-[0.95rem] font-semibold text-white">
+          {course.title}
+        </h1>
+        <div className="flex shrink-0 items-center gap-3 text-[0.8rem] text-white/80">
+          <span className="mx-640:hidden">
+            {completed.size} of {flat.length} complete
+          </span>
+          <span className="w-24 mx-640:w-16">
+            <ProgressBar value={enrollment.progressPct} />
+          </span>
+          <Link
+            to="/student/courses"
+            className="rounded-lg border border-white/30 px-3 py-1.5 font-semibold text-white transition-colors duration-200 ease-gs hover:bg-white/10 mx-480:hidden"
+          >
+            My learning
+          </Link>
+        </div>
+      </header>
 
-      {/* The lesson list drops below the player when stacked, and its own
-          max-height scroll is removed there — a 70vh scroll region nested
-          inside a scrolling page traps the thumb on a phone. */}
-      <div className="grid grid-cols-[1fr_320px] gap-6 mx-1040:grid-cols-1">
-        <section>
-          <LessonPlayer slug={slug} lesson={lesson} thumbClass={course.thumbClass} />
+      <div className="flex">
+        {/* ---------------------------- main column ---------------------------- */}
+        <main className="min-w-0 flex-1">
+          <div className="relative bg-ink">
+            {/* Height-capped so a wide monitor shows the controls without
+                scrolling; the [&>div] override flattens the player's rounded
+                card frame into an edge-to-edge stage. */}
+            <div className="mx-auto w-full max-w-[min(100%,calc((100vh-9rem)*1.7778))] [&>div]:rounded-none">
+              <LessonPlayer slug={slug} lesson={lesson} thumbClass={course.thumbClass} />
+            </div>
 
-          <div className="mt-5 rounded-lg2 border border-line bg-white p-5">
-            <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-accent-mid">
-              {lesson?.sectionName}
-            </p>
-            <h1 className="mt-1 text-[1.3rem]">{lesson?.name}</h1>
-            <p className="mt-1 text-[0.85rem] text-muted">
-              {lesson?.duration} · {lesson?.contentType}
-            </p>
-
-            <ProgressBar value={enrollment.progressPct} className="mt-4" />
-            <p className="mt-2 text-[0.82rem] text-muted">
-              {enrollment.progressPct}% complete · {completed.size} of {flat.length} lessons
-            </p>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Button
-                variant={isDone ? 'outline' : 'primary'}
-                disabled={progress.isPending}
-                onClick={() =>
-                  progress.mutate({
-                    lessonId: lesson._id,
-                    sectionId: lesson.sectionId,
-                    completed: !isDone,
-                  })
-                }
+            {prev && (
+              <button
+                type="button"
+                onClick={() => select(prev)}
+                className={cn(arrow, 'left-0 rounded-r-lg')}
+                aria-label={`Previous lesson: ${prev.name}`}
+                title={`Previous: ${prev.name}`}
               >
-                {isDone ? 'Mark as not done' : 'Mark complete'}
-              </Button>
-              {next && (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setActiveId(String(next._id))
-                    setOpenSections((s) => ({ ...s, [String(next.sectionId)]: true }))
-                  }}
+                ‹
+              </button>
+            )}
+            {next && (
+              <button
+                type="button"
+                onClick={() => select(next)}
+                className={cn(arrow, 'right-0 rounded-l-lg')}
+                aria-label={`Next lesson: ${next.name}`}
+                title={`Next: ${next.name}`}
+              >
+                ›
+              </button>
+            )}
+
+            {!sidebarOpen && (
+              <button
+                type="button"
+                onClick={() => setSidebar(true)}
+                className="absolute right-0 top-4 z-10 flex items-center gap-2 rounded-l-lg bg-white px-3 py-2 text-[0.82rem] font-semibold text-brand-deep shadow-lg transition-colors duration-200 ease-gs hover:bg-accent-soft mx-1040:hidden"
+              >
+                <span aria-hidden="true">←</span> Course content
+              </button>
+            )}
+          </div>
+
+          {/* ------------------------------- tabs ------------------------------- */}
+          <div className="sticky top-14 z-20 border-b border-line-solid bg-white">
+            <div role="tablist" className="flex gap-6 overflow-x-auto px-6 mx-640:px-4">
+              {[
+                { id: 'content', label: 'Course content', narrowOnly: true },
+                { id: 'overview', label: 'Overview' },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    'shrink-0 border-b-2 py-3.5 text-[0.92rem] font-semibold transition-colors duration-200 ease-gs',
+                    t.narrowOnly && 'hidden mx-1040:block',
+                    // On wide screens Overview is always the visible panel, so
+                    // it always reads as selected there.
+                    tab === t.id || (t.id === 'overview' && tab === 'content')
+                      ? 'border-brand text-brand-deep'
+                      : 'border-transparent text-muted hover:text-brand-deep',
+                    t.id === 'overview' &&
+                      tab === 'content' &&
+                      'mx-1040:border-transparent mx-1040:text-muted',
+                  )}
                 >
-                  Next: {next.name} →
-                </Button>
-              )}
+                  {t.label}
+                </button>
+              ))}
             </div>
           </div>
-        </section>
 
-        <aside className="rounded-lg2 border border-line bg-white">
-          <header className="border-b border-line px-4 py-3.5">
-            <h2 className="text-[1rem]">Course content</h2>
-            <p className="mt-0.5 text-[0.78rem] text-muted">
-              {course.sections.length} modules · {flat.length} lessons
-            </p>
-          </header>
+          {tab === 'content' && <div className="hidden mx-1040:block">{curriculum}</div>}
 
-          <div className="max-h-[70vh] overflow-y-auto mx-1040:max-h-none mx-1040:overflow-visible">
-            {course.sections.map((section) => {
-              const open = openSections[String(section._id)]
-              const sectionDone = section.lessons.filter((l) => completed.has(String(l._id))).length
-              return (
-                <div key={section._id} className="border-b border-line last:border-0">
-                  <button
-                    type="button"
-                    aria-expanded={!!open}
-                    onClick={() => setOpenSections((s) => ({ ...s, [String(section._id)]: !open }))}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-                  >
-                    <span className="text-[0.9rem] font-semibold text-brand-deep">
-                      {section.name}
-                    </span>
-                    <span className="shrink-0 text-[0.75rem] text-muted">
-                      {sectionDone}/{section.lessons.length}{' '}
-                      <span
-                        className={cn('inline-block transition-transform', open && 'rotate-180')}
-                      >
-                        ▾
-                      </span>
-                    </span>
-                  </button>
-                  {open && (
-                    <ul>
-                      {section.lessons.map((l) => {
-                        const done = completed.has(String(l._id))
-                        const active = String(l._id) === activeId
-                        return (
-                          <li key={l._id}>
-                            <button
-                              type="button"
-                              onClick={() => setActiveId(String(l._id))}
-                              className={cn(
-                                // min-h-[44px]: switching lessons is the one
-                                // thing a phone viewer does constantly.
-                                'flex min-h-[44px] w-full items-center gap-2.5 px-4 py-2.5 text-left text-[0.85rem] transition-colors duration-200 ease-gs',
-                                active
-                                  ? 'bg-accent-soft font-semibold text-brand'
-                                  : 'text-muted hover:bg-surface-mist',
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  'shrink-0',
-                                  done ? 'text-accent-mid' : 'text-line-solid',
-                                )}
-                                aria-hidden="true"
-                              >
-                                {done ? '✓' : '○'}
-                              </span>
-                              <span className="flex-1 truncate">{l.name}</span>
-                              <span className="shrink-0 text-[0.72rem]">{l.duration}</span>
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
+          <section
+            className={cn('px-6 py-8 mx-640:px-4', tab === 'content' && 'mx-1040:hidden')}
+            aria-label="Overview"
+          >
+            <div className="mx-auto max-w-3xl">
+              <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-accent-mid">
+                {lesson?.sectionName}
+              </p>
+              <h2 className="mt-1 text-[1.4rem] leading-snug">{lesson?.name}</h2>
+              <p className="mt-1 text-[0.85rem] text-muted">
+                {[lessonLength(lesson?.duration), lesson?.contentType].filter(Boolean).join(' · ')}
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button
+                  variant={isDone ? 'outline' : 'primary'}
+                  disabled={progress.isPending || !lesson}
+                  onClick={() => toggleDone(lesson, !isDone)}
+                >
+                  {isDone ? 'Mark as not done' : 'Mark complete'}
+                </Button>
+                {next && (
+                  <Button variant="ghost" onClick={() => select(next)}>
+                    Next: {next.name} →
+                  </Button>
+                )}
+              </div>
+
+              <hr className="my-8 border-line-solid" />
+
+              {course.summary && (
+                <p className="text-[1.1rem] leading-relaxed text-ink">{course.summary}</p>
+              )}
+
+              <dl className="mt-6 flex flex-wrap gap-x-10 gap-y-4">
+                <div>
+                  <dt className="text-[0.75rem] text-muted">Your progress</dt>
+                  <dd className="text-[1.05rem] font-bold text-brand-deep">
+                    {enrollment.progressPct}%
+                  </dd>
                 </div>
-              )
-            })}
-          </div>
-        </aside>
+                <div>
+                  <dt className="text-[0.75rem] text-muted">Lessons</dt>
+                  <dd className="text-[1.05rem] font-bold text-brand-deep">{flat.length}</dd>
+                </div>
+                <div>
+                  <dt className="text-[0.75rem] text-muted">Sections</dt>
+                  <dd className="text-[1.05rem] font-bold text-brand-deep">
+                    {course.sections.length}
+                  </dd>
+                </div>
+                {totalSeconds > 0 && (
+                  <div>
+                    <dt className="text-[0.75rem] text-muted">Total length</dt>
+                    <dd className="text-[1.05rem] font-bold text-brand-deep">
+                      {formatTotal(totalSeconds)}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+
+              {course.overview?.length > 0 && (
+                <>
+                  <h3 className="mt-8 text-[1.1rem]">What you&rsquo;ll learn</h3>
+                  <ul className="mt-3 grid gap-2.5 text-[0.92rem] text-ink">
+                    {course.overview.map((point) => (
+                      <li key={point} className="flex gap-2.5">
+                        <span className="text-accent-mid" aria-hidden="true">
+                          ✓
+                        </span>
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          </section>
+        </main>
+
+        {/* ------------------------- desktop sidebar -------------------------- */}
+        {sidebarOpen && (
+          <aside
+            className="sticky top-14 h-[calc(100vh-3.5rem)] w-[380px] shrink-0 overflow-y-auto border-l border-line-solid bg-white mx-1100:w-[340px] mx-1040:hidden"
+            aria-label="Course content"
+          >
+            <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line-solid bg-white px-4 py-3.5">
+              <div>
+                <h2 className="text-[1rem]">Course content</h2>
+                <p className="mt-0.5 text-[0.75rem] text-muted">
+                  {course.sections.length} sections · {flat.length} lessons
+                  {totalSeconds > 0 && ` · ${formatTotal(totalSeconds)}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSidebar(false)}
+                aria-label="Close course content"
+                className="grid h-8 w-8 place-items-center rounded-md text-[1.1rem] text-muted transition-colors duration-200 ease-gs hover:bg-surface hover:text-brand-deep"
+              >
+                ✕
+              </button>
+            </header>
+            {curriculum}
+          </aside>
+        )}
       </div>
-    </>
+    </div>
   )
 }
