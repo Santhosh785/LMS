@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CHANNEL,
+  INSTANCE_ID,
   applyInvalidation,
   createInvalidationListener,
   handleNotification,
@@ -27,6 +28,7 @@ function spyHandlers() {
     invalidateSiteConfig: vi.fn(() => calls.push('site')),
     invalidateRuntimeConfig: vi.fn(() => calls.push('runtime-stale')),
     refreshRuntimeConfig: vi.fn(async () => calls.push('runtime-refresh')),
+    invalidateSitemap: vi.fn(() => calls.push('sitemap')),
   }
 }
 
@@ -46,10 +48,44 @@ describe('notification dispatch', () => {
     expect(h.invalidateSiteConfig).not.toHaveBeenCalled()
   })
 
-  it('all does both, and clears the site config again once the new flags are loaded', async () => {
+  it('all does every scope, and clears the site config again once the new flags are loaded', async () => {
     const h = spyHandlers()
     await applyInvalidation('all', h)
-    expect(h.calls).toEqual(['site', 'runtime-stale', 'runtime-refresh', 'site'])
+    expect(h.calls).toEqual(['sitemap', 'site', 'runtime-stale', 'runtime-refresh', 'site'])
+  })
+
+  it('sitemap clears only the sitemap memo', async () => {
+    const h = spyHandlers()
+    expect(handleNotification(JSON.stringify({ scope: 'sitemap' }), h)).toBe('sitemap')
+    await Promise.resolve()
+    expect(h.calls).toEqual(['sitemap'])
+    expect(h.invalidateSiteConfig).not.toHaveBeenCalled()
+    expect(h.invalidateRuntimeConfig).not.toHaveBeenCalled()
+  })
+
+  it('sitemap clears the real memo by default', async () => {
+    const sitemap = await import('../src/services/sitemap.js')
+    // A warm memo hands out the same promise; a cleared one builds a new one.
+    const memo = sitemap.getSitemap()
+    try {
+      expect(sitemap.getSitemap()).toBe(memo)
+      handleNotification(JSON.stringify({ scope: 'sitemap' }), { logger: quietLogger() })
+      expect(sitemap.getSitemap()).not.toBe(memo)
+    } finally {
+      await Promise.allSettled([memo, sitemap.getSitemap()])
+      sitemap.invalidateSitemap()
+    }
+  })
+
+  it('skips a notification this process published, and applies anyone else’s', async () => {
+    const h = spyHandlers()
+    const own = JSON.stringify({ scope: 'siteConfig', origin: INSTANCE_ID })
+    expect(handleNotification(own, h)).toBeNull()
+    expect(h.invalidateSiteConfig).not.toHaveBeenCalled()
+
+    const other = JSON.stringify({ scope: 'siteConfig', origin: 'another-instance' })
+    expect(handleNotification(other, h)).toBe('siteConfig')
+    expect(h.invalidateSiteConfig).toHaveBeenCalledTimes(1)
   })
 
   it('ignores malformed JSON at low severity without throwing', () => {
@@ -66,7 +102,7 @@ describe('notification dispatch', () => {
 
   it('ignores unknown scopes', () => {
     const h = spyHandlers()
-    for (const scope of ['everything', 'SITECONFIG', '', 7, null]) {
+    for (const scope of ['everything', 'SITECONFIG', 'Sitemap', '', 7, null]) {
       expect(handleNotification(JSON.stringify({ scope }), h)).toBeNull()
     }
     expect(handleNotification(JSON.stringify({}), h)).toBeNull()
@@ -91,14 +127,36 @@ describe('invalidateEverywhere', () => {
     const publish = vi.fn(async () => h.calls.push('publish'))
     await invalidateEverywhere('siteConfig', { ...h, publish })
     expect(h.calls).toEqual(['site', 'publish'])
-    expect(JSON.parse(publish.mock.calls[0][0])).toEqual({ scope: 'siteConfig' })
+    expect(JSON.parse(publish.mock.calls[0][0])).toEqual({
+      scope: 'siteConfig',
+      origin: INSTANCE_ID,
+    })
+  })
+
+  it('broadcasts the sitemap scope', async () => {
+    const h = spyHandlers()
+    const publish = vi.fn(async () => h.calls.push('publish'))
+    await invalidateEverywhere('sitemap', { ...h, publish })
+    expect(h.calls).toEqual(['sitemap', 'publish'])
+    expect(JSON.parse(publish.mock.calls[0][0]).scope).toBe('sitemap')
+  })
+
+  it('rejects an unknown scope', async () => {
+    await expect(invalidateEverywhere('nope', { publish: vi.fn() })).rejects.toThrow(/Unknown/)
   })
 
   it('waits for the local runtime refresh before publishing', async () => {
     const h = spyHandlers()
     const publish = vi.fn(async () => h.calls.push('publish'))
     await invalidateEverywhere('all', { ...h, publish })
-    expect(h.calls).toEqual(['site', 'runtime-stale', 'runtime-refresh', 'site', 'publish'])
+    expect(h.calls).toEqual([
+      'sitemap',
+      'site',
+      'runtime-stale',
+      'runtime-refresh',
+      'site',
+      'publish',
+    ])
   })
 
   it('swallows and logs a failed publish', async () => {
@@ -118,7 +176,7 @@ describe('invalidateEverywhere', () => {
       await invalidateEverywhere('siteConfig')
       expect(query).toHaveBeenCalledWith('select pg_notify($1, $2)', [
         CHANNEL,
-        JSON.stringify({ scope: 'siteConfig' }),
+        JSON.stringify({ scope: 'siteConfig', origin: INSTANCE_ID }),
       ])
     } finally {
       query.mockRestore()

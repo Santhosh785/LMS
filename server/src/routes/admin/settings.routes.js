@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { asyncHandler, HttpError } from '../../middleware/error.js'
 import { getSettings, updateSettings } from '../../db/repos/settings.js'
 import { invalidateEverywhere } from '../../services/invalidation.js'
+import { safeContentChanged } from '../../services/contentEvents.js'
 
 const router = Router()
 
@@ -37,6 +38,8 @@ for (const tab of TABS) {
       // These fields are served to every visitor via GET /api/config, so the
       // cached copy has to go the moment one of them changes — on every instance.
       await invalidateEverywhere('siteConfig')
+      // The header and footer render them on every page: purge the whole edge.
+      await safeContentChanged({ kind: 'settings' })
       res.json(setting)
     }),
   )

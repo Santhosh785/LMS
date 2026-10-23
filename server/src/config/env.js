@@ -166,6 +166,17 @@ export const env = {
   ),
 
   /**
+   * Cloudflare edge-cache purge after content changes (jobs/cloudflare.js).
+   * Both optional: with either unset the purge job completes as a no-op, so
+   * local development and tests never reach the Cloudflare API. The token
+   * needs only the zone's "Cache Purge" permission.
+   */
+  cloudflare: {
+    zoneId: (process.env.CF_ZONE_ID || '').trim(),
+    apiToken: (process.env.CF_API_TOKEN || '').trim(),
+  },
+
+  /**
    * Sender identity printed in the footer of every transactional email. Indian
    * consumers expect a named business with a reachable address, and bulk
    * filters weight its presence — so this is deliverability, not decoration.

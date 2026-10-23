@@ -21,8 +21,16 @@ import {
   mapBunnyStatus,
   signTusUpload,
 } from '../../services/bunnyApi.js'
+import { safeContentChanged } from '../../services/contentEvents.js'
 
 const router = Router()
+
+/**
+ * Tells the sitemap and the edge cache a course page changed — under its old
+ * slug too when a save renamed it, so the old URL is purged as well.
+ */
+const courseChanged = (...slugs) =>
+  safeContentChanged({ kind: 'course', slugs: [...new Set(slugs.filter(Boolean))] })
 
 /* ------------------------- Lesson video (task 22) ------------------------- */
 
@@ -238,12 +246,18 @@ for (const [tab, fields] of Object.entries(TAB_FIELDS)) {
     `/:id/${tab}`,
     asyncHandler(async (req, res) => {
       let patch = Object.fromEntries(Object.entries(req.body).filter(([k]) => fields.includes(k)))
-      if (fields.includes('price') || fields.includes('amount')) {
-        const existing = await findCourseById(req.params.id, { curriculum: false })
-        patch = reconcilePricing(patch, existing)
-      }
+      const pricing = fields.includes('price') || fields.includes('amount')
+      // Needed for the pricing reconciliation, and for the old slug on a rename.
+      const existing =
+        pricing || 'slug' in patch
+          ? await findCourseById(req.params.id, { curriculum: false })
+          : null
+      if (pricing) patch = reconcilePricing(patch, existing)
       const course = await updateCourse(req.params.id, patch, { allow: fields })
       if (!course) throw new HttpError(404, 'Course not found')
+      // Every tab feeds the public course page (or, for settings and pricing,
+      // the catalogue cards too), so every save refreshes it.
+      await courseChanged(course.slug, existing?.slug)
       res.json(course)
     }),
   )
@@ -256,6 +270,7 @@ router.post(
       status: req.body.status === 'Draft' ? 'Draft' : 'Published',
     })
     if (!course) throw new HttpError(404, 'Course not found')
+    await courseChanged(course.slug)
     res.json(course)
   }),
 )
@@ -307,6 +322,7 @@ router.use(
     sort: { createdAt: -1 },
     hydrate: (rows) => hydrateCourses(rows),
     repo: { create: (body) => createCourse(body), update: (id, body) => updateCourse(id, body) },
+    onChange: (_kind, row, previous) => courseChanged(row.slug, previous?.slug),
   }),
 )
 

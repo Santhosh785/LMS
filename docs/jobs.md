@@ -7,8 +7,9 @@ v12: its state lives in the existing Supabase Postgres under the `pgboss` schema
 and its workers run inside the Express process. There is no Redis and no second
 service to deploy.
 
-Defined jobs: `noop` (a smoke test), and the transactional mail and payment jobs
-described under [Mail and payment jobs](#mail-and-payment-jobs).
+Defined jobs: `noop` (a smoke test), the transactional mail and payment jobs
+described under [Mail and payment jobs](#mail-and-payment-jobs), and the sitemap
+and edge-cache jobs under [Content-change jobs](#content-change-jobs).
 
 pg-boss v12 needs **Node 22.12 or newer**; the root `package.json` says so in
 `engines`.
@@ -120,12 +121,62 @@ Still synchronous, because an admin is waiting on the outcome: the admin
 "send test email" button and "resend set-password link" action call the mail
 layer directly.
 
+## Content-change jobs
+
+When an admin changes public content, the sitemap and the Cloudflare edge cache
+follow. Admin routes call `contentChanged({ kind, slug })`
+(`server/src/services/contentEvents.js`), which queues one `regenerate-sitemap`
+and one `purge-cloudflare-cache` job through `dispatch` — so, like mail, it
+never fails or holds up the admin request.
+
+| `kind` | Purged paths |
+| --- | --- |
+| `course` | `/`, `/courses`, `/courses/<slug>`, `/sitemap.xml` |
+| `program` | `/`, `/programs/<slug>`, `/sitemap.xml` |
+| `workshop` | `/`, `/workshops`, `/workshops/<slug>`, `/sitemap.xml` |
+| `post` | `/`, `/blog`, `/blog/<slug>`, `/sitemap.xml` |
+| `settings`, `taxonomy` | everything — the header and footer are on every page |
+
+An unknown kind, or a slugged kind without a slug, throws. A rename passes
+`slugs: [newSlug, oldSlug]` so both URLs are purged in one job; bulk blog
+actions do the same with every affected post.
+
+Where it fires:
+
+- **Courses** — create, update and delete through the CRUD router (its
+  `onChange(kind, row, previous)` option), publish/unpublish, and every tab save.
+- **Programs** — CRUD create, update, delete, and every tab save.
+- **Workshops** — CRUD create, update, delete, and an admin removing a
+  registration (the page shows seats left).
+- **Blog posts** — create, update (publishing is an update), trash, restore,
+  revision restore, delete, bulk actions and import — each only when the post
+  is, or just was, `Published` or `Scheduled`. Editing a draft purges nothing.
+  Comment moderation does not fire.
+- **Settings** — every tab save. **Taxonomy** — create, update, reorder, merge
+  and delete.
+
+| Job | Data | Notes |
+| --- | --- | --- |
+| `regenerate-sitemap` | `{}` | Broadcasts the `sitemap` invalidation scope so every instance drops its memo, then builds the sitemap once here. Queue policy `stately`: a burst of saves collapses into one queued rebuild. Also on cron `0 */6 * * *` (UTC), registered at boot. |
+| `purge-cloudflare-cache` | `{ urls }` (relative paths) or `{ everything: true }` | Makes each path absolute against `PUBLIC_URL`, then `POST /client/v4/zones/{CF_ZONE_ID}/purge_cache` with `{ files }` in batches of at most 30, or one `{ purge_everything: true }`. Any non-2xx response throws, so the whole job is retried. |
+
+Without `CF_ZONE_ID` or `CF_API_TOKEN` the purge job logs one line per process
+and completes without a network call. **`PUBLIC_URL` must be the origin
+Cloudflare caches** (`https://growthscholar.in`), or the purge matches nothing.
+
+The two jobs are independent, so an edge miss on `/sitemap.xml` in the moment
+between the purge and the sitemap invalidation can re-cache the old document;
+its `max-age=600` bounds that, and the next change or the six-hourly run
+replaces it.
+
 ## Configuration
 
 ```
 # server/.env
 BOSS_DATABASE_URL=postgresql://…:5432/postgres   # defaults to DIRECT_DATABASE_URL
 BOSS_ENABLED=1                                  # 0 = run every job inline
+CF_ZONE_ID=                                     # optional: edge purge after content changes
+CF_API_TOKEN=                                   # optional: token with Zone > Cache Purge
 ```
 
 **`BOSS_DATABASE_URL` must be a session-capable connection**: the direct
@@ -193,6 +244,13 @@ select id, name, retry_count, retry_limit, start_after, output->>'message' as la
 from pgboss.job
 where state = 'retry'
 order by start_after;
+
+-- Did the last content change reach the queue?
+select name, state, data, created_on
+from pgboss.job
+where name in ('regenerate-sitemap', 'purge-cloudflare-cache')
+order by created_on desc
+limit 10;
 
 -- Cron schedules
 select name, key, cron, timezone, data, updated_on

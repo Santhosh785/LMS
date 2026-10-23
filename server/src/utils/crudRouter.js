@@ -21,6 +21,12 @@ import { coerce, isUuid } from '../db/coerce.js'
  * @param {object}   [opts.repo]          full override of create/update for tables whose
  *        document spans child tables: { create(body), update(id, body) } → document
  * @param {(body) => object} [opts.toValues]  body → column values (default: coerce)
+ * @param {(kind: 'create'|'update'|'delete', row: object, previous?: object) => unknown} [opts.onChange]
+ *        called after a successful write with the affected row: the created or
+ *        updated document, or for a delete the row as it was. Updates also pass
+ *        the row as it was before (`previous`), so a renamed slug can be handled.
+ *        Awaited before the response, but a throw or rejection is logged, never
+ *        returned to the client — the write has already succeeded.
  */
 export function crudRouter(table, opts = {}) {
   const {
@@ -31,6 +37,7 @@ export function crudRouter(table, opts = {}) {
     hydrate = async (rows) => withMongoId(rows),
     repo,
     toValues = (body) => coerce(table, body),
+    onChange,
   } = opts
   const columns = getTableColumns(table)
   const router = Router({ mergeParams: true })
@@ -67,6 +74,25 @@ export function crudRouter(table, opts = {}) {
       .map(([k, dir]) => (dir < 0 ? desc(columns[k]) : asc(columns[k])))
   }
 
+  const changed = async (kind, row, previous) => {
+    if (!onChange || !row) return
+    try {
+      await onChange(kind, row, previous)
+    } catch (err) {
+      console.error(`[crud] ${name} ${kind} onChange failed:`, err?.message)
+    }
+  }
+
+  /** The stored row, unhydrated — only fetched when someone is listening. */
+  const findRaw = async (req) => {
+    if (!onChange) return undefined
+    const [row] = await db
+      .select()
+      .from(table)
+      .where(and(eq(columns.id, req.params.id), ...scope(req)))
+    return row
+  }
+
   const findOne = async (req) => {
     if (!isUuid(req.params.id)) return null
     const [row] = await db
@@ -101,9 +127,15 @@ export function crudRouter(table, opts = {}) {
     '/',
     asyncHandler(async (req, res) => {
       const body = { ...req.body, ...(baseFilter ? baseFilter(req) : {}) }
-      if (repo?.create) return res.status(201).json(await repo.create(body))
+      if (repo?.create) {
+        const doc = await repo.create(body)
+        await changed('create', doc)
+        return res.status(201).json(doc)
+      }
       const [row] = await db.insert(table).values(toValues(body)).returning()
-      res.status(201).json((await hydrate([row]))[0])
+      const doc = (await hydrate([row]))[0]
+      await changed('create', doc)
+      res.status(201).json(doc)
     }),
   )
 
@@ -123,17 +155,23 @@ export function crudRouter(table, opts = {}) {
       if (repo?.update) {
         // Scope first: a parent-scoped resource must not update across parents.
         if (baseFilter && !(await findOne(req))) throw new HttpError(404, `${name} not found`)
+        const previous = await findRaw(req)
         const doc = await repo.update(req.params.id, req.body)
         if (!doc) throw new HttpError(404, `${name} not found`)
+        await changed('update', doc, previous)
         return res.json(doc)
       }
       const values = toValues(req.body)
       const where = and(eq(columns.id, req.params.id), ...scope(req))
+      const previous = Object.keys(values).length ? await findRaw(req) : undefined
       const [row] = Object.keys(values).length
         ? await db.update(table).set(values).where(where).returning()
         : await db.select().from(table).where(where)
       if (!row) throw new HttpError(404, `${name} not found`)
-      res.json((await hydrate([row]))[0])
+      const doc = (await hydrate([row]))[0]
+      // An empty body wrote nothing, so there is nothing to announce.
+      if (previous) await changed('update', doc, previous)
+      res.json(doc)
     }),
   )
 
@@ -141,11 +179,13 @@ export function crudRouter(table, opts = {}) {
     '/:id',
     asyncHandler(async (req, res) => {
       if (!isUuid(req.params.id)) throw new HttpError(404, `${name} not found`)
+      // The full row comes back from the delete itself: the row as it was.
       const [row] = await db
         .delete(table)
         .where(and(eq(columns.id, req.params.id), ...scope(req)))
-        .returning({ id: columns.id })
+        .returning(onChange ? undefined : { id: columns.id })
       if (!row) throw new HttpError(404, `${name} not found`)
+      await changed('delete', row)
       res.json({ ok: true })
     }),
   )

@@ -8,8 +8,13 @@ import { registrationDoc } from '../../db/repos/workshops.js'
 import { pickColumns } from '../../db/repos/content.js'
 import { crudRouter } from '../../utils/crudRouter.js'
 import { sendCsv } from '../../utils/csv.js'
+import { safeContentChanged } from '../../services/contentEvents.js'
 
 const router = Router()
+
+/** Sitemap + edge purge for a workshop page, under its old slug too on a rename. */
+const workshopChanged = (...slugs) =>
+  safeContentChanged({ kind: 'workshop', slugs: [...new Set(slugs.filter(Boolean))] })
 
 /**
  * Workshops and, more importantly, who registered for them.
@@ -150,13 +155,16 @@ router.delete(
         .where(eq(workshopRegistrations.id, req.params.id))
         .returning({ workshopId: workshopRegistrations.workshopId })
       if (!row) return false
-      await tx
+      const [workshop] = await tx
         .update(workshops)
         .set({ registeredCount: sql`${workshops.registeredCount} - 1` })
         .where(and(eq(workshops.id, row.workshopId), gt(workshops.registeredCount, 0)))
-      return true
+        .returning({ slug: workshops.slug })
+      return { slug: workshop?.slug }
     })
     if (!removed) throw new HttpError(404, 'Registration not found')
+    // The public page shows seats remaining from the counter that just moved.
+    if (removed.slug) await workshopChanged(removed.slug)
     res.json({ ok: true })
   }),
 )
@@ -198,6 +206,7 @@ router.use(
     name: 'Workshop',
     searchFields: ['title', 'slug'],
     sort: { startsAt: -1 },
+    onChange: (_kind, row, previous) => workshopChanged(row.slug, previous?.slug),
   }),
 )
 

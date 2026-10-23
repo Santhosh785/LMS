@@ -23,6 +23,7 @@ import { BLOCK_TYPES, blogComments, blogPosts, media } from '../../db/schema/ind
 import { withoutColumns } from '../../db/repos/blog.js'
 import { pickColumns } from '../../db/repos/content.js'
 import { slugify } from '../../services/taxonomy.js'
+import { safeContentChanged } from '../../services/contentEvents.js'
 
 /**
  * The editorial API behind /admin/blog.
@@ -216,6 +217,29 @@ const revision = (post, user, autosave = false) =>
       ['autosave', autosave],
     ]),
   )
+
+/*
+ * Content-change events (services/contentEvents.js): the sitemap and the edge
+ * cache follow every write that can change what a visitor sees. A post is on
+ * the public site only while Published or Scheduled (repos/blog.js has the
+ * full rule), so a write fires when the post was in one of those states
+ * before it or is after it — editing a draft purges nothing.
+ */
+const PUBLIC_STATUSES = new Set(['Published', 'Scheduled'])
+const mayBePublic = (post) => Boolean(post) && PUBLIC_STATUSES.has(post.status)
+
+/** One event for every listed post that is, or just was, public. */
+function postsChanged(...posts) {
+  const slugs = [...new Set(posts.filter(mayBePublic).map((p) => p.slug))]
+  return slugs.length ? safeContentChanged({ kind: 'post', slugs }) : undefined
+}
+
+/** A single post's write: `before` and `after` are the row either side of it. */
+function postChanged(before, after) {
+  if (!mayBePublic(before) && !mayBePublic(after)) return undefined
+  // Under its old slug too, when the write renamed it.
+  return postsChanged({ ...before, status: 'Published' }, { ...after, status: 'Published' })
+}
 
 async function findPost(id) {
   if (!isUuid(id)) return null
@@ -563,11 +587,20 @@ router.post(
     const action = req.body?.action
     if (!ids.length) throw new HttpError(400, 'Select at least one post')
     const selected = inArray(blogPosts.id, ids)
+    const touched = { id: blogPosts.id, slug: blogPosts.slug, status: blogPosts.status }
+    // As they were, so a post leaving the public site is purged too.
+    const before = await db.select(touched).from(blogPosts).where(selected)
+    const done = async (rows) => {
+      const affected = new Set(rows.map((r) => r.id))
+      await postsChanged(...before.filter((r) => affected.has(r.id)), ...rows)
+      return res.json({ ok: true, affected: rows.length })
+    }
 
     if (action === 'delete') {
       // Comments go with their post via the foreign key cascade.
-      const rows = await db.delete(blogPosts).where(selected).returning({ id: blogPosts.id })
-      return res.json({ ok: true, affected: rows.length })
+      const rows = await db.delete(blogPosts).where(selected).returning(touched)
+      // Deleted rows are gone, whatever `returning` says their status was.
+      return done(rows.map((r) => ({ ...r, status: 'Trash' })))
     }
     if (action === 'trash') {
       const rows = await db
@@ -578,8 +611,8 @@ router.post(
           trashedAt: new Date(),
         })
         .where(and(selected, ne(blogPosts.status, 'Trash')))
-        .returning({ id: blogPosts.id })
-      return res.json({ ok: true, affected: rows.length })
+        .returning(touched)
+      return done(rows)
     }
     if (action === 'restore') {
       const rows = await db
@@ -591,8 +624,8 @@ router.post(
           trashedAt: null,
         })
         .where(and(selected, eq(blogPosts.status, 'Trash')))
-        .returning({ id: blogPosts.id })
-      return res.json({ ok: true, affected: rows.length })
+        .returning(touched)
+      return done(rows)
     }
     if (action === 'edit') {
       // WordPress's bulk-edit row: only the fields the operator actually filled in.
@@ -611,12 +644,8 @@ router.post(
       if (tags.length) {
         patch.tags = sql`array(select t from unnest(${blogPosts.tags} || ${param(tags)}::text[]) with ordinality u(t, n) group by t order by min(n))`
       }
-      const rows = await db
-        .update(blogPosts)
-        .set(patch)
-        .where(selected)
-        .returning({ id: blogPosts.id })
-      return res.json({ ok: true, affected: rows.length })
+      const rows = await db.update(blogPosts).set(patch).where(selected).returning(touched)
+      return done(rows)
     }
     throw new HttpError(400, 'Choose a bulk action')
   }),
@@ -671,6 +700,7 @@ router.post(
     let created = 0
     let updated = 0
     let skipped = 0
+    const changed = []
 
     for (const raw of incoming) {
       const patch = patchFrom(raw)
@@ -695,7 +725,7 @@ router.post(
 
       const [existing] = raw.slug
         ? await db
-            .select({ id: blogPosts.id })
+            .select({ id: blogPosts.id, slug: blogPosts.slug, status: blogPosts.status })
             .from(blogPosts)
             .where(eq(blogPosts.slug, slugify(raw.slug)))
         : []
@@ -705,16 +735,24 @@ router.post(
           continue
         }
         delete patch.slug
-        await db.update(blogPosts).set(patch).where(eq(blogPosts.id, existing.id))
+        const [row] = await db
+          .update(blogPosts)
+          .set(patch)
+          .where(eq(blogPosts.id, existing.id))
+          .returning({ slug: blogPosts.slug, status: blogPosts.status })
+        changed.push(existing, row)
         updated += 1
       } else {
-        await db
+        const [row] = await db
           .insert(blogPosts)
           .values({ ...patch, slug: await uniqueSlug(raw.slug || patch.title) })
+          .returning({ slug: blogPosts.slug, status: blogPosts.status })
+        changed.push(row)
         created += 1
       }
     }
 
+    await postsChanged(...changed)
     res.json({ ok: true, created, updated, skipped })
   }),
 )
@@ -736,6 +774,8 @@ router.post(
     if (!str(patch.readTime)) patch.readTime = minutesFor(patch.body)
     normaliseSchedule(patch)
     const [row] = await db.insert(blogPosts).values(patch).returning()
+    // Only a post created already published (or scheduled) is on the site.
+    await postsChanged(row)
     res.status(201).json(withMongoId(row))
   }),
 )
@@ -784,7 +824,10 @@ router.put(
     const history = (post.revisions || []).filter((entry) => !(autosave && entry.autosave))
     patch.revisions = [revision(post, req.user, autosave), ...history].slice(0, 25)
 
-    res.json(await savePost(post.id, patch))
+    // Publishing is an update too: a draft saved as Published fires here.
+    const saved = await savePost(post.id, patch)
+    await postChanged(post, saved)
+    res.json(saved)
   }),
 )
 
@@ -825,13 +868,13 @@ router.post(
     const post = await findPost(req.params.id)
     if (!post) throw new HttpError(404, 'Post not found')
     if (post.status !== 'Trash') {
-      return res.json(
-        await savePost(post.id, {
-          statusBeforeTrash: post.status,
-          status: 'Trash',
-          trashedAt: new Date(),
-        }),
-      )
+      const saved = await savePost(post.id, {
+        statusBeforeTrash: post.status,
+        status: 'Trash',
+        trashedAt: new Date(),
+      })
+      await postChanged(post, saved)
+      return res.json(saved)
     }
     res.json(withMongoId(post))
   }),
@@ -842,13 +885,13 @@ router.post(
   asyncHandler(async (req, res) => {
     const post = await findPost(req.params.id)
     if (!post) throw new HttpError(404, 'Post not found')
-    res.json(
-      await savePost(post.id, {
-        status: STATUSES.includes(post.statusBeforeTrash) ? post.statusBeforeTrash : 'Draft',
-        statusBeforeTrash: null,
-        trashedAt: null,
-      }),
-    )
+    const saved = await savePost(post.id, {
+      status: STATUSES.includes(post.statusBeforeTrash) ? post.statusBeforeTrash : 'Draft',
+      statusBeforeTrash: null,
+      trashedAt: null,
+    })
+    await postChanged(post, saved)
+    res.json(saved)
   }),
 )
 
@@ -882,7 +925,9 @@ router.post(
     ]) {
       if (patch[key] === null) delete patch[key]
     }
-    res.json(await savePost(post.id, patch))
+    const restored = await savePost(post.id, patch)
+    await postChanged(post, restored)
+    res.json(restored)
   }),
 )
 
@@ -894,8 +939,10 @@ router.delete(
     const [row] = await db
       .delete(blogPosts)
       .where(eq(blogPosts.id, req.params.id))
-      .returning({ id: blogPosts.id })
+      .returning({ id: blogPosts.id, slug: blogPosts.slug, status: blogPosts.status })
     if (!row) throw new HttpError(404, 'Post not found')
+    // `row` is the post as it was: a published post deleted outright is purged.
+    await postsChanged(row)
     res.json({ ok: true })
   }),
 )

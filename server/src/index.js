@@ -20,7 +20,7 @@ import showcaseRoutes from './routes/showcase.routes.js'
 import { refreshRuntimeConfig } from './services/runtimeConfig.js'
 import { startQueue, stopQueue } from './services/queue.js'
 // Job definitions register themselves on import; they must exist before startQueue().
-import './jobs/index.js'
+import { scheduleRecurringJobs } from './jobs/index.js'
 import { startInvalidationListener, stopInvalidationListener } from './services/invalidation.js'
 import { isBunnyStorageConfigured } from './services/bunnyStorage.js'
 import { assertReplicaSafe } from './config/replicas.js'
@@ -326,6 +326,8 @@ if (!env.isTest) {
     // After the config refresh, before the port opens: a request that enqueues
     // a job should find the workers already running.
     .then(() => startQueue())
+    // Cron schedules (the six-hourly sitemap rebuild) need the started queue.
+    .then(() => scheduleRecurringJobs())
     .then(() => {
       // Cross-instance cache invalidation. Not awaited: an unreachable listener
       // database leaves the caches on their TTLs, it never blocks or fails boot.

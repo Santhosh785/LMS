@@ -44,6 +44,10 @@ process.env.RAZORPAY_WEBHOOK_SECRET = 'test-razorpay-webhook-secret'
 process.env.RESEND_API_KEY = ''
 process.env.MAIL_FROM = ''
 process.env.SENTRY_DSN = ''
+// Blank for the same reason: every admin content write queues a Cloudflare
+// purge, and with real values in .env the suite would purge the live zone.
+process.env.CF_ZONE_ID = ''
+process.env.CF_API_TOKEN = ''
 process.env.CONFIG_SECRET = 'test-only-config-secret-not-used-anywhere-real'
 
 /**

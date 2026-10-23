@@ -3,6 +3,10 @@ import { defineJob } from '../services/queue.js'
 import './mail.js'
 // Post-payment notifications: fulfil-payment-side-effects.
 import './fulfilment.js'
+// Content-change fan-out (services/contentEvents.js): regenerate-sitemap and
+// purge-cloudflare-cache.
+import { scheduleSitemapRegeneration } from './sitemap.js'
+import './cloudflare.js'
 
 /**
  * Every job definition, imported once by the server entry before startQueue()
@@ -19,3 +23,17 @@ import './fulfilment.js'
  * enqueue one by hand to prove the queue is working — see docs/jobs.md.
  */
 defineJob('noop', { handler: async (data) => data })
+
+/**
+ * Registers every cron schedule. Called by the server entry once startQueue()
+ * has resolved; inline (queue not started) each is a no-op. A failure is logged
+ * rather than failing boot: a missing schedule only loses the backstop run, and
+ * the next boot registers it again.
+ */
+export async function scheduleRecurringJobs() {
+  try {
+    await scheduleSitemapRegeneration()
+  } catch (err) {
+    console.error('[queue] could not register the regenerate-sitemap schedule:', err?.message)
+  }
+}

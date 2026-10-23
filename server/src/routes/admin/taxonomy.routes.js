@@ -13,6 +13,7 @@ import {
   usageMap,
 } from '../../services/taxonomy.js'
 import { invalidateEverywhere } from '../../services/invalidation.js'
+import { safeContentChanged } from '../../services/contentEvents.js'
 
 const router = Router()
 
@@ -74,9 +75,18 @@ async function findTerm(id) {
   return row || null
 }
 
-/** Every write here changes what the public site renders. */
-const touched = async (res, payload) => {
+/**
+ * Every write here changes what the public site renders — the menus and
+ * footers on every page, the catalogue filters, the sitemap's topic URLs — so
+ * each one clears the config cache everywhere and purges the whole edge.
+ */
+const termsChanged = async () => {
   await invalidateEverywhere('siteConfig')
+  await safeContentChanged({ kind: 'taxonomy' })
+}
+
+const touched = async (res, payload) => {
+  await termsChanged()
   return res.json(payload)
 }
 
@@ -144,7 +154,7 @@ router.post(
       .insert(terms)
       .values({ ...body, name: body.name.trim(), taxonomy, slug })
       .returning()
-    await invalidateEverywhere('siteConfig')
+    await termsChanged()
     res.status(201).json(withMongoId(created))
   }),
 )
