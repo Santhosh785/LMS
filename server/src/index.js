@@ -41,6 +41,7 @@ import communityRoutes from './routes/community.routes.js'
 import adminRoutes from './routes/admin/index.js'
 import { mediaDir } from './routes/admin/media.routes.js'
 import { legacyRedirect } from './middleware/legacyRedirect.js'
+import sitemapRoutes from './routes/sitemap.routes.js'
 
 const app = express()
 
@@ -190,6 +191,11 @@ app.use('/uploads/media', express.static(mediaDir, { fallthrough: false, maxAge:
 // Mongo-era bookmarks (/admin/courses/<ObjectId>) → their Postgres ids. Ahead of
 // the SPA so the browser is redirected before index.html is served.
 app.use(legacyRedirect)
+
+// /sitemap.xml and /robots.txt. Outside the client-build check below, so they are
+// served in development too, and ahead of the SPA fallback, which would
+// otherwise answer both with the app shell.
+app.use(sitemapRoutes)
 
 /* ------------------------------ the SPA ---------------------------------- */
 /**
